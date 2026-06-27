@@ -54,6 +54,11 @@ const text = {
     upload: "Upload",
     profilePicture: "Profile picture",
     changePhoto: "Change photo",
+    attachments: "Attachments",
+    noAttachments: "No attachments yet",
+    viewFile: "View file",
+    removeAttachment: "Remove",
+    maxCertificates: "Up to 5 certificates",
     profileBuilder: "Profile Builder",
     completeYourRawabet: "Complete your Rawabet profile",
     basicInfo: "Basic information",
@@ -67,6 +72,9 @@ const text = {
     title: "Title",
     company: "Company",
     activeJobs: "Active jobs",
+    appliedJobs: "Applied jobs",
+    whereIApplied: "Where I applied for",
+    noAppliedJobs: "No applications yet",
     apply: "Apply",
     adminDashboard: "Admin dashboard",
     totalUsers: "Total users",
@@ -87,6 +95,9 @@ const text = {
     riskQueue: "Risk queue",
     pendingDocs: "Pending document reviews",
     view: "View",
+    chooseAction: "Choose action",
+    backToUsers: "Back to users",
+    profileDetails: "Profile details",
     suspend: "Suspend",
     restore: "Restore",
     status: "Status",
@@ -162,6 +173,11 @@ const text = {
     upload: "رفع",
     profilePicture: "الصورة الشخصية",
     changePhoto: "تغيير الصورة",
+    attachments: "المرفقات",
+    noAttachments: "لا توجد مرفقات بعد",
+    viewFile: "عرض الملف",
+    removeAttachment: "حذف",
+    maxCertificates: "حتى 5 شهادات",
     profileBuilder: "منشئ الملف",
     completeYourRawabet: "أكمل ملفك في روابط",
     basicInfo: "المعلومات الأساسية",
@@ -175,6 +191,9 @@ const text = {
     title: "المسمى",
     company: "الشركة",
     activeJobs: "الوظائف النشطة",
+    appliedJobs: "الوظائف المقدمة",
+    whereIApplied: "الوظائف التي تقدمت إليها",
+    noAppliedJobs: "لا توجد طلبات بعد",
     apply: "تقديم",
     adminDashboard: "لوحة تحكم الإدارة",
     totalUsers: "إجمالي المستخدمين",
@@ -195,6 +214,9 @@ const text = {
     riskQueue: "قائمة المخاطر",
     pendingDocs: "مراجعات مستندات معلقة",
     view: "عرض",
+    chooseAction: "اختر إجراء",
+    backToUsers: "العودة للمستخدمين",
+    profileDetails: "تفاصيل الملف",
     suspend: "إيقاف",
     restore: "استعادة",
     status: "الحالة",
@@ -300,8 +322,8 @@ function App() {
     <div className="app-shell">
       <header className="topbar">
         <button className="brand" onClick={() => setView("home")}>
-          <span className="brand-mark">ر</span>
-          <span><strong>{t("brand")}</strong><small>{t("sub")}</small></span>
+          <img className="brand-mark" src="/brand/rawabet-mark.png" alt="" />
+          <img className="brand-wordmark" src="/brand/rawabet-wordmark.png" alt="Rawabet - روابط تجمعنا" />
         </button>
         <label className="search">
           <span>⌕</span>
@@ -324,11 +346,11 @@ function App() {
         </div>
       </header>
 
-      <main>
+      <main className={view === "admin" ? "admin-main" : ""}>
         {view === "home" && <Home t={t} me={me} jobs={jobs} setView={setView} openBuilder={() => setBuilderOpen(true)} />}
         {view === "profile" && <Profile t={t} me={me} reload={loadApp} />}
         {view === "network" && <Network t={t} />}
-        {view === "jobs" && <Jobs t={t} jobs={jobs} />}
+        {view === "jobs" && <Jobs t={t} jobs={jobs} reload={loadApp} />}
         {view === "admin" && session.role === "admin" && <Admin t={t} admin={admin} users={adminUsers} setUsers={setAdminUsers} jobs={jobs} supportThreads={supportThreads} reload={loadApp} openSupport={(userId) => { setSupportTarget(userId || ""); setSupportOpen(true); }} />}
       </main>
       {builderOpen && <ProfileBuilder t={t} me={me} reload={loadApp} close={() => setBuilderOpen(false)} />}
@@ -343,7 +365,7 @@ function Login({ lang, setLang, t, login, error }) {
   return (
     <main className="login-page">
       <section className="login-hero">
-        <div className="brand large"><span className="brand-mark">ر</span><span><strong>{t("brand")}</strong><small>{t("sub")}</small></span></div>
+        <div className="brand large"><img className="brand-mark" src="/brand/rawabet-mark.png" alt="" /><img className="brand-wordmark" src="/brand/rawabet-wordmark.png" alt="Rawabet - روابط تجمعنا" /></div>
         <h1>{t("welcome")}</h1>
         <p>{t("welcomeBody")}</p>
       </section>
@@ -364,6 +386,8 @@ function Login({ lang, setLang, t, login, error }) {
 
 function Home({ t, me, jobs, setView, openBuilder }) {
   const strength = me.profile?.profile_strength || 64;
+  const stats = me.stats || {};
+  const applications = me.applications || [];
   return (
     <div className="layout-grid">
       <aside className="profile-rail">
@@ -373,8 +397,8 @@ function Home({ t, me, jobs, setView, openBuilder }) {
           <h2>{me.user.fullName}</h2>
           <p>{me.user.headline}</p>
           <dl className="quick-stats">
-            <div><dt>{t("profileViews")}</dt><dd>248</dd></div>
-            <div><dt>{t("connections")}</dt><dd>1,274</dd></div>
+            <div><dt>{t("profileViews")}</dt><dd>{formatNumber(stats.profile_views)}</dd></div>
+            <div><dt>{t("connections")}</dt><dd>{formatNumber(stats.connections)}</dd></div>
           </dl>
           <button className="secondary-button" onClick={openBuilder}>{t("editProfile")}</button>
         </section>
@@ -387,30 +411,21 @@ function Home({ t, me, jobs, setView, openBuilder }) {
         </section>
       </aside>
       <section className="feed">
-        <section className="composer panel">
-          <Avatar user={me.user} size="small" />
-          <button className="composer-input">{t("startPost")}</button>
-          <div className="composer-actions">
-            <button><span>▤</span>{t("article")}</button>
-            <button><span>▧</span>{t("portfolio")}</button>
-            <button><span>◌</span>{t("event")}</button>
-          </div>
-        </section>
         <article className="panel post-card">
           <div className="post-head"><div className="company-logo">R</div><div><h2>{t("welcomeTitle")}</h2><p>{t("sub")}</p></div></div>
           <p>{t("welcomeBody")}</p>
           <div className="feature-grid">
-            <div className="feature-card"><strong>{t("resumeUpload")}</strong><span>{t("resumeUploadBody")}</span></div>
-            <div className="feature-card"><strong>{t("verifiedCerts")}</strong><span>{t("verifiedCertsBody")}</span></div>
-            <div className="feature-card"><strong>{t("workTimeline")}</strong><span>{t("workTimelineBody")}</span></div>
+            <button className="feature-card" type="button" onClick={openBuilder}><strong>{t("resumeUpload")}</strong><span>{t("resumeUploadBody")}</span></button>
+            <button className="feature-card" type="button" onClick={openBuilder}><strong>{t("verifiedCerts")}</strong><span>{t("verifiedCertsBody")}</span></button>
+            <button className="feature-card" type="button" onClick={openBuilder}><strong>{t("workTimeline")}</strong><span>{t("workTimelineBody")}</span></button>
           </div>
         </article>
         <article className="panel post-card">
-          <div className="post-head"><div className="company-logo accent">AI</div><div>
-          <h2>{t("activeJobs")}</h2>
-          <p>{t("jobs")}</p>
+          <div className="post-head"><div className="company-logo accent">✓</div><div>
+          <h2>{t("appliedJobs")}</h2>
+          <p>{t("whereIApplied")}</p>
           </div></div>
-          <div className="job-strip">{jobs.slice(0, 4).map((job) => <span key={job.id}>{job.title}</span>)}</div>
+          <div className="job-strip">{applications.length ? applications.slice(0, 4).map((item) => <span key={item.id}>{item.title}</span>) : <span>{t("noAppliedJobs")}</span>}</div>
         </article>
       </section>
       <aside className="insight-rail">
@@ -459,8 +474,12 @@ function ProfileBuilder({ t, me, reload, close }) {
     const body = new FormData();
     body.append("kind", kind);
     body.append("file", file);
-    await api("/me/documents", { method: "POST", body });
-    await reload();
+    try {
+      await api("/me/documents", { method: "POST", body });
+      await reload();
+    } catch (err) {
+      alert(err.message);
+    }
   }
 
   async function uploadAvatar(file) {
@@ -504,11 +523,12 @@ function ProfileBuilder({ t, me, reload, close }) {
             <h3>{t("mediaFiles")}</h3>
             <label>{t("profilePicture")}<input type="file" accept="image/*" onChange={(e) => uploadAvatar(e.target.files[0])} /></label>
             <label>{t("resume")}<input type="file" accept=".pdf,.doc,.docx" onChange={(e) => upload("resume", e.target.files[0])} /></label>
-            <label>{t("certificate")}<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={(e) => upload("certificate", e.target.files[0])} /></label>
+            <label>{t("certificate")}<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={(e) => upload("certificate", e.target.files[0])} /><span>{t("maxCertificates")}</span></label>
             <div className="upload-preview">
               <Avatar user={me.user} size="large" />
               <div><strong>{t("filesStayLocal")}</strong><p>{t("filesStayLocalBody")}</p></div>
             </div>
+            <DocumentLinks t={t} documents={me.documents} avatarUrl={me.user.avatarUrl} />
           </section>
 
           <section className="builder-panel span">
@@ -557,7 +577,19 @@ function Profile({ t, me, reload }) {
     const body = new FormData();
     body.append("kind", kind);
     body.append("file", file);
-    await api("/me/documents", { method: "POST", body });
+    try {
+      await api("/me/documents", { method: "POST", body });
+      await reload();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  async function uploadAvatar(file) {
+    if (!file) return;
+    const body = new FormData();
+    body.append("file", file);
+    await api("/me/avatar", { method: "POST", body });
     await reload();
   }
 
@@ -581,8 +613,10 @@ function Profile({ t, me, reload }) {
         <button className="primary-button">{t("editProfile")}</button>
       </form>
       <section className="panel upload-grid">
-        <label>{t("resume")}<input type="file" onChange={(e) => upload("resume", e.target.files[0])} /></label>
-        <label>{t("certificate")}<input type="file" onChange={(e) => upload("certificate", e.target.files[0])} /></label>
+        <label>{t("profilePicture")}<input type="file" accept="image/*" onChange={(e) => uploadAvatar(e.target.files[0])} /></label>
+        <label>{t("resume")}<input type="file" accept=".pdf,.doc,.docx" onChange={(e) => upload("resume", e.target.files[0])} /></label>
+        <label>{t("certificate")}<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={(e) => upload("certificate", e.target.files[0])} /><span>{t("maxCertificates")}</span></label>
+        <div className="span"><DocumentLinks t={t} documents={me.documents} avatarUrl={me.user.avatarUrl} /></div>
       </section>
       <section className="panel">
         <h2>{t("experience")}</h2>
@@ -601,14 +635,19 @@ function Network({ t }) {
   return <section className="directory-grid">{["Sara Alami", "Omar Khaled", "Lina Nader", "Maya Haddad", "Faisal Noor", "Reem Mansour"].map((name) => <article className="network-card" key={name}><Avatar user={{ fullName: name }} /><h2>{name}</h2><p>{t("network")}</p><button className="secondary-button">Connect</button></article>)}</section>;
 }
 
-function Jobs({ t, jobs }) {
-  return <section className="job-list">{jobs.map((job) => <article className="job-card panel" key={job.id}><div><h2>{job.title}</h2><p>{job.company_name} · {job.location}</p><span>{job.salary_range}</span></div><button className="primary-button">{t("apply")}</button></article>)}</section>;
+function Jobs({ t, jobs, reload }) {
+  async function apply(jobId) {
+    await api(`/jobs/${jobId}/apply`, { method: "POST" });
+    await reload();
+  }
+  return <section className="job-list">{jobs.map((job) => <article className="job-card panel" key={job.id}><div><h2>{job.title}</h2><p>{job.company_name} · {job.location}</p><span>{job.salary_range}</span></div><button className="primary-button" onClick={() => apply(job.id)}>{t("apply")}</button></article>)}</section>;
 }
 
 function Admin({ t, admin, users, setUsers, jobs, supportThreads, reload, openSupport }) {
   const [tab, setTab] = useState("overview");
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState(null);
+  const [selectedProfile, setSelectedProfile] = useState(null);
   const [jobForm, setJobForm] = useState({ companyName: "Rawabet Labs", title: "", location: "Remote", type: "Full-time", salaryRange: "", description: "" });
   const [interview, setInterview] = useState({ userId: "", jobId: "", scheduledAt: "", channel: "Video call", notes: "" });
   const unreadTotal = supportThreads.reduce((sum, thread) => sum + Number(thread.unread_count || 0), 0);
@@ -631,6 +670,65 @@ function Admin({ t, admin, users, setUsers, jobs, supportThreads, reload, openSu
     if (!confirm(`Delete ${user.full_name}?`)) return;
     await api(`/admin/users/${user.id}`, { method: "DELETE" });
     searchUsers(search);
+  }
+  async function openUserProfile(user) {
+    setSelectedProfile(await api(`/admin/users/${user.id}/profile`));
+    setEditing(null);
+    setTab("userProfile");
+  }
+  async function refreshSelectedProfile(userId = selectedProfile?.user?.id) {
+    if (!userId) return;
+    setSelectedProfile(await api(`/admin/users/${userId}/profile`));
+    await searchUsers(search);
+  }
+  async function runUserAction(user, action) {
+    if (!action) return;
+    if (action === "edit") await openUserProfile(user);
+    if (action === "verify") await patchUser(user, { status: "verified" });
+    if (action === "activate") await patchUser(user, { status: "active" });
+    if (action === "deactivate") await patchUser(user, { status: "suspended" });
+    if (action === "delete") await deleteUser(user);
+  }
+  async function saveSelectedProfile(event) {
+    event.preventDefault();
+    await api(`/admin/users/${selectedProfile.user.id}/profile`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        fullName: selectedProfile.user.full_name,
+        email: selectedProfile.user.email,
+        headline: selectedProfile.user.headline,
+        location: selectedProfile.user.location,
+        role: selectedProfile.user.role,
+        plan: selectedProfile.user.plan,
+        status: selectedProfile.user.status,
+        about: selectedProfile.profile?.about || "",
+        skills: typeof selectedProfile.profile?.skills === "string" ? selectedProfile.profile.skills.split(",").map((item) => item.trim()).filter(Boolean) : selectedProfile.profile?.skills || []
+      })
+    });
+    await refreshSelectedProfile();
+  }
+  async function uploadSelectedAttachment(kind, file) {
+    if (!file || !selectedProfile) return;
+    const body = new FormData();
+    body.append("kind", kind);
+    body.append("file", file);
+    try {
+      await api(`/admin/users/${selectedProfile.user.id}/documents`, { method: "POST", body });
+      await refreshSelectedProfile();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+  async function uploadSelectedAvatar(file) {
+    if (!file || !selectedProfile) return;
+    const body = new FormData();
+    body.append("file", file);
+    await api(`/admin/users/${selectedProfile.user.id}/avatar`, { method: "POST", body });
+    await refreshSelectedProfile();
+  }
+  async function deleteSelectedAttachment(documentId) {
+    await api(`/admin/documents/${documentId}`, { method: "DELETE" });
+    await refreshSelectedProfile();
   }
   async function saveUser(event) {
     event.preventDefault();
@@ -692,8 +790,8 @@ function Admin({ t, admin, users, setUsers, jobs, supportThreads, reload, openSu
               <div className="section-head"><h2>{t("users")}</h2><input placeholder={t("searchUsers")} value={search} onChange={(e) => searchUsers(e.target.value)} /></div>
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>{t("users")}</th><th>{t("role")}</th><th>{t("plan")}</th><th>{t("status")}</th><th>{t("lastActive")}</th><th>{t("actions")}</th></tr></thead>
-                  <tbody>{users.map((user) => <tr key={user.id}><td><strong>{user.full_name}</strong><span>{user.email}</span></td><td>{user.role}</td><td>{user.plan}</td><td><span className={`status ${user.status}`}>{user.status}</span></td><td>{new Date(user.last_active_at).toLocaleDateString()}</td><td><div className="table-actions"><button onClick={() => setEditing(user)}>{t("editUser")}</button><button onClick={() => patchUser(user, { status: "verified" })}>{t("verify")}</button><button onClick={() => patchUser(user, { status: "active" })}>{t("activate")}</button><button onClick={() => patchUser(user, { status: "suspended" })}>{t("deactivate")}</button><button className="danger" onClick={() => deleteUser(user)}>{t("delete")}</button></div></td></tr>)}</tbody>
+                  <thead><tr><th>{t("users")}</th><th>{t("role")}</th><th>{t("plan")}</th><th>{t("status")}</th><th>{t("attachments")}</th><th>{t("lastActive")}</th><th>{t("actions")}</th></tr></thead>
+                  <tbody>{users.map((user) => <tr key={user.id}><td><div className="table-user"><Avatar user={user} size="small" /><div><strong>{user.full_name}</strong><span>{user.email}</span></div></div></td><td>{user.role}</td><td>{user.plan}</td><td><span className={`status ${user.status}`}>{user.status}</span></td><td><DocumentLinks t={t} documents={user.documents} avatarUrl={user.avatar_url} compact /></td><td>{new Date(user.last_active_at).toLocaleDateString()}</td><td><select className="action-select" defaultValue="" onChange={(e) => { runUserAction(user, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option><option value="edit">{t("editUser")}</option><option value="verify">{t("verify")}</option><option value="activate">{t("activate")}</option><option value="deactivate">{t("deactivate")}</option><option value="delete">{t("delete")}</option></select></td></tr>)}</tbody>
                 </table>
               </div>
             </section>
@@ -710,6 +808,50 @@ function Admin({ t, admin, users, setUsers, jobs, supportThreads, reload, openSu
               </div>
             </form>}
           </>}
+
+          {tab === "userProfile" && selectedProfile && <section className="admin-profile-view">
+            <div className="section-head">
+              <h2>{t("profileDetails")}</h2>
+              <button className="secondary-button compact" onClick={() => setTab("users")}>{t("backToUsers")}</button>
+            </div>
+            <section className="profile-hero panel">
+              <Avatar user={selectedProfile.user} size="large" />
+              <div><h1>{selectedProfile.user.full_name}</h1><p>{selectedProfile.user.headline}</p><span>{selectedProfile.user.location}</span></div>
+            </section>
+            <section className="admin-profile-grid">
+              <form className="panel admin-form" onSubmit={saveSelectedProfile}>
+                <h2>{t("editUser")}</h2>
+                <input value={selectedProfile.user.full_name || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, full_name: e.target.value } })} />
+                <input value={selectedProfile.user.email || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, email: e.target.value } })} />
+                <input value={selectedProfile.user.headline || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, headline: e.target.value } })} placeholder={t("headline")} />
+                <input value={selectedProfile.user.location || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, location: e.target.value } })} placeholder={t("location")} />
+                <input value={selectedProfile.user.plan || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, plan: e.target.value } })} placeholder={t("plan")} />
+                <textarea value={selectedProfile.profile?.about || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, profile: { ...(selectedProfile.profile || {}), about: e.target.value } })} placeholder={t("about")} />
+                <input value={Array.isArray(selectedProfile.profile?.skills) ? selectedProfile.profile.skills.join(", ") : selectedProfile.profile?.skills || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, profile: { ...(selectedProfile.profile || {}), skills: e.target.value } })} placeholder={t("skills")} />
+                <div className="row-fields">
+                  <select value={selectedProfile.user.role} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, role: e.target.value } })}><option value="member">member</option><option value="recruiter">recruiter</option><option value="company">company</option><option value="admin">admin</option></select>
+                  <select value={selectedProfile.user.status} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, status: e.target.value } })}><option value="active">active</option><option value="verified">verified</option><option value="review">review</option><option value="suspended">suspended</option></select>
+                  <button className="primary-button">{t("save")}</button>
+                </div>
+              </form>
+              <section className="panel admin-form">
+                <h2>{t("attachments")}</h2>
+                <label>{t("profilePicture")}<input type="file" accept="image/*" onChange={(e) => uploadSelectedAvatar(e.target.files[0])} /></label>
+                <label>{t("resume")}<input type="file" accept=".pdf,.doc,.docx" onChange={(e) => uploadSelectedAttachment("resume", e.target.files[0])} /></label>
+                <label>{t("certificate")}<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={(e) => uploadSelectedAttachment("certificate", e.target.files[0])} /><span>{t("maxCertificates")}</span></label>
+                <DocumentLinks t={t} documents={selectedProfile.documents} avatarUrl={selectedProfile.user.avatar_url} onDelete={deleteSelectedAttachment} />
+              </section>
+            </section>
+            <section className="panel">
+              <h2>{t("about")}</h2>
+              <p>{selectedProfile.profile?.about || "-"}</p>
+              <div className="chips">{(selectedProfile.profile?.skills || []).map((skill) => <span key={skill}>{skill}</span>)}</div>
+            </section>
+            <section className="panel">
+              <h2>{t("experience")}</h2>
+              {(selectedProfile.experiences || []).map((item) => <div className="timeline-item" key={item.id}><strong>{item.title}</strong><span>{item.company}</span></div>)}
+            </section>
+          </section>}
 
           {tab === "jobs" && <form className="panel admin-form" onSubmit={addJob}>
             <h2>{t("addJob")}</h2>
@@ -782,20 +924,61 @@ function SupportWindow({ t, me, users, initialUserId = "", onUpdate, close }) {
   );
 }
 
+function DocumentLinks({ t, documents = [], avatarUrl = "", compact = false, onDelete }) {
+  const files = [
+    ...(avatarUrl ? [{ id: "avatar", kind: "avatar", file_name: t("profilePicture"), file_url: avatarUrl }] : []),
+    ...(Array.isArray(documents) ? documents : [])
+  ];
+  if (!files.length) return <p className="attachment-empty">{t("noAttachments")}</p>;
+  if (compact) {
+    return (
+      <select className="attachment-select" defaultValue="" onChange={(event) => { if (event.target.value) window.open(event.target.value, "_blank", "noopener,noreferrer"); event.target.value = ""; }}>
+        <option value="">{t("attachments")}</option>
+        {files.map((item) => <option value={assetUrl(item.file_url || item.fileUrl)} key={item.id}>
+          {item.kind === "resume" ? t("resume") : item.kind === "avatar" ? t("profilePicture") : t("certificate")} - {item.file_name || item.fileName || t("viewFile")}
+        </option>)}
+      </select>
+    );
+  }
+  return (
+    <div className="attachment-list">
+      <strong>{t("attachments")}</strong>
+      {files.map((item) => <div className="attachment-row" key={item.id}>
+        <a href={assetUrl(item.file_url || item.fileUrl)} target="_blank" rel="noreferrer">
+          <span>{item.kind === "resume" ? t("resume") : item.kind === "avatar" ? t("profilePicture") : t("certificate")}</span>
+          {item.file_name || item.fileName || t("viewFile")}
+        </a>
+        {onDelete && item.kind !== "avatar" && <button type="button" onClick={() => onDelete(item.id)}>{t("removeAttachment")}</button>}
+      </div>)}
+    </div>
+  );
+}
+
 function Metric({ label, value }) {
   return <article className="metric-card"><span>{label}</span><strong>{value}</strong><small>+12.4%</small></article>;
 }
 
 function Avatar({ user, size = "" }) {
   const className = `avatar ${size}`.trim();
-  const apiBase = (import.meta.env.VITE_API_URL || "http://localhost:4000/api").replace(/\/api$/, "");
-  const src = user.avatarUrl ? `${apiBase}${user.avatarUrl}` : "";
+  const avatarUrl = user.avatarUrl || user.avatar_url;
+  const src = avatarUrl ? assetUrl(avatarUrl) : "";
   if (src) return <img className={className} src={src} alt={user.fullName || "Profile"} />;
-  return <div className={className}>{initials(user.fullName)}</div>;
+  return <div className={className}>{initials(user.fullName || user.full_name)}</div>;
 }
 
 function initials(name = "") {
   return name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+}
+
+function formatNumber(value = 0) {
+  return Number(value || 0).toLocaleString();
+}
+
+function assetUrl(path = "") {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  const apiBase = (import.meta.env.VITE_API_URL || "http://localhost:4000/api").replace(/\/api$/, "");
+  return `${apiBase}${path}`;
 }
 
 createRoot(document.getElementById("root")).render(<App />);

@@ -66,6 +66,11 @@ class AdminUserPatch(BaseModel):
     status: str | None = None
 
 
+class AdminProfilePatch(AdminUserPatch):
+    about: str | None = None
+    skills: list[str] | None = None
+
+
 class JobBody(BaseModel):
     companyName: str
     title: str
@@ -126,10 +131,39 @@ def me(user: Annotated[dict, Depends(current_user)]):
     experiences = fetch_all("SELECT * FROM experiences WHERE user_id = %s ORDER BY start_date DESC NULLS LAST", (user["id"],))
     education = fetch_all("SELECT * FROM education WHERE user_id = %s ORDER BY end_year DESC NULLS LAST", (user["id"],))
     documents = fetch_all(
-        "SELECT id, kind, file_name, mime_type, file_size, verification_status, created_at FROM documents WHERE user_id = %s ORDER BY created_at DESC",
+        """
+        SELECT id, kind, file_name, mime_type, file_size, verification_status, created_at,
+          '/uploads/' || split_part(file_path, '/', array_length(string_to_array(file_path, '/'), 1)) AS file_url
+        FROM documents
+        WHERE user_id = %s
+        ORDER BY created_at DESC
+        """,
         (user["id"],),
     )
-    return {"user": public_user(user), "profile": profile, "experiences": experiences, "education": education, "documents": documents}
+    applications = fetch_all(
+        """
+        SELECT a.id, a.status, a.created_at, j.id AS job_id, j.company_name, j.title, j.location, j.type, j.salary_range
+        FROM applications a
+        JOIN jobs j ON j.id = a.job_id
+        WHERE a.user_id = %s
+        ORDER BY a.created_at DESC
+        """,
+        (user["id"],),
+    )
+    stats = fetch_one(
+        """
+        SELECT
+          (SELECT COUNT(*)::int FROM profile_views WHERE profile_user_id = %s) AS profile_views,
+          (
+            SELECT COUNT(*)::int
+            FROM connections
+            WHERE status = 'accepted'
+              AND (requester_id = %s OR addressee_id = %s)
+          ) AS connections
+        """,
+        (user["id"], user["id"], user["id"]),
+    )
+    return {"user": public_user(user), "profile": profile, "experiences": experiences, "education": education, "documents": documents, "applications": applications, "stats": stats}
 
 
 @app.put("/api/me/profile")
@@ -168,16 +202,30 @@ async def upload_document(
     file: UploadFile = File(...),
 ):
     safe_kind = "certificate" if kind == "certificate" else "resume"
-    target = UPLOAD_DIR / f"{user['id']}_{safe_kind}_{file.filename}"
+    if safe_kind == "resume":
+        old_documents = fetch_all("SELECT id, file_path FROM documents WHERE user_id = %s AND kind = 'resume'", (user["id"],))
+        for old_document in old_documents:
+            if old_document.get("file_path"):
+                Path(old_document["file_path"]).unlink(missing_ok=True)
+        execute("DELETE FROM documents WHERE user_id = %s AND kind = 'resume'", (user["id"],))
+    else:
+        certificate_count = fetch_one("SELECT COUNT(*)::int AS count FROM documents WHERE user_id = %s AND kind = 'certificate'", (user["id"],))["count"]
+        if certificate_count >= 5:
+            raise HTTPException(status_code=400, detail="You can upload up to 5 certificates")
+
+    original_name = file.filename or safe_kind
+    suffix = Path(original_name).suffix
+    target = UPLOAD_DIR / f"{user['id']}_{safe_kind}_{uuid4().hex}{suffix}"
     content = await file.read()
     target.write_bytes(content)
+    file_url = f"/uploads/{target.name}"
     return execute(
         """
         INSERT INTO documents (user_id, kind, file_name, file_path, mime_type, file_size)
         VALUES (%s,%s,%s,%s,%s,%s)
-        RETURNING id, kind, file_name, mime_type, file_size, verification_status, created_at
+        RETURNING id, kind, file_name, mime_type, file_size, verification_status, created_at, %s AS file_url
         """,
-        (user["id"], safe_kind, file.filename, str(target), file.content_type, len(content)),
+        (user["id"], safe_kind, original_name, str(target), file.content_type, len(content), file_url),
     )
 
 
@@ -185,6 +233,9 @@ async def upload_document(
 async def upload_avatar(user: Annotated[dict, Depends(current_user)], file: UploadFile = File(...)):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Profile picture must be an image")
+    if user.get("avatar_url"):
+        old_avatar = UPLOAD_DIR / Path(user["avatar_url"]).name
+        old_avatar.unlink(missing_ok=True)
     suffix = Path(file.filename or "avatar").suffix.lower() or ".jpg"
     target = UPLOAD_DIR / f"{user['id']}_avatar_{uuid4().hex}{suffix}"
     content = await file.read()
@@ -250,14 +301,156 @@ def admin_users(user: Annotated[dict, Depends(admin_user)], search: str = ""):
     query = f"%{search}%"
     return fetch_all(
         """
-        SELECT id, full_name, email, role, plan, status, headline, location, created_at, last_active_at
-        FROM users
-        WHERE full_name ILIKE %s OR email ILIKE %s OR role ILIKE %s OR plan ILIKE %s OR status ILIKE %s
-        ORDER BY created_at DESC
+        SELECT
+          u.id, u.full_name, u.email, u.role, u.plan, u.status, u.headline, u.location, u.avatar_url, u.created_at, u.last_active_at,
+          COALESCE(
+            json_agg(
+              json_build_object(
+                'id', d.id,
+                'kind', d.kind,
+                'file_name', d.file_name,
+                'verification_status', d.verification_status,
+                'created_at', d.created_at,
+                'file_url', '/uploads/' || split_part(d.file_path, '/', array_length(string_to_array(d.file_path, '/'), 1))
+              )
+              ORDER BY d.created_at DESC
+            ) FILTER (WHERE d.id IS NOT NULL),
+            '[]'::json
+          ) AS documents
+        FROM users u
+        LEFT JOIN documents d ON d.user_id = u.id
+        WHERE u.full_name ILIKE %s OR u.email ILIKE %s OR u.role ILIKE %s OR u.plan ILIKE %s OR u.status ILIKE %s
+        GROUP BY u.id
+        ORDER BY u.created_at DESC
         LIMIT 100
         """,
         (query, query, query, query, query),
     )
+
+
+@app.get("/api/admin/users/{user_id}/profile")
+def admin_user_profile(user_id: UUID, user: Annotated[dict, Depends(admin_user)]):
+    target_user = fetch_one(
+        "SELECT id, full_name, email, role, plan, status, headline, location, avatar_url, created_at, last_active_at FROM users WHERE id = %s",
+        (user_id,),
+    )
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    profile = fetch_one("SELECT about, skills, languages, profile_strength FROM profiles WHERE user_id = %s", (user_id,))
+    experiences = fetch_all("SELECT * FROM experiences WHERE user_id = %s ORDER BY start_date DESC NULLS LAST", (user_id,))
+    education = fetch_all("SELECT * FROM education WHERE user_id = %s ORDER BY end_year DESC NULLS LAST", (user_id,))
+    documents = fetch_all(
+        """
+        SELECT id, kind, file_name, mime_type, file_size, verification_status, created_at,
+          '/uploads/' || split_part(file_path, '/', array_length(string_to_array(file_path, '/'), 1)) AS file_url
+        FROM documents
+        WHERE user_id = %s
+        ORDER BY created_at DESC
+        """,
+        (user_id,),
+    )
+    return {"user": target_user, "profile": profile, "experiences": experiences, "education": education, "documents": documents}
+
+
+@app.patch("/api/admin/users/{user_id}/profile")
+def update_admin_profile(user_id: UUID, body: AdminProfilePatch, user: Annotated[dict, Depends(admin_user)]):
+    updated = execute(
+        """
+        UPDATE users
+        SET full_name = COALESCE(%s, full_name),
+            email = COALESCE(%s, email),
+            headline = COALESCE(%s, headline),
+            location = COALESCE(%s, location),
+            role = COALESCE(%s, role),
+            plan = COALESCE(%s, plan),
+            status = COALESCE(%s, status)
+        WHERE id = %s
+        RETURNING id
+        """,
+        (body.fullName, str(body.email).lower() if body.email else None, body.headline, body.location, body.role, body.plan, body.status, user_id),
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="User not found")
+    profile = fetch_one("SELECT about, skills, languages FROM profiles WHERE user_id = %s", (user_id,))
+    about = body.about if body.about is not None else (profile or {}).get("about", "")
+    skills = body.skills if body.skills is not None else (profile or {}).get("skills", [])
+    languages = (profile or {}).get("languages", ["English", "Arabic"])
+    strength = min(100, 40 + (15 if about else 0) + (20 if skills else 0) + (10 if body.headline else 0) + (10 if body.location else 0))
+    execute(
+        """
+        INSERT INTO profiles (user_id, about, skills, languages, profile_strength, updated_at)
+        VALUES (%s,%s,%s,%s,%s,NOW())
+        ON CONFLICT (user_id) DO UPDATE
+        SET about = EXCLUDED.about, skills = EXCLUDED.skills, languages = EXCLUDED.languages,
+            profile_strength = EXCLUDED.profile_strength, updated_at = NOW()
+        """,
+        (user_id, about, skills, languages, strength),
+    )
+    return {"ok": True}
+
+
+@app.post("/api/admin/users/{user_id}/documents", status_code=201)
+async def upload_admin_document(
+    user_id: UUID,
+    user: Annotated[dict, Depends(admin_user)],
+    kind: Annotated[str, Form()] = "resume",
+    file: UploadFile = File(...),
+):
+    if not fetch_one("SELECT id FROM users WHERE id = %s", (user_id,)):
+        raise HTTPException(status_code=404, detail="User not found")
+    safe_kind = "certificate" if kind == "certificate" else "resume"
+    if safe_kind == "resume":
+        old_documents = fetch_all("SELECT file_path FROM documents WHERE user_id = %s AND kind = 'resume'", (user_id,))
+        for old_document in old_documents:
+            if old_document.get("file_path"):
+                Path(old_document["file_path"]).unlink(missing_ok=True)
+        execute("DELETE FROM documents WHERE user_id = %s AND kind = 'resume'", (user_id,))
+    else:
+        certificate_count = fetch_one("SELECT COUNT(*)::int AS count FROM documents WHERE user_id = %s AND kind = 'certificate'", (user_id,))["count"]
+        if certificate_count >= 5:
+            raise HTTPException(status_code=400, detail="You can upload up to 5 certificates")
+    original_name = file.filename or safe_kind
+    suffix = Path(original_name).suffix
+    target = UPLOAD_DIR / f"{user_id}_{safe_kind}_{uuid4().hex}{suffix}"
+    content = await file.read()
+    target.write_bytes(content)
+    file_url = f"/uploads/{target.name}"
+    return execute(
+        """
+        INSERT INTO documents (user_id, kind, file_name, file_path, mime_type, file_size)
+        VALUES (%s,%s,%s,%s,%s,%s)
+        RETURNING id, kind, file_name, mime_type, file_size, verification_status, created_at, %s AS file_url
+        """,
+        (user_id, safe_kind, original_name, str(target), file.content_type, len(content), file_url),
+    )
+
+
+@app.post("/api/admin/users/{user_id}/avatar")
+async def upload_admin_avatar(user_id: UUID, user: Annotated[dict, Depends(admin_user)], file: UploadFile = File(...)):
+    target_user = fetch_one("SELECT id, avatar_url FROM users WHERE id = %s", (user_id,))
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Profile picture must be an image")
+    if target_user.get("avatar_url"):
+        (UPLOAD_DIR / Path(target_user["avatar_url"]).name).unlink(missing_ok=True)
+    suffix = Path(file.filename or "avatar").suffix.lower() or ".jpg"
+    target = UPLOAD_DIR / f"{user_id}_avatar_{uuid4().hex}{suffix}"
+    content = await file.read()
+    target.write_bytes(content)
+    avatar_url = f"/uploads/{target.name}"
+    execute("UPDATE users SET avatar_url = %s WHERE id = %s", (avatar_url, user_id))
+    return {"avatarUrl": avatar_url}
+
+
+@app.delete("/api/admin/documents/{document_id}")
+def delete_admin_document(document_id: UUID, user: Annotated[dict, Depends(admin_user)]):
+    document = execute("DELETE FROM documents WHERE id = %s RETURNING file_path", (document_id,))
+    if not document:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    if document.get("file_path"):
+        Path(document["file_path"]).unlink(missing_ok=True)
+    return {"ok": True}
 
 
 @app.patch("/api/admin/users/{user_id}")

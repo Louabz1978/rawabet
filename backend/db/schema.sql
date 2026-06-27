@@ -81,6 +81,24 @@ CREATE TABLE IF NOT EXISTS applications (
   UNIQUE(job_id, user_id)
 );
 
+CREATE TABLE IF NOT EXISTS profile_views (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  profile_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  viewer_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  viewed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS connections (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  requester_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  addressee_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'blocked')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (requester_id <> addressee_id),
+  UNIQUE(requester_id, addressee_id)
+);
+
 CREATE TABLE IF NOT EXISTS interviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -105,5 +123,9 @@ CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 CREATE INDEX IF NOT EXISTS idx_documents_kind ON documents(kind);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+CREATE INDEX IF NOT EXISTS idx_profile_views_profile_user ON profile_views(profile_user_id);
+CREATE INDEX IF NOT EXISTS idx_connections_requester ON connections(requester_id);
+CREATE INDEX IF NOT EXISTS idx_connections_addressee ON connections(addressee_id);
+CREATE INDEX IF NOT EXISTS idx_connections_status ON connections(status);
 CREATE INDEX IF NOT EXISTS idx_interviews_user ON interviews(user_id);
 CREATE INDEX IF NOT EXISTS idx_support_messages_user ON support_messages(user_id);
