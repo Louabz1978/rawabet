@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rawabet | Professional Network</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Kufi+Arabic:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#home" aria-label="Rawabet home">
+          <span class="brand-mark">ر</span>
+          <span>
+            <strong data-i18n="brand">Rawabet</strong>
+            <small data-i18n="brandSub">Professional Network</small>
+          </span>
+        </a>
+
+        <label class="search" for="searchInput">
+          <span aria-hidden="true">⌕</span>
+          <input id="searchInput" type="search" data-i18n-placeholder="search" placeholder="Search people, jobs, companies" />
+        </label>
+
+        <nav class="desktop-nav" aria-label="Main navigation">
+          <a href="#home" class="nav-link active" data-view="home"><span>⌂</span><b data-i18n="home">Home</b></a>
+          <a href="#profile" class="nav-link" data-view="profile"><span>◉</span><b data-i18n="profile">Profile</b></a>
+          <a href="#network" class="nav-link" data-view="network"><span>◎</span><b data-i18n="network">Network</b></a>
+          <a href="#jobs" class="nav-link" data-view="jobs"><span>▣</span><b data-i18n="jobs">Jobs</b></a>
+          <a href="#messages" class="nav-link" data-view="messages"><span>✉</span><b data-i18n="messages">Messages</b></a>
+          <a href="#admin" class="nav-link" data-view="admin"><span>▥</span><b data-i18n="admin">Admin</b></a>
+        </nav>
+
+        <div class="top-actions">
+          <button class="icon-button" id="languageToggle" type="button" aria-label="Switch language">ع</button>
+          <button class="primary-button compact" data-open-builder type="button" data-i18n="completeProfile">Complete profile</button>
+        </div>
+      </header>
+
+      <main>
+        <section class="view active" id="home" aria-labelledby="homeTitle">
+          <div class="layout-grid">
+            <aside class="profile-rail">
+              <section class="profile-card">
+                <div class="cover-strip"></div>
+                <div class="avatar-wrap">
+                  <img id="miniAvatar" class="avatar" alt="Profile photo" />
+                  <span class="online-dot"></span>
+                </div>
+                <h1 id="miniName">Your Name</h1>
+                <p id="miniHeadline">Build your professional identity on Rawabet.</p>
+                <dl class="quick-stats">
+                  <div><dt data-i18n="profileViews">Profile views</dt><dd>248</dd></div>
+                  <div><dt data-i18n="connections">Connections</dt><dd id="connectionCount">1,274</dd></div>
+                </dl>
+                <button class="secondary-button full" data-open-builder type="button" data-i18n="editProfile">Edit profile</button>
+              </section>
+
+              <section class="side-panel">
+                <h2 data-i18n="workspace">Workspace</h2>
+                <a href="#profile" data-view="profile" class="panel-link"><span>↗</span><span data-i18n="publicProfile">Public profile</span></a>
+                <a href="#jobs" data-view="jobs" class="panel-link"><span>▦</span><span data-i18n="savedJobs">Saved jobs</span></a>
+                <a href="#network" data-view="network" class="panel-link"><span>◇</span><span data-i18n="myNetwork">My network</span></a>
+                <a href="#admin" data-view="admin" class="panel-link"><span>▥</span><span data-i18n="adminConsole">Admin console</span></a>
+              </section>
+            </aside>
+
+            <section class="feed-column">
+              <section class="composer">
+                <img id="composerAvatar" class="avatar small" alt="Profile photo" />
+                <button class="composer-input" type="button" data-i18n="startPost">Start a professional update</button>
+                <div class="composer-actions">
+                  <button type="button"><span>▤</span><span data-i18n="article">Article</span></button>
+                  <button type="button"><span>▧</span><span data-i18n="portfolio">Portfolio</span></button>
+                  <button type="button"><span>◌</span><span data-i18n="event">Event</span></button>
+                </div>
+              </section>
+
+              <article class="post-card">
+                <div class="post-head">
+                  <div class="company-logo">R</div>
+                  <div>
+                    <h2 data-i18n="welcomeTitle">Welcome to Rawabet</h2>
+                    <p data-i18n="welcomeMeta">Professional identity platform</p>
+                  </div>
+                </div>
+                <p data-i18n="welcomeBody">
+                  Create a credible profile, add your resume, verify certificates, show your experience, and connect with opportunities in English and Arabic.
+                </p>
+                <div class="feature-grid">
+                  <div><strong data-i18n="resumeUpload">Resume upload</strong><span data-i18n="resumeUploadBody">PDF, DOC, and portfolio files</span></div>
+                  <div><strong data-i18n="verifiedCerts">Certificates</strong><span data-i18n="verifiedCertsBody">Show licenses, awards, and training</span></div>
+                  <div><strong data-i18n="workTimeline">Work history</strong><span data-i18n="workTimelineBody">Structured career timeline</span></div>
+                </div>
+              </article>
+
+              <article class="post-card">
+                <div class="post-head">
+                  <div class="company-logo accent">AI</div>
+                  <div>
+                    <h2 data-i18n="hiringTitle">Companies hiring this week</h2>
+                    <p data-i18n="hiringMeta">Based on your selected skills</p>
+                  </div>
+                </div>
+                <div class="job-strip">
+                  <span>Product Manager</span>
+                  <span>Frontend Engineer</span>
+                  <span>Data Analyst</span>
+                  <span>HR Specialist</span>
+                </div>
+              </article>
+            </section>
+
+            <aside class="insight-rail">
+              <section class="side-panel">
+                <h2 data-i18n="profileStrength">Profile strength</h2>
+                <div class="meter"><span id="strengthBar"></span></div>
+                <p id="strengthText">Add your resume and work history to reach All-Star.</p>
+              </section>
+
+              <section class="side-panel">
+                <h2 data-i18n="peopleYouMayKnow">People you may know</h2>
+                <div class="person-row"><div class="avatar text">SA</div><div><strong>Sara Alami</strong><small>UX Lead</small></div><button type="button">+</button></div>
+                <div class="person-row"><div class="avatar text">OK</div><div><strong>Omar Khaled</strong><small>Cloud Architect</small></div><button type="button">+</button></div>
+                <div class="person-row"><div class="avatar text">LN</div><div><strong>Lina Nader</strong><small>Talent Partner</small></div><button type="button">+</button></div>
+              </section>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="profile" aria-labelledby="profileTitle">
+          <div class="profile-page">
+            <section class="hero-profile">
+              <div class="hero-cover"></div>
+              <div class="hero-body">
+                <img id="profileAvatar" class="avatar large" alt="Profile photo" />
+                <div class="profile-title-block">
+                  <h1 id="profileTitle">Your Name</h1>
+                  <p id="profileHeadline">Build your professional identity on Rawabet.</p>
+                  <span id="profileLocation">Riyadh, Saudi Arabia</span>
+                </div>
+                <button class="primary-button" data-open-builder type="button" data-i18n="editProfile">Edit profile</button>
+              </div>
+            </section>
+
+            <div class="profile-sections">
+              <section class="content-section">
+                <h2 data-i18n="about">About</h2>
+                <p id="aboutText">Add a concise summary that explains your work, strengths, and career goals.</p>
+              </section>
+              <section class="content-section">
+                <h2 data-i18n="experience">Experience</h2>
+                <div id="experienceList" class="timeline-list"></div>
+              </section>
+              <section class="content-section">
+                <h2 data-i18n="education">Education</h2>
+                <div id="educationList" class="timeline-list"></div>
+              </section>
+              <section class="content-section">
+                <h2 data-i18n="licenses">Licenses & certificates</h2>
+                <div id="certificateList" class="file-list"></div>
+              </section>
+              <section class="content-section">
+                <h2 data-i18n="resume">Resume</h2>
+                <div id="resumeList" class="file-list"></div>
+              </section>
+              <section class="content-section">
+                <h2 data-i18n="skills">Skills</h2>
+                <div id="skillList" class="chips"></div>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="network" aria-labelledby="networkTitle">
+          <div class="directory-page">
+            <div class="page-heading">
+              <h1 id="networkTitle" data-i18n="growNetwork">Grow your network</h1>
+              <p data-i18n="growNetworkBody">Discover professionals, recruiters, mentors, and alumni in your field.</p>
+            </div>
+            <div class="directory-grid" id="networkCards"></div>
+          </div>
+        </section>
+
+        <section class="view" id="jobs" aria-labelledby="jobsTitle">
+          <div class="jobs-page">
+            <div class="page-heading">
+              <h1 id="jobsTitle" data-i18n="jobMatches">Job matches</h1>
+              <p data-i18n="jobMatchesBody">Curated opportunities aligned with your profile, language, and career history.</p>
+            </div>
+            <div class="jobs-layout">
+              <aside class="filters">
+                <h2 data-i18n="filters">Filters</h2>
+                <label><input type="checkbox" checked /> <span data-i18n="remote">Remote</span></label>
+                <label><input type="checkbox" checked /> <span data-i18n="fullTime">Full-time</span></label>
+                <label><input type="checkbox" /> <span data-i18n="internship">Internship</span></label>
+              </aside>
+              <div class="job-list" id="jobCards"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="messages" aria-labelledby="messagesTitle">
+          <div class="messages-page">
+            <aside class="conversation-list">
+              <h1 id="messagesTitle" data-i18n="messages">Messages</h1>
+              <button class="conversation active" type="button"><strong>Noura Hassan</strong><span data-i18n="messagePreviewOne">Can we schedule an interview?</span></button>
+              <button class="conversation" type="button"><strong>Rawabet Support</strong><span data-i18n="messagePreviewTwo">Your profile verification is ready.</span></button>
+              <button class="conversation" type="button"><strong>Yousef Ali</strong><span data-i18n="messagePreviewThree">Thanks for connecting.</span></button>
+            </aside>
+            <section class="chat-panel">
+              <div class="chat-head"><div class="avatar text">NH</div><div><strong>Noura Hassan</strong><small>Talent Acquisition Manager</small></div></div>
+              <div class="chat-body">
+                <p class="bubble incoming" data-i18n="chatOne">Your experience looks relevant for our Senior Operations role.</p>
+                <p class="bubble outgoing" data-i18n="chatTwo">Thank you. I uploaded my updated resume and certificates.</p>
+              </div>
+              <label class="message-box">
+                <input type="text" data-i18n-placeholder="writeMessage" placeholder="Write a message" />
+                <button type="button" data-i18n="send">Send</button>
+              </label>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="admin" aria-labelledby="adminTitle">
+          <div class="admin-page">
+            <div class="admin-heading">
+              <div>
+                <p data-i18n="adminEyebrow">Platform operations</p>
+                <h1 id="adminTitle" data-i18n="adminDashboard">Admin dashboard</h1>
+                <span data-i18n="adminDashboardBody">Control users, monitor platform health, and review reports from one professional command center.</span>
+              </div>
+              <div class="admin-actions">
+                <button class="secondary-button" id="refreshReports" type="button" data-i18n="refresh">Refresh</button>
+                <button class="primary-button" id="exportReports" type="button" data-i18n="exportReport">Export report</button>
+              </div>
+            </div>
+
+            <section class="metric-grid" aria-label="Admin metrics">
+              <article class="metric-card">
+                <span data-i18n="totalUsers">Total users</span>
+                <strong id="metricUsers">0</strong>
+                <small data-i18n="metricUsersDelta">+12.4% this month</small>
+              </article>
+              <article class="metric-card">
+                <span data-i18n="verifiedProfiles">Verified profiles</span>
+                <strong id="metricVerified">0</strong>
+                <small data-i18n="metricVerifiedDelta">82% verification rate</small>
+              </article>
+              <article class="metric-card">
+                <span data-i18n="activeJobs">Active jobs</span>
+                <strong id="metricJobs">0</strong>
+                <small data-i18n="metricJobsDelta">18 new roles posted</small>
+              </article>
+              <article class="metric-card">
+                <span data-i18n="monthlyRevenue">Monthly revenue</span>
+                <strong id="metricRevenue">$0</strong>
+                <small data-i18n="metricRevenueDelta">Enterprise plans growing</small>
+              </article>
+            </section>
+
+            <div class="admin-layout">
+              <section class="admin-panel span-two">
+                <div class="section-head">
+                  <div>
+                    <h2 data-i18n="growthAnalytics">Growth analytics</h2>
+                    <p data-i18n="growthAnalyticsBody">User signups, completed profiles, and job applications over the last six months.</p>
+                  </div>
+                  <div class="segmented-control" role="group" aria-label="Analytics range">
+                    <button class="active" type="button" data-i18n="sixMonths">6M</button>
+                    <button type="button" data-i18n="yearToDate">YTD</button>
+                    <button type="button" data-i18n="all">All</button>
+                  </div>
+                </div>
+                <div id="growthChart" class="bar-chart"></div>
+              </section>
+
+              <section class="admin-panel">
+                <div class="section-head">
+                  <div>
+                    <h2 data-i18n="userSegments">User segments</h2>
+                    <p data-i18n="userSegmentsBody">Composition by member type.</p>
+                  </div>
+                </div>
+                <div id="segmentList" class="segment-list"></div>
+              </section>
+
+              <section class="admin-panel span-three">
+                <div class="section-head">
+                  <div>
+                    <h2 data-i18n="userManagement">User management</h2>
+                    <p data-i18n="userManagementBody">Review user status, subscription, verification, and account controls.</p>
+                  </div>
+                  <label class="admin-search">
+                    <span>⌕</span>
+                    <input id="adminUserSearch" type="search" data-i18n-placeholder="searchUsers" placeholder="Search users" />
+                  </label>
+                </div>
+                <div class="user-table-wrap">
+                  <table class="user-table">
+                    <thead>
+                      <tr>
+                        <th data-i18n="user">User</th>
+                        <th data-i18n="role">Role</th>
+                        <th data-i18n="plan">Plan</th>
+                        <th data-i18n="status">Status</th>
+                        <th data-i18n="lastActive">Last active</th>
+                        <th data-i18n="actions">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="adminUsers"></tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section class="admin-panel">
+                <div class="section-head">
+                  <div>
+                    <h2 data-i18n="reports">Reports</h2>
+                    <p data-i18n="reportsBody">Operational summaries ready for leadership review.</p>
+                  </div>
+                </div>
+                <div id="reportCards" class="report-list"></div>
+              </section>
+
+              <section class="admin-panel">
+                <div class="section-head">
+                  <div>
+                    <h2 data-i18n="riskQueue">Risk queue</h2>
+                    <p data-i18n="riskQueueBody">Items needing admin attention.</p>
+                  </div>
+                </div>
+                <div class="risk-list">
+                  <div><strong>14</strong><span data-i18n="pendingCertificates">Pending certificate reviews</span></div>
+                  <div><strong>7</strong><span data-i18n="flaggedProfiles">Flagged profile updates</span></div>
+                  <div><strong>3</strong><span data-i18n="billingIssues">Billing issues</span></div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <nav class="mobile-nav" aria-label="Mobile navigation">
+        <a href="#home" class="nav-link active" data-view="home"><span>⌂</span><b data-i18n="home">Home</b></a>
+        <a href="#profile" class="nav-link" data-view="profile"><span>◉</span><b data-i18n="profile">Profile</b></a>
+        <a href="#network" class="nav-link" data-view="network"><span>◎</span><b data-i18n="network">Network</b></a>
+        <a href="#jobs" class="nav-link" data-view="jobs"><span>▣</span><b data-i18n="jobs">Jobs</b></a>
+        <a href="#admin" class="nav-link" data-view="admin"><span>▥</span><b data-i18n="admin">Admin</b></a>
+      </nav>
+    </div>
+
+    <dialog id="profileBuilder" class="builder-modal">
+      <form method="dialog" class="builder">
+        <header class="builder-head">
+          <div>
+            <p data-i18n="profileBuilder">Profile Builder</p>
+            <h2 data-i18n="completeYourRawabet">Complete your Rawabet profile</h2>
+          </div>
+          <button class="icon-button" value="cancel" aria-label="Close" type="submit">×</button>
+        </header>
+
+        <div class="builder-grid">
+          <section class="builder-panel">
+            <h3 data-i18n="basicInfo">Basic information</h3>
+            <label data-i18n-label="fullName">Full name<input id="fullName" type="text" value="Loui Abouzaid" /></label>
+            <label data-i18n-label="headline">Headline<input id="headline" type="text" value="Founder and product builder" /></label>
+            <label data-i18n-label="location">Location<input id="location" type="text" value="New York, United States" /></label>
+            <label data-i18n-label="about">About<textarea id="aboutInput" rows="5">I build professional digital products, connect teams, and turn ideas into useful platforms.</textarea></label>
+            <label data-i18n-label="skills">Skills<input id="skillsInput" type="text" value="Product Strategy, UX, JavaScript, Leadership, Arabic, English" /></label>
+          </section>
+
+          <section class="builder-panel">
+            <h3 data-i18n="mediaFiles">Photo, resume, certificates</h3>
+            <label data-i18n-label="profilePicture">Profile picture<input id="photoInput" type="file" accept="image/*" /></label>
+            <label data-i18n-label="resume">Resume<input id="resumeInput" type="file" accept=".pdf,.doc,.docx" multiple /></label>
+            <label data-i18n-label="certificates">Certificates<input id="certificateInput" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" multiple /></label>
+            <div class="upload-preview">
+              <img id="photoPreview" class="avatar large" alt="Profile preview" />
+              <div>
+                <strong data-i18n="filesStayLocal">Files stay in your browser</strong>
+                <p data-i18n="filesStayLocalBody">This demo saves profile text and file names locally for a fast professional prototype.</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="builder-panel span">
+            <h3 data-i18n="careerHistory">Career history</h3>
+            <div class="row-fields">
+              <input id="roleInput" type="text" data-i18n-placeholder="rolePlaceholder" placeholder="Role" value="Founder" />
+              <input id="companyInput" type="text" data-i18n-placeholder="companyPlaceholder" placeholder="Company" value="Rawabet" />
+              <input id="periodInput" type="text" data-i18n-placeholder="periodPlaceholder" placeholder="Period" value="2025 - Present" />
+              <button id="addExperience" class="secondary-button" type="button" data-i18n="add">Add</button>
+            </div>
+            <div id="builderExperienceList" class="timeline-list compact"></div>
+          </section>
+
+          <section class="builder-panel span">
+            <h3 data-i18n="education">Education</h3>
+            <div class="row-fields">
+              <input id="schoolInput" type="text" data-i18n-placeholder="schoolPlaceholder" placeholder="School" value="University Program" />
+              <input id="degreeInput" type="text" data-i18n-placeholder="degreePlaceholder" placeholder="Degree" value="Business and Technology" />
+              <input id="eduPeriodInput" type="text" data-i18n-placeholder="periodPlaceholder" placeholder="Period" value="2021 - 2025" />
+              <button id="addEducation" class="secondary-button" type="button" data-i18n="add">Add</button>
+            </div>
+            <div id="builderEducationList" class="timeline-list compact"></div>
+          </section>
+        </div>
+
+        <footer class="builder-actions">
+          <button class="secondary-button" value="cancel" type="submit" data-i18n="cancel">Cancel</button>
+          <button id="saveProfile" class="primary-button" value="default" type="button" data-i18n="saveProfile">Save profile</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>

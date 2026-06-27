@@ -1,0 +1,17 @@
+{
+  "name": "rawabet-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Rawabet bilingual professional network with admin analytics.",
+  "scripts": {
+    "install:all": "python3 -m venv backend/.venv && backend/.venv/bin/pip install -r backend/requirements.txt && npm install --prefix frontend",
+    "dev": "concurrently \"backend/.venv/bin/uvicorn app.main:app --app-dir backend --reload --host 127.0.0.1 --port 4000\" \"npm run dev --prefix frontend\"",
+    "db:setup": "backend/.venv/bin/python backend/db/setup.py",
+    "db:seed": "backend/.venv/bin/python backend/db/seed.py",
+    "build": "npm run build --prefix frontend",
+    "start": "backend/.venv/bin/uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 4000"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
