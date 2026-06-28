@@ -2,6 +2,9 @@ from pathlib import Path
 from uuid import uuid4
 from typing import Annotated
 from uuid import UUID
+from email.message import EmailMessage
+import secrets
+import smtplib
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr
 
 from .auth import admin_user, create_token, current_user, hash_password, public_user, verify_password
-from .config import UPLOAD_DIR
+from .config import SMTP_FROM, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USER, UPLOAD_DIR
 from .db import execute, fetch_all, fetch_one
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -35,6 +38,11 @@ class RegisterBody(BaseModel):
 class LoginBody(BaseModel):
     email: EmailStr
     password: str
+
+
+class VerifyRegistrationBody(BaseModel):
+    email: EmailStr
+    otp: str
 
 
 class ProfileBody(BaseModel):
@@ -74,6 +82,7 @@ class AdminProfilePatch(AdminUserPatch):
 class JobBody(BaseModel):
     companyName: str
     title: str
+    category: str = "General"
     location: str
     type: str = "Full-time"
     salaryRange: str | None = None
@@ -89,6 +98,10 @@ class InterviewBody(BaseModel):
     notes: str | None = None
 
 
+class ApplicationStatusBody(BaseModel):
+    status: str
+
+
 class SupportMessageBody(BaseModel):
     message: str
     userId: UUID | None = None
@@ -99,21 +112,131 @@ def health():
     return {"ok": True, "service": "rawabet-python-api"}
 
 
+def send_verification_email(email: str, otp: str) -> tuple[bool, str | None]:
+    if not SMTP_HOST or not SMTP_PASSWORD or SMTP_PASSWORD == "PUT_GMAIL_APP_PASSWORD_HERE":
+        return False, "SMTP is not configured."
+    message = EmailMessage()
+    message["Subject"] = "Rawabet verification code"
+    message["From"] = SMTP_FROM
+    message["To"] = email
+    message.set_content(f"Your Rawabet verification code is: {otp}\n\nThis code expires in 15 minutes.")
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as smtp:
+            smtp.starttls()
+            if SMTP_USER:
+                smtp.login(SMTP_USER, SMTP_PASSWORD)
+            smtp.send_message(message)
+        return True, None
+    except smtplib.SMTPAuthenticationError:
+        return False, "Gmail rejected the SMTP login. Use a Google App Password, not your normal Gmail password."
+    except smtplib.SMTPException as exc:
+        return False, f"SMTP failed: {exc}"
+
+
+def calculate_profile_strength(user_id: UUID | str) -> int:
+    data = fetch_one(
+        """
+        SELECT
+          u.avatar_url,
+          u.headline,
+          u.location,
+          COALESCE(p.about, '') AS about,
+          COALESCE(array_length(p.skills, 1), 0) AS skill_count,
+          EXISTS (SELECT 1 FROM documents WHERE user_id = u.id AND kind = 'resume') AS has_resume,
+          EXISTS (SELECT 1 FROM documents WHERE user_id = u.id AND kind = 'certificate') AS has_certificate,
+          EXISTS (SELECT 1 FROM experiences WHERE user_id = u.id) AS has_experience
+        FROM users u
+        LEFT JOIN profiles p ON p.user_id = u.id
+        WHERE u.id = %s
+        """,
+        (user_id,),
+    )
+    if not data:
+        return 0
+    strength = 0
+    strength += 15 if data.get("avatar_url") else 0
+    strength += 20 if data.get("has_resume") else 0
+    strength += 15 if data.get("has_certificate") else 0
+    strength += min(15, int(data.get("skill_count") or 0) * 5)
+    strength += 10 if data.get("headline") else 0
+    strength += 10 if data.get("about") else 0
+    strength += 5 if data.get("location") else 0
+    strength += 10 if data.get("has_experience") else 0
+    return min(100, strength)
+
+
+def sync_profile_strength(user_id: UUID | str) -> int:
+    strength = calculate_profile_strength(user_id)
+    execute(
+        """
+        INSERT INTO profiles (user_id, about, skills, profile_strength, updated_at)
+        VALUES (%s, '', '{}', %s, NOW())
+        ON CONFLICT (user_id) DO UPDATE
+        SET profile_strength = EXCLUDED.profile_strength,
+            updated_at = NOW()
+        """,
+        (user_id, strength),
+    )
+    return strength
+
+
 @app.post("/api/auth/register")
 def register(body: RegisterBody):
-    existing = fetch_one("SELECT id FROM users WHERE email = %s", (body.email.lower(),))
+    existing = fetch_one("SELECT id, email_verified, status FROM users WHERE email = %s", (body.email.lower(),))
     if existing:
         raise HTTPException(status_code=409, detail="Email already registered")
-    user = execute(
+    otp = f"{secrets.randbelow(1000000):06d}"
+    execute(
         """
-        INSERT INTO users (full_name, email, password_hash, role)
-        VALUES (%s,%s,%s,%s)
+        INSERT INTO pending_registrations (full_name, email, password_hash, role, otp_hash, expires_at)
+        VALUES (%s,%s,%s,%s,%s,NOW() + interval '15 minutes')
+        ON CONFLICT (email) DO UPDATE
+        SET full_name = EXCLUDED.full_name,
+            password_hash = EXCLUDED.password_hash,
+            role = EXCLUDED.role,
+            otp_hash = EXCLUDED.otp_hash,
+            expires_at = EXCLUDED.expires_at,
+            created_at = NOW()
+        """,
+        (body.fullName, body.email.lower(), hash_password(body.password), body.role, hash_password(otp)),
+    )
+    email_sent, email_error = send_verification_email(body.email.lower(), otp)
+    response = {"ok": True, "needsVerification": True, "emailSent": email_sent, "message": "Check your email for the verification code."}
+    if not email_sent:
+        response["devOtp"] = otp
+        response["message"] = f"{email_error} Use the displayed development OTP to verify this account."
+    return response
+
+
+@app.post("/api/auth/verify-registration")
+def verify_registration(body: VerifyRegistrationBody):
+    pending = fetch_one(
+        """
+        SELECT *
+        FROM pending_registrations
+        WHERE email = %s AND expires_at > NOW()
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (body.email.lower(),),
+    )
+    if not pending or not verify_password(body.otp, pending["otp_hash"]):
+        raise HTTPException(status_code=400, detail="Invalid or expired verification code")
+    if fetch_one("SELECT id FROM users WHERE email = %s", (pending["email"],)):
+        execute("DELETE FROM pending_registrations WHERE id = %s", (pending["id"],))
+        raise HTTPException(status_code=409, detail="Email already registered")
+    verified_user = execute(
+        """
+        INSERT INTO users (full_name, email, password_hash, role, status, email_verified)
+        VALUES (%s,%s,%s,%s,'active',true)
         RETURNING id, full_name, email, role, plan, status, headline, location, avatar_url
         """,
-        (body.fullName, body.email.lower(), hash_password(body.password), body.role),
+        (pending["full_name"], pending["email"], pending["password_hash"], pending["role"]),
     )
-    execute("INSERT INTO profiles (user_id, about, skills) VALUES (%s, '', '{}')", (user["id"],))
-    return {"user": public_user(user), "token": create_token(user)}
+    execute("INSERT INTO profiles (user_id, about, skills, profile_strength) VALUES (%s, '', '{}', 0)", (verified_user["id"],))
+    sync_profile_strength(verified_user["id"])
+    execute("DELETE FROM pending_registrations WHERE id = %s", (pending["id"],))
+    return {"user": public_user(verified_user), "token": create_token(verified_user)}
 
 
 @app.post("/api/auth/login")
@@ -121,12 +244,17 @@ def login(body: LoginBody):
     user = fetch_one("SELECT * FROM users WHERE email = %s", (body.email.lower(),))
     if not user or not verify_password(body.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    if not user.get("email_verified"):
+        raise HTTPException(status_code=403, detail="Please verify your email before signing in")
+    if user.get("status") == "suspended":
+        raise HTTPException(status_code=403, detail="This account is suspended")
     execute("UPDATE users SET last_active_at = NOW() WHERE id = %s", (user["id"],))
     return {"user": public_user(user), "token": create_token(user)}
 
 
 @app.get("/api/me")
 def me(user: Annotated[dict, Depends(current_user)]):
+    sync_profile_strength(user["id"])
     profile = fetch_one("SELECT about, skills, languages, profile_strength FROM profiles WHERE user_id = %s", (user["id"],))
     experiences = fetch_all("SELECT * FROM experiences WHERE user_id = %s ORDER BY start_date DESC NULLS LAST", (user["id"],))
     education = fetch_all("SELECT * FROM education WHERE user_id = %s ORDER BY end_year DESC NULLS LAST", (user["id"],))
@@ -142,7 +270,7 @@ def me(user: Annotated[dict, Depends(current_user)]):
     )
     applications = fetch_all(
         """
-        SELECT a.id, a.status, a.created_at, j.id AS job_id, j.company_name, j.title, j.location, j.type, j.salary_range
+        SELECT a.id, a.status, a.created_at, j.id AS job_id, j.company_name, j.title, j.category, j.location, j.type, j.salary_range, j.description, j.status AS job_status
         FROM applications a
         JOIN jobs j ON j.id = a.job_id
         WHERE a.user_id = %s
@@ -169,7 +297,6 @@ def me(user: Annotated[dict, Depends(current_user)]):
 @app.put("/api/me/profile")
 def update_profile(body: ProfileBody, user: Annotated[dict, Depends(current_user)]):
     execute("UPDATE users SET full_name = %s, headline = %s, location = %s WHERE id = %s", (body.fullName, body.headline, body.location, user["id"]))
-    strength = min(100, 40 + (15 if body.about else 0) + (20 if body.skills else 0) + (10 if body.headline else 0) + (10 if body.location else 0))
     execute(
         """
         INSERT INTO profiles (user_id, about, skills, languages, profile_strength, updated_at)
@@ -178,14 +305,15 @@ def update_profile(body: ProfileBody, user: Annotated[dict, Depends(current_user
         SET about = EXCLUDED.about, skills = EXCLUDED.skills, languages = EXCLUDED.languages,
             profile_strength = EXCLUDED.profile_strength, updated_at = NOW()
         """,
-        (user["id"], body.about, body.skills, body.languages, strength),
+        (user["id"], body.about, body.skills, body.languages, calculate_profile_strength(user["id"])),
     )
+    sync_profile_strength(user["id"])
     return {"ok": True}
 
 
 @app.post("/api/me/experience", status_code=201)
 def add_experience(body: ExperienceBody, user: Annotated[dict, Depends(current_user)]):
-    return execute(
+    experience = execute(
         """
         INSERT INTO experiences (user_id, title, company, location, start_date, end_date, is_current, description)
         VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
@@ -193,6 +321,8 @@ def add_experience(body: ExperienceBody, user: Annotated[dict, Depends(current_u
         """,
         (user["id"], body.title, body.company, body.location, body.startDate, body.endDate, body.isCurrent, body.description),
     )
+    sync_profile_strength(user["id"])
+    return experience
 
 
 @app.post("/api/me/documents", status_code=201)
@@ -219,7 +349,7 @@ async def upload_document(
     content = await file.read()
     target.write_bytes(content)
     file_url = f"/uploads/{target.name}"
-    return execute(
+    document = execute(
         """
         INSERT INTO documents (user_id, kind, file_name, file_path, mime_type, file_size)
         VALUES (%s,%s,%s,%s,%s,%s)
@@ -227,6 +357,8 @@ async def upload_document(
         """,
         (user["id"], safe_kind, original_name, str(target), file.content_type, len(content), file_url),
     )
+    sync_profile_strength(user["id"])
+    return document
 
 
 @app.post("/api/me/avatar")
@@ -250,6 +382,7 @@ async def upload_avatar(user: Annotated[dict, Depends(current_user)], file: Uplo
         """,
         (avatar_url, user["id"]),
     )
+    sync_profile_strength(user["id"])
     return {"user": public_user(updated)}
 
 
@@ -264,6 +397,33 @@ def apply_to_job(job_id: UUID, user: Annotated[dict, Depends(current_user)]):
     return {"ok": True}
 
 
+@app.get("/api/admin/applications")
+def list_admin_applications(user: Annotated[dict, Depends(admin_user)]):
+    return fetch_all(
+        """
+        SELECT
+          a.id, a.status, a.created_at,
+          u.id AS user_id, u.full_name, u.email, u.headline, u.avatar_url,
+          j.id AS job_id, j.title AS job_title, j.company_name, j.location
+        FROM applications a
+        JOIN users u ON u.id = a.user_id
+        JOIN jobs j ON j.id = a.job_id
+        ORDER BY a.created_at DESC
+        """
+    )
+
+
+@app.patch("/api/admin/applications/{application_id}")
+def update_admin_application(application_id: UUID, body: ApplicationStatusBody, user: Annotated[dict, Depends(admin_user)]):
+    allowed = {"submitted", "review", "interview", "accepted", "rejected"}
+    if body.status not in allowed:
+        raise HTTPException(status_code=400, detail="Invalid application status")
+    updated = execute("UPDATE applications SET status = %s WHERE id = %s RETURNING id", (body.status, application_id))
+    if not updated:
+        raise HTTPException(status_code=404, detail="Application not found")
+    return {"ok": True}
+
+
 @app.get("/api/admin/overview")
 def admin_overview(user: Annotated[dict, Depends(admin_user)]):
     metrics = {
@@ -272,26 +432,101 @@ def admin_overview(user: Annotated[dict, Depends(admin_user)]):
         "activeJobs": fetch_one("SELECT COUNT(*)::int AS count FROM jobs WHERE status = 'active'")["count"],
         "applications": fetch_one("SELECT COUNT(*)::int AS count FROM applications")["count"],
         "pendingDocuments": fetch_one("SELECT COUNT(*)::int AS count FROM documents WHERE verification_status = 'pending'")["count"],
-        "monthlyRevenue": 186000,
+        "suspendedUsers": fetch_one("SELECT COUNT(*)::int AS count FROM users WHERE status = 'suspended'")["count"],
+        "pendingInterviews": fetch_one("SELECT COUNT(*)::int AS count FROM interviews WHERE status = 'scheduled'")["count"],
     }
-    growth = fetch_all(
+    users_growth = fetch_all(
         """
-        SELECT to_char(month, 'Mon') AS month,
-          (40 + row_number() OVER () * 18)::int AS users,
-          (25 + row_number() OVER () * 14)::int AS profiles,
-          (18 + row_number() OVER () * 11)::int AS applications
+        SELECT to_char(month, 'Mon') AS label,
+          COALESCE(COUNT(u.id), 0)::int AS value
         FROM generate_series(date_trunc('month', NOW()) - interval '5 months', date_trunc('month', NOW()), interval '1 month') AS month
+        LEFT JOIN users u ON date_trunc('month', u.created_at) = month
+        GROUP BY month
+        ORDER BY month
+        """
+    )
+    jobs_posted = fetch_all(
+        """
+        SELECT to_char(month, 'Mon') AS label,
+          COALESCE(COUNT(j.id), 0)::int AS value
+        FROM generate_series(date_trunc('month', NOW()) - interval '5 months', date_trunc('month', NOW()), interval '1 month') AS month
+        LEFT JOIN jobs j ON date_trunc('month', j.created_at) = month
+        GROUP BY month
+        ORDER BY month
+        """
+    )
+    monthly_applications = fetch_all(
+        """
+        SELECT to_char(month, 'Mon') AS label,
+          COALESCE(COUNT(a.id), 0)::int AS value
+        FROM generate_series(date_trunc('month', NOW()) - interval '5 months', date_trunc('month', NOW()), interval '1 month') AS month
+        LEFT JOIN applications a ON date_trunc('month', a.created_at) = month
+        GROUP BY month
+        ORDER BY month
+        """
+    )
+    application_outcomes = fetch_all(
+        """
+        SELECT statuses.label, COALESCE(COUNT(a.id), 0)::int AS value
+        FROM (
+          VALUES
+            ('submitted', 'submitted'),
+            ('review', 'review'),
+            ('interview', 'interview'),
+            ('accepted', 'approved'),
+            ('rejected', 'rejected')
+        ) AS statuses(status, label)
+        LEFT JOIN applications a ON a.status = statuses.status
+        GROUP BY statuses.status, statuses.label
+        ORDER BY CASE statuses.status
+          WHEN 'submitted' THEN 1
+          WHEN 'review' THEN 2
+          WHEN 'interview' THEN 3
+          WHEN 'accepted' THEN 4
+          WHEN 'rejected' THEN 5
+        END
+        """
+    )
+    job_categories = fetch_all(
+        """
+        SELECT category AS label, COUNT(*)::int AS value
+        FROM jobs
+        GROUP BY category
+        ORDER BY value DESC, category
+        LIMIT 8
+        """
+    )
+    profile_health = fetch_all(
+        """
+        SELECT bucket AS label, COUNT(*)::int AS value
+        FROM (
+          SELECT CASE
+            WHEN profile_strength >= 85 THEN 'excellent'
+            WHEN profile_strength >= 55 THEN 'good'
+            ELSE 'needs work'
+          END AS bucket
+          FROM profiles
+        ) grouped
+        GROUP BY bucket
+        ORDER BY bucket
         """
     )
     segments = fetch_all("SELECT role, COUNT(*)::int AS count FROM users GROUP BY role ORDER BY count DESC")
     return {
         "metrics": metrics,
-        "growth": growth,
+        "analytics": {
+            "usersGrowth": users_growth,
+            "jobsPosted": jobs_posted,
+            "monthlyApplications": monthly_applications,
+            "applicationOutcomes": application_outcomes,
+            "jobCategories": job_categories,
+            "profileHealth": profile_health,
+        },
         "segments": segments,
         "reports": [
-            {"title": "Monthly growth report", "type": "PDF", "size": "2.4 MB"},
-            {"title": "Revenue and subscriptions", "type": "XLSX", "size": "840 KB"},
-            {"title": "Verification and compliance", "type": "PDF", "size": "1.1 MB"},
+            {"title": "تقرير نمو المستخدمين", "type": "PDF", "size": "2.4 MB"},
+            {"title": "تحليل الوظائف والتقديمات", "type": "XLSX", "size": "840 KB"},
+            {"title": "التحقق وجودة الملفات", "type": "PDF", "size": "1.1 MB"},
         ],
     }
 
@@ -330,6 +565,7 @@ def admin_users(user: Annotated[dict, Depends(admin_user)], search: str = ""):
 
 @app.get("/api/admin/users/{user_id}/profile")
 def admin_user_profile(user_id: UUID, user: Annotated[dict, Depends(admin_user)]):
+    sync_profile_strength(user_id)
     target_user = fetch_one(
         "SELECT id, full_name, email, role, plan, status, headline, location, avatar_url, created_at, last_active_at FROM users WHERE id = %s",
         (user_id,),
@@ -375,7 +611,6 @@ def update_admin_profile(user_id: UUID, body: AdminProfilePatch, user: Annotated
     about = body.about if body.about is not None else (profile or {}).get("about", "")
     skills = body.skills if body.skills is not None else (profile or {}).get("skills", [])
     languages = (profile or {}).get("languages", ["English", "Arabic"])
-    strength = min(100, 40 + (15 if about else 0) + (20 if skills else 0) + (10 if body.headline else 0) + (10 if body.location else 0))
     execute(
         """
         INSERT INTO profiles (user_id, about, skills, languages, profile_strength, updated_at)
@@ -384,8 +619,9 @@ def update_admin_profile(user_id: UUID, body: AdminProfilePatch, user: Annotated
         SET about = EXCLUDED.about, skills = EXCLUDED.skills, languages = EXCLUDED.languages,
             profile_strength = EXCLUDED.profile_strength, updated_at = NOW()
         """,
-        (user_id, about, skills, languages, strength),
+        (user_id, about, skills, languages, calculate_profile_strength(user_id)),
     )
+    sync_profile_strength(user_id)
     return {"ok": True}
 
 
@@ -415,7 +651,7 @@ async def upload_admin_document(
     content = await file.read()
     target.write_bytes(content)
     file_url = f"/uploads/{target.name}"
-    return execute(
+    document = execute(
         """
         INSERT INTO documents (user_id, kind, file_name, file_path, mime_type, file_size)
         VALUES (%s,%s,%s,%s,%s,%s)
@@ -423,6 +659,8 @@ async def upload_admin_document(
         """,
         (user_id, safe_kind, original_name, str(target), file.content_type, len(content), file_url),
     )
+    sync_profile_strength(user_id)
+    return document
 
 
 @app.post("/api/admin/users/{user_id}/avatar")
@@ -440,16 +678,18 @@ async def upload_admin_avatar(user_id: UUID, user: Annotated[dict, Depends(admin
     target.write_bytes(content)
     avatar_url = f"/uploads/{target.name}"
     execute("UPDATE users SET avatar_url = %s WHERE id = %s", (avatar_url, user_id))
+    sync_profile_strength(user_id)
     return {"avatarUrl": avatar_url}
 
 
 @app.delete("/api/admin/documents/{document_id}")
 def delete_admin_document(document_id: UUID, user: Annotated[dict, Depends(admin_user)]):
-    document = execute("DELETE FROM documents WHERE id = %s RETURNING file_path", (document_id,))
+    document = execute("DELETE FROM documents WHERE id = %s RETURNING user_id, file_path", (document_id,))
     if not document:
         raise HTTPException(status_code=404, detail="Attachment not found")
     if document.get("file_path"):
         Path(document["file_path"]).unlink(missing_ok=True)
+    sync_profile_strength(document["user_id"])
     return {"ok": True}
 
 
@@ -479,22 +719,63 @@ def update_admin_user(user_id: UUID, body: AdminUserPatch, user: Annotated[dict,
 def delete_admin_user(user_id: UUID, user: Annotated[dict, Depends(admin_user)]):
     if str(user_id) == str(user["id"]):
         raise HTTPException(status_code=400, detail="You cannot delete your own admin account")
-    deleted = execute("DELETE FROM users WHERE id = %s RETURNING id", (user_id,))
+    target_user = fetch_one("SELECT id, email, avatar_url FROM users WHERE id = %s", (user_id,))
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    documents = fetch_all("SELECT file_path FROM documents WHERE user_id = %s", (user_id,))
+    for document in documents:
+        if document.get("file_path"):
+            Path(document["file_path"]).unlink(missing_ok=True)
+    if target_user.get("avatar_url"):
+        (UPLOAD_DIR / Path(target_user["avatar_url"]).name).unlink(missing_ok=True)
+    deleted = execute("DELETE FROM users WHERE id = %s RETURNING id, email", (user_id,))
     if not deleted:
         raise HTTPException(status_code=404, detail="User not found")
-    return {"ok": True}
+    still_exists = fetch_one("SELECT id FROM users WHERE email = %s", (target_user["email"],))
+    return {"ok": True, "deletedEmail": deleted["email"], "emailAvailable": still_exists is None}
 
 
 @app.post("/api/admin/jobs", status_code=201)
 def create_admin_job(body: JobBody, user: Annotated[dict, Depends(admin_user)]):
     return execute(
         """
-        INSERT INTO jobs (company_name, title, location, type, salary_range, description, status)
-        VALUES (%s,%s,%s,%s,%s,%s,%s)
+        INSERT INTO jobs (company_name, title, category, location, type, salary_range, description, status)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
         RETURNING *
         """,
-        (body.companyName, body.title, body.location, body.type, body.salaryRange, body.description, body.status),
+        (body.companyName, body.title, body.category, body.location, body.type, body.salaryRange, body.description, body.status),
     )
+
+
+@app.patch("/api/admin/jobs/{job_id}")
+def update_admin_job(job_id: UUID, body: JobBody, user: Annotated[dict, Depends(admin_user)]):
+    updated = execute(
+        """
+        UPDATE jobs
+        SET company_name = %s,
+            title = %s,
+            category = %s,
+            location = %s,
+            type = %s,
+            salary_range = %s,
+            description = %s,
+            status = %s
+        WHERE id = %s
+        RETURNING *
+        """,
+        (body.companyName, body.title, body.category, body.location, body.type, body.salaryRange, body.description, body.status, job_id),
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return updated
+
+
+@app.delete("/api/admin/jobs/{job_id}")
+def delete_admin_job(job_id: UUID, user: Annotated[dict, Depends(admin_user)]):
+    deleted = execute("DELETE FROM jobs WHERE id = %s RETURNING id", (job_id,))
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"ok": True}
 
 
 @app.get("/api/admin/interviews")
@@ -533,7 +814,7 @@ def list_support_threads(user: Annotated[dict, Depends(admin_user)]):
           latest.message AS last_message,
           latest.created_at AS last_message_at,
           COUNT(sm.id) FILTER (
-            WHERE sm.sender_role IN ('user', 'bot')
+            WHERE sm.sender_role = 'user'
               AND sm.created_at > COALESCE(last_admin.last_admin_at, 'epoch'::timestamptz)
           )::int AS unread_count
         FROM users u

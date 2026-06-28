@@ -10,6 +10,13 @@ const text = {
     email: "Email",
     password: "Password",
     login: "Sign in",
+    register: "Register",
+    createAccount: "Create account",
+    verifyEmail: "Verify email",
+    verificationCode: "Verification code",
+    haveAccount: "Already have an account?",
+    needAccount: "Create a new account",
+    checkEmail: "Check your email for the verification code.",
     logout: "Logout",
     demoAdmin: "Admin demo",
     demoUser: "User demo",
@@ -17,19 +24,16 @@ const text = {
     profile: "Profile",
     jobs: "Jobs",
     admin: "Admin",
-    network: "Network",
-    search: "Search people, jobs, companies",
+    search: "Search jobs or companies",
     completeProfile: "Complete profile",
     workspace: "Workspace",
-    profileViews: "Profile views",
-    connections: "Connections",
+    profileViews: "Jobs applied",
     profileStrength: "Profile strength",
     strengthGreat: "All-Star profile. You look ready for recruiters.",
     strengthGood: "Strong profile. Add certificates for more credibility.",
+    strengthNeedsWork: "Add your photo, resume, certificates, skills, and work history to strengthen your profile.",
     publicProfile: "Public profile",
     savedJobs: "Saved jobs",
-    myNetwork: "My network",
-    peopleYouMayKnow: "People you may know",
     resumeUpload: "Resume upload",
     resumeUploadBody: "PDF, DOC, and portfolio files",
     verifiedCerts: "Certificates",
@@ -71,22 +75,43 @@ const text = {
     addExperience: "Add experience",
     title: "Title",
     company: "Company",
+    type: "Type",
     activeJobs: "Active jobs",
     appliedJobs: "Applied jobs",
     whereIApplied: "Where I applied for",
     noAppliedJobs: "No applications yet",
+    more: "More",
+    adminPosts: "Admin posts",
+    noAdminPosts: "No admin posts yet",
     apply: "Apply",
     adminDashboard: "Admin dashboard",
     totalUsers: "Total users",
     verifiedProfiles: "Verified profiles",
     applications: "Applications",
+    applicationStatus: "Application status",
+    applicant: "Applicant",
+    job: "Job",
+    jobDetails: "Job details",
+    category: "Category",
+    allCategories: "All categories",
+    noJobsMatching: "No jobs match this filter",
     monthlyRevenue: "Monthly revenue",
     users: "Users",
     searchUsers: "Search users",
     reports: "Reports",
+    growthAnalytics: "Growth analytics",
+    usersGrowth: "Users growth",
+    jobsPosted: "Jobs posted",
+    monthlyApplications: "Monthly applications",
+    applicationOutcomes: "Applied vs rejected vs approved",
+    jobCategories: "Jobs by category",
+    profileHealth: "Profile health",
+    suspendedUsers: "Suspended users",
+    pendingInterviews: "Scheduled interviews",
     overview: "Overview",
     userManagement: "User management",
     jobManagement: "Job management",
+    applicationManagement: "Applications",
     interviews: "Interviews",
     supportInbox: "Support inbox",
     unreadMessages: "Unread messages",
@@ -115,6 +140,8 @@ const text = {
     activate: "Activate",
     deactivate: "Deactivate",
     addJob: "Add job",
+    editJob: "Edit job",
+    deleteJob: "Delete job",
     salary: "Salary",
     description: "Description",
     scheduleInterview: "Schedule interview",
@@ -129,6 +156,13 @@ const text = {
     email: "البريد الإلكتروني",
     password: "كلمة المرور",
     login: "تسجيل الدخول",
+    register: "تسجيل",
+    createAccount: "إنشاء حساب",
+    verifyEmail: "تأكيد البريد",
+    verificationCode: "رمز التحقق",
+    haveAccount: "لديك حساب؟",
+    needAccount: "إنشاء حساب جديد",
+    checkEmail: "تحقق من بريدك للحصول على رمز التحقق.",
     logout: "خروج",
     demoAdmin: "تجربة المدير",
     demoUser: "تجربة المستخدم",
@@ -136,19 +170,16 @@ const text = {
     profile: "الملف",
     jobs: "الوظائف",
     admin: "الإدارة",
-    network: "الشبكة",
-    search: "ابحث عن أشخاص أو وظائف أو شركات",
+    search: "ابحث عن الوظيفة أو اسم الشركة",
     completeProfile: "أكمل الملف",
     workspace: "مساحة العمل",
-    profileViews: "مشاهدات الملف",
-    connections: "العلاقات",
+    profileViews: "عدد الوظائف المقدمة",
     profileStrength: "قوة الملف",
     strengthGreat: "ملف ممتاز. أنت جاهز للظهور أمام مسؤولي التوظيف.",
     strengthGood: "ملف قوي. أضف الشهادات لزيادة الموثوقية.",
+    strengthNeedsWork: "أضف الصورة والسيرة الذاتية والشهادات والمهارات وتاريخ العمل لتقوية ملفك.",
     publicProfile: "الملف العام",
     savedJobs: "الوظائف المحفوظة",
-    myNetwork: "شبكتي",
-    peopleYouMayKnow: "أشخاص قد تعرفهم",
     resumeUpload: "رفع السيرة الذاتية",
     resumeUploadBody: "ملفات PDF و DOC وملفات الأعمال",
     verifiedCerts: "الشهادات",
@@ -190,22 +221,43 @@ const text = {
     addExperience: "إضافة خبرة",
     title: "المسمى",
     company: "الشركة",
+    type: "النوع",
     activeJobs: "الوظائف النشطة",
     appliedJobs: "الوظائف المقدمة",
     whereIApplied: "الوظائف التي تقدمت إليها",
     noAppliedJobs: "لا توجد طلبات بعد",
+    more: "المزيد",
+    adminPosts: "منشورات الإدارة",
+    noAdminPosts: "لا توجد منشورات من الإدارة بعد",
     apply: "تقديم",
     adminDashboard: "لوحة تحكم الإدارة",
     totalUsers: "إجمالي المستخدمين",
     verifiedProfiles: "الملفات الموثقة",
     applications: "طلبات التقديم",
+    applicationStatus: "حالة الطلب",
+    applicant: "المتقدم",
+    job: "الوظيفة",
+    jobDetails: "تفاصيل الوظيفة",
+    category: "الفئة",
+    allCategories: "كل الفئات",
+    noJobsMatching: "لا توجد وظائف مطابقة لهذا الفلتر",
     monthlyRevenue: "الإيراد الشهري",
     users: "المستخدمون",
     searchUsers: "ابحث عن مستخدمين",
     reports: "التقارير",
+    growthAnalytics: "تحليلات النمو",
+    usersGrowth: "نمو المستخدمين",
+    jobsPosted: "الوظائف المنشورة",
+    monthlyApplications: "التقديمات الشهرية",
+    applicationOutcomes: "التقديمات مقابل المرفوض والمقبول",
+    jobCategories: "الوظائف حسب الفئة",
+    profileHealth: "جودة الملفات",
+    suspendedUsers: "الحسابات الموقوفة",
+    pendingInterviews: "المقابلات المجدولة",
     overview: "نظرة عامة",
     userManagement: "إدارة المستخدمين",
     jobManagement: "إدارة الوظائف",
+    applicationManagement: "طلبات التقديم",
     interviews: "المقابلات",
     supportInbox: "صندوق الدعم",
     unreadMessages: "رسائل غير مقروءة",
@@ -234,6 +286,8 @@ const text = {
     activate: "تفعيل",
     deactivate: "إيقاف",
     addJob: "إضافة وظيفة",
+    editJob: "تعديل الوظيفة",
+    deleteJob: "حذف الوظيفة",
     salary: "الراتب",
     description: "الوصف",
     scheduleInterview: "جدولة مقابلة",
@@ -244,6 +298,27 @@ const text = {
   }
 };
 
+const JOB_CATEGORIES = [
+  { value: "General", en: "General", ar: "عام" },
+  { value: "Technology", en: "Technology", ar: "التقنية" },
+  { value: "Engineering", en: "Engineering", ar: "الهندسة" },
+  { value: "Data", en: "Data", ar: "البيانات" },
+  { value: "Design", en: "Design", ar: "التصميم" },
+  { value: "Product", en: "Product", ar: "المنتج" },
+  { value: "Sales", en: "Sales", ar: "المبيعات" },
+  { value: "Marketing", en: "Marketing", ar: "التسويق" },
+  { value: "HR", en: "HR", ar: "الموارد البشرية" },
+  { value: "Finance", en: "Finance", ar: "المالية" },
+  { value: "Operations", en: "Operations", ar: "العمليات" },
+  { value: "Healthcare", en: "Healthcare", ar: "الرعاية الصحية" },
+  { value: "Education", en: "Education", ar: "التعليم" }
+];
+
+function jobCategoryLabel(value, lang) {
+  const match = JOB_CATEGORIES.find((category) => category.value === value);
+  return match ? match[lang] : value || JOB_CATEGORIES[0][lang];
+}
+
 function App() {
   const [lang, setLang] = useState(localStorage.getItem("rawabet_lang") || "en");
   const [view, setView] = useState("home");
@@ -252,8 +327,11 @@ function App() {
   const [jobs, setJobs] = useState([]);
   const [admin, setAdmin] = useState(null);
   const [adminUsers, setAdminUsers] = useState([]);
+  const [adminApplications, setAdminApplications] = useState([]);
   const [supportThreads, setSupportThreads] = useState([]);
   const [supportTarget, setSupportTarget] = useState("");
+  const [adminStartTab, setAdminStartTab] = useState("");
+  const [jobSearch, setJobSearch] = useState("");
   const [error, setError] = useState("");
   const [builderOpen, setBuilderOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
@@ -267,12 +345,13 @@ function App() {
 
   async function loadApp() {
     const data = await api("/me");
-    setSession(data.user);
     setMe(data);
+    setSession(data.user);
     setJobs(await api("/jobs"));
     if (data.user.role === "admin") {
       setAdmin(await api("/admin/overview"));
       setAdminUsers(await api("/admin/users"));
+      setAdminApplications(await api("/admin/applications"));
       setSupportThreads(await api("/admin/support/threads"));
     }
   }
@@ -306,17 +385,31 @@ function App() {
     }
   }
 
+  async function verifyAndLoad(token) {
+    setToken(token);
+    try {
+      await loadApp();
+      setView("home");
+    } catch (err) {
+      clearToken();
+      setSession(null);
+      setMe(null);
+      throw err;
+    }
+  }
+
   function logout() {
     clearToken();
     setSession(null);
     setMe(null);
     setAdmin(null);
+    setAdminApplications([]);
     setSupportThreads([]);
   }
 
-  const supportUnread = supportThreads.reduce((sum, thread) => sum + Number(thread.unread_count || 0), 0);
+  const supportUnread = supportThreads.filter((thread) => Number(thread.unread_count || 0) > 0).length;
 
-  if (!session) return <Login lang={lang} setLang={setLang} t={t} login={login} error={error} />;
+  if (!session || !me) return <Login lang={lang} setLang={setLang} t={t} login={login} verifyAndLoad={verifyAndLoad} error={error} setError={setError} />;
 
   return (
     <div className="app-shell">
@@ -327,31 +420,29 @@ function App() {
         </button>
         <label className="search">
           <span>⌕</span>
-          <input placeholder={t("search")} />
+          <input placeholder={t("search")} value={jobSearch} onChange={(event) => { setJobSearch(event.target.value); setView("jobs"); }} />
         </label>
         <nav className="desktop-nav">
           {[
             ["home", "⌂"],
             ["profile", "◉"],
-            ["network", "◎"],
             ["jobs", "▣"]
           ].map(([item, icon]) => <button className={`nav-link ${view === item ? "active" : ""}`} onClick={() => setView(item)} key={item}><span>{icon}</span><b>{t(item)}</b></button>)}
           {session.role === "admin" && <button className={`nav-link ${view === "admin" ? "active" : ""}`} onClick={() => setView("admin")}><span>▥</span><b>{t("admin")}</b></button>}
         </nav>
         <div className="top-actions">
           <button className="icon-button" onClick={() => setLang(lang === "en" ? "ar" : "en")}>{t("language")}</button>
-          <button className="secondary-button compact notify-button" onClick={() => setSupportOpen(true)}>{t("support")}{supportUnread > 0 && <span>{supportUnread}</span>}</button>
+          <button className="secondary-button compact notify-button" onClick={() => session.role === "admin" ? (setAdminStartTab("support"), setView("admin")) : setSupportOpen(true)}>{t("support")}{supportUnread > 0 && <span>{supportUnread}</span>}</button>
           <button className="primary-button compact" onClick={() => setBuilderOpen(true)}>{t("completeProfile")}</button>
           <button className="secondary-button compact" onClick={logout}>{t("logout")}</button>
         </div>
       </header>
 
       <main className={view === "admin" ? "admin-main" : ""}>
-        {view === "home" && <Home t={t} me={me} jobs={jobs} setView={setView} openBuilder={() => setBuilderOpen(true)} />}
+        {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} setView={setView} openBuilder={() => setBuilderOpen(true)} />}
         {view === "profile" && <Profile t={t} me={me} reload={loadApp} />}
-        {view === "network" && <Network t={t} />}
-        {view === "jobs" && <Jobs t={t} jobs={jobs} reload={loadApp} />}
-        {view === "admin" && session.role === "admin" && <Admin t={t} admin={admin} users={adminUsers} setUsers={setAdminUsers} jobs={jobs} supportThreads={supportThreads} reload={loadApp} openSupport={(userId) => { setSupportTarget(userId || ""); setSupportOpen(true); }} />}
+        {view === "jobs" && <Jobs t={t} lang={lang} jobs={jobs} applications={me.applications || []} search={jobSearch} reload={loadApp} />}
+        {view === "admin" && session.role === "admin" && <Admin t={t} lang={lang} admin={admin} users={adminUsers} setUsers={setAdminUsers} jobs={jobs} applications={adminApplications} setApplications={setAdminApplications} supportThreads={supportThreads} initialTab={adminStartTab} clearInitialTab={() => setAdminStartTab("")} reload={loadApp} openSupport={(userId) => { setSupportTarget(userId || ""); setSupportOpen(true); }} />}
       </main>
       {builderOpen && <ProfileBuilder t={t} me={me} reload={loadApp} close={() => setBuilderOpen(false)} />}
       {supportOpen && <SupportWindow t={t} me={me} users={adminUsers} initialUserId={supportTarget} onUpdate={loadSupportThreads} close={() => { setSupportOpen(false); setSupportTarget(""); }} />}
@@ -359,34 +450,91 @@ function App() {
   );
 }
 
-function Login({ lang, setLang, t, login, error }) {
+function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
+  const [mode, setMode] = useState("login");
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("admin@rawabet.app");
   const [password, setPassword] = useState("admin123");
+  const [otp, setOtp] = useState("");
+  const [notice, setNotice] = useState("");
+  const [registering, setRegistering] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+
+  async function register(event) {
+    event.preventDefault();
+    setError("");
+    setNotice("");
+    setRegistering(true);
+    try {
+      const data = await api("/auth/register", { method: "POST", body: JSON.stringify({ fullName, email, password }) });
+      setNotice(data.devOtp ? `${data.message} OTP: ${data.devOtp}` : data.message || t("checkEmail"));
+      setMode("verify");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setRegistering(false);
+    }
+  }
+
+  async function verify(event) {
+    event.preventDefault();
+    setError("");
+    setVerifying(true);
+    try {
+      const data = await api("/auth/verify-registration", { method: "POST", body: JSON.stringify({ email, otp }) });
+      await verifyAndLoad(data.token);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setVerifying(false);
+    }
+  }
+
   return (
-    <main className="login-page">
-      <section className="login-hero">
-        <div className="brand large"><img className="brand-mark" src="/brand/rawabet-mark.png" alt="" /><img className="brand-wordmark" src="/brand/rawabet-wordmark.png" alt="Rawabet - روابط تجمعنا" /></div>
-        <h1>{t("welcome")}</h1>
-        <p>{t("welcomeBody")}</p>
-      </section>
-      <form className="login-card" onSubmit={(event) => { event.preventDefault(); login(email, password); }}>
+    <main className={`login-page ${lang === "ar" ? "login-page-rtl" : ""}`}>
+      <header className="login-top">
+        <img className="login-top-logo" src="/brand/rawabet-wordmark.png" alt="Rawabet - روابط تجمعنا" />
         <button type="button" className="icon-button" onClick={() => setLang(lang === "en" ? "ar" : "en")}>{t("language")}</button>
-        <label>{t("email")}<input value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-        <label>{t("password")}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
-        {error && <p className="error">{error}</p>}
-        <button className="primary-button">{t("login")}</button>
-        <div className="demo-actions">
-          <button type="button" onClick={() => { setEmail("admin@rawabet.app"); setPassword("admin123"); }}>{t("demoAdmin")}</button>
-          <button type="button" onClick={() => { setEmail("loui@rawabet.app"); setPassword("user123"); }}>{t("demoUser")}</button>
+      </header>
+      <section className="login-stage">
+        <div className="login-copy">
+          <h1>{t("welcome")}</h1>
+          {mode === "login" && <form className="login-card" onSubmit={(event) => { event.preventDefault(); login(email, password); }}>
+            <label>{t("email")}<input value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+            <label>{t("password")}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+            {error && <p className="error">{error}</p>}
+            <button className="primary-button">{t("login")}</button>
+            <button className="auth-switch" type="button" onClick={() => { setMode("register"); setError(""); }}>{t("needAccount")}</button>
+          </form>}
+
+          {mode === "register" && <form className="login-card" onSubmit={register}>
+            <label>{t("fullName")}<input value={fullName} onChange={(event) => setFullName(event.target.value)} required /></label>
+            <label>{t("email")}<input value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
+            <label>{t("password")}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
+            {error && <p className="error">{error}</p>}
+            <button className="primary-button loading-button" disabled={registering}>{registering && <span className="spinner" aria-hidden="true"></span>}{t("createAccount")}</button>
+            <button className="auth-switch" type="button" disabled={registering} onClick={() => { setMode("login"); setError(""); }}>{t("haveAccount")} {t("login")}</button>
+          </form>}
+
+          {mode === "verify" && <form className="login-card" onSubmit={verify}>
+            <label>{t("email")}<input value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
+            <label>{t("verificationCode")}<input value={otp} onChange={(event) => setOtp(event.target.value)} required /></label>
+            {notice && <p className="notice">{notice}</p>}
+            {error && <p className="error">{error}</p>}
+            <button className="primary-button loading-button" disabled={verifying}>{verifying && <span className="spinner" aria-hidden="true"></span>}{t("verifyEmail")}</button>
+            <button className="auth-switch" type="button" disabled={verifying} onClick={() => { setMode("login"); setError(""); }}>{t("haveAccount")} {t("login")}</button>
+          </form>}
         </div>
-      </form>
+        <div className="login-visual">
+          <img src="/brand/login-hero.svg" alt="" />
+        </div>
+      </section>
     </main>
   );
 }
 
-function Home({ t, me, jobs, setView, openBuilder }) {
-  const strength = me.profile?.profile_strength || 64;
-  const stats = me.stats || {};
+function Home({ t, lang, me, jobs, setView, openBuilder }) {
+  const strength = Number(me.profile?.profile_strength ?? 0);
   const applications = me.applications || [];
   return (
     <div className="layout-grid">
@@ -396,47 +544,48 @@ function Home({ t, me, jobs, setView, openBuilder }) {
           <div className="avatar-wrap"><Avatar user={me.user} /><span className="online-dot" /></div>
           <h2>{me.user.fullName}</h2>
           <p>{me.user.headline}</p>
-          <dl className="quick-stats">
-            <div><dt>{t("profileViews")}</dt><dd>{formatNumber(stats.profile_views)}</dd></div>
-            <div><dt>{t("connections")}</dt><dd>{formatNumber(stats.connections)}</dd></div>
-          </dl>
           <button className="secondary-button" onClick={openBuilder}>{t("editProfile")}</button>
         </section>
         <section className="panel side-panel workspace-panel">
           <h2>{t("workspace")}</h2>
           <button className="panel-link" onClick={() => setView("profile")}><span>↗</span>{t("publicProfile")}</button>
           <button className="panel-link" onClick={() => setView("jobs")}><span>▦</span>{t("savedJobs")}</button>
-          <button className="panel-link" onClick={() => setView("network")}><span>◇</span>{t("myNetwork")}</button>
           {me.user.role === "admin" && <button className="panel-link" onClick={() => setView("admin")}><span>▥</span>{t("adminDashboard")}</button>}
         </section>
       </aside>
       <section className="feed">
         <article className="panel post-card">
-          <div className="post-head"><div className="company-logo">R</div><div><h2>{t("welcomeTitle")}</h2><p>{t("sub")}</p></div></div>
-          <p>{t("welcomeBody")}</p>
-          <div className="feature-grid">
-            <button className="feature-card" type="button" onClick={openBuilder}><strong>{t("resumeUpload")}</strong><span>{t("resumeUploadBody")}</span></button>
-            <button className="feature-card" type="button" onClick={openBuilder}><strong>{t("verifiedCerts")}</strong><span>{t("verifiedCertsBody")}</span></button>
-            <button className="feature-card" type="button" onClick={openBuilder}><strong>{t("workTimeline")}</strong><span>{t("workTimelineBody")}</span></button>
+          <div className="post-head"><div className="company-logo">R</div><div><h2>{t("adminPosts")}</h2><p>{t("jobs")}</p></div></div>
+          <div className="admin-post-list">
+            {jobs.length ? jobs.slice(0, 5).map((job) => (
+              <button className="admin-post" type="button" onClick={() => setView("jobs")} key={job.id}>
+                <strong>{job.title}</strong>
+                <span>{job.company_name} · {jobCategoryLabel(job.category, lang)} · {job.location}</span>
+                {job.description && <p>{job.description}</p>}
+              </button>
+            )) : <p>{t("noAdminPosts")}</p>}
           </div>
-        </article>
-        <article className="panel post-card">
-          <div className="post-head"><div className="company-logo accent">✓</div><div>
-          <h2>{t("appliedJobs")}</h2>
-          <p>{t("whereIApplied")}</p>
-          </div></div>
-          <div className="job-strip">{applications.length ? applications.slice(0, 4).map((item) => <span key={item.id}>{item.title}</span>) : <span>{t("noAppliedJobs")}</span>}</div>
         </article>
       </section>
       <aside className="insight-rail">
         <section className="panel side-panel strength-panel">
           <h2>{t("profileStrength")}</h2>
           <div className="meter"><span style={{ width: `${strength}%` }} /></div>
-          <p>{strength > 82 ? t("strengthGreat") : t("strengthGood")}</p>
+          <p>{strength >= 85 ? t("strengthGreat") : strength >= 55 ? t("strengthGood") : t("strengthNeedsWork")}</p>
         </section>
         <section className="panel side-panel">
-          <h2>{t("peopleYouMayKnow")}</h2>
-          {["Sara Alami", "Omar Khaled", "Lina Nader"].map((name) => <div className="person-row" key={name}><Avatar user={{ fullName: name }} size="small" /><div><strong>{name}</strong><span>{name === "Sara Alami" ? "UX Lead" : name === "Omar Khaled" ? "Cloud Architect" : "Talent Partner"}</span></div><button>+</button></div>)}
+          <h2>{t("profileViews")}</h2>
+          <strong className="side-stat">{formatNumber(applications.length)}</strong>
+          <div className="job-strip side-job-strip">{applications.length ? applications.slice(0, 5).map((item) => <span className="application-chip" key={item.id}>{item.title}<b className={`status ${item.status}`}>{item.status}</b></span>) : <span>{t("noAppliedJobs")}</span>}</div>
+          {applications.length > 5 && <button className="panel-link more-link" type="button" onClick={() => setView("jobs")}><span>↗</span>{t("more")}</button>}
+        </section>
+        <section className="panel side-panel">
+          <h2>{t("completeProfile")}</h2>
+          <div className="side-feature-grid">
+            <button className="feature-card" type="button" onClick={openBuilder}><strong>{t("resumeUpload")}</strong><span>{t("resumeUploadBody")}</span></button>
+            <button className="feature-card" type="button" onClick={openBuilder}><strong>{t("verifiedCerts")}</strong><span>{t("verifiedCertsBody")}</span></button>
+            <button className="feature-card" type="button" onClick={openBuilder}><strong>{t("workTimeline")}</strong><span>{t("workTimelineBody")}</span></button>
+          </div>
         </section>
       </aside>
     </div>
@@ -631,33 +780,83 @@ function Profile({ t, me, reload }) {
   );
 }
 
-function Network({ t }) {
-  return <section className="directory-grid">{["Sara Alami", "Omar Khaled", "Lina Nader", "Maya Haddad", "Faisal Noor", "Reem Mansour"].map((name) => <article className="network-card" key={name}><Avatar user={{ fullName: name }} /><h2>{name}</h2><p>{t("network")}</p><button className="secondary-button">Connect</button></article>)}</section>;
-}
-
-function Jobs({ t, jobs, reload }) {
+function Jobs({ t, lang, jobs, applications, search = "", reload }) {
+  const [openJobId, setOpenJobId] = useState("");
+  const [category, setCategory] = useState("");
+  const appliedByJob = new Map(applications.map((item) => [item.job_id, item]));
+  const normalizedSearch = search.trim().toLowerCase();
+  const visibleJobs = jobs.filter((job) => {
+    const matchesSearch = !normalizedSearch || `${job.title || ""} ${job.company_name || ""}`.toLowerCase().includes(normalizedSearch);
+    const matchesCategory = !category || (job.category || "General") === category;
+    return matchesSearch && matchesCategory;
+  });
   async function apply(jobId) {
     await api(`/jobs/${jobId}/apply`, { method: "POST" });
     await reload();
   }
-  return <section className="job-list">{jobs.map((job) => <article className="job-card panel" key={job.id}><div><h2>{job.title}</h2><p>{job.company_name} · {job.location}</p><span>{job.salary_range}</span></div><button className="primary-button" onClick={() => apply(job.id)}>{t("apply")}</button></article>)}</section>;
+  return <section className="job-list">
+    <div className="panel job-filter-bar">
+      <label>{t("category")}
+        <select value={category} onChange={(event) => setCategory(event.target.value)}>
+          <option value="">{t("allCategories")}</option>
+          {JOB_CATEGORIES.map((item) => <option value={item.value} key={item.value}>{item[lang]}</option>)}
+        </select>
+      </label>
+    </div>
+    {visibleJobs.length ? visibleJobs.map((job) => {
+    const application = appliedByJob.get(job.id);
+    const isOpen = openJobId === job.id;
+    return <article className="job-card panel" key={job.id}>
+      <div>
+        <h2>{job.title}</h2>
+        <p>{job.company_name} · {jobCategoryLabel(job.category, lang)} · {job.location}</p>
+        <span>{job.salary_range}</span>
+        {application && <small className={`application-status status ${application.status}`}>{t("applicationStatus")}: {application.status}</small>}
+      </div>
+      <div className="job-actions">
+        <button className="secondary-button" onClick={() => setOpenJobId(isOpen ? "" : job.id)}>{t("jobDetails")}</button>
+        <button className="primary-button" disabled={!!application} onClick={() => apply(job.id)}>{application ? application.status : t("apply")}</button>
+      </div>
+      {isOpen && <section className="job-details">
+        <dl>
+          <div><dt>{t("company")}</dt><dd>{job.company_name}</dd></div>
+          <div><dt>{t("category")}</dt><dd>{jobCategoryLabel(job.category, lang)}</dd></div>
+          <div><dt>{t("location")}</dt><dd>{job.location}</dd></div>
+          <div><dt>{t("status")}</dt><dd>{job.status}</dd></div>
+          <div><dt>{t("salary")}</dt><dd>{job.salary_range || "-"}</dd></div>
+          <div><dt>{t("type")}</dt><dd>{job.type}</dd></div>
+        </dl>
+        <h3>{t("description")}</h3>
+        <p>{job.description || "-"}</p>
+      </section>}
+    </article>;
+  }) : <article className="panel"><p>{t("noJobsMatching")}</p></article>}
+  </section>;
 }
 
-function Admin({ t, admin, users, setUsers, jobs, supportThreads, reload, openSupport }) {
+function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplications, supportThreads, initialTab, clearInitialTab, reload, openSupport }) {
   const [tab, setTab] = useState("overview");
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState(null);
   const [selectedProfile, setSelectedProfile] = useState(null);
-  const [jobForm, setJobForm] = useState({ companyName: "Rawabet Labs", title: "", location: "Remote", type: "Full-time", salaryRange: "", description: "" });
+  const [jobForm, setJobForm] = useState({ companyName: "مختبرات روابط", title: "", category: "General", location: "عن بعد", type: "دوام كامل", salaryRange: "", description: "" });
+  const [editingJob, setEditingJob] = useState(null);
   const [interview, setInterview] = useState({ userId: "", jobId: "", scheduledAt: "", channel: "Video call", notes: "" });
-  const unreadTotal = supportThreads.reduce((sum, thread) => sum + Number(thread.unread_count || 0), 0);
+  const unreadTotal = supportThreads.filter((thread) => Number(thread.unread_count || 0) > 0).length;
   const adminTabs = [
     ["overview", t("overview"), "▦"],
     ["users", t("userManagement"), "◎"],
     ["jobs", t("jobManagement"), "▣"],
+    ["applications", t("applicationManagement"), "◈"],
     ["interviews", t("interviews"), "◌"],
     ["support", t("supportInbox"), "✉"]
   ];
+  useEffect(() => {
+    if (initialTab) {
+      setTab(initialTab);
+      clearInitialTab?.();
+    }
+  }, [initialTab]);
   async function searchUsers(value) {
     setSearch(value);
     setUsers(await api(`/admin/users?search=${encodeURIComponent(value)}`));
@@ -750,7 +949,38 @@ function Admin({ t, admin, users, setUsers, jobs, supportThreads, reload, openSu
   async function addJob(event) {
     event.preventDefault();
     await api("/admin/jobs", { method: "POST", body: JSON.stringify(jobForm) });
-    setJobForm({ companyName: "Rawabet Labs", title: "", location: "Remote", type: "Full-time", salaryRange: "", description: "" });
+    setJobForm({ companyName: "مختبرات روابط", title: "", category: "General", location: "عن بعد", type: "دوام كامل", salaryRange: "", description: "" });
+    await reload();
+  }
+  function startEditJob(job) {
+    setEditingJob({
+      id: job.id,
+      companyName: job.company_name || "",
+      title: job.title || "",
+      category: job.category || "General",
+      location: job.location || "",
+      type: job.type || "دوام كامل",
+      salaryRange: job.salary_range || "",
+      description: job.description || "",
+      status: job.status || "active"
+    });
+  }
+  async function saveJob(event) {
+    event.preventDefault();
+    await api(`/admin/jobs/${editingJob.id}`, { method: "PATCH", body: JSON.stringify(editingJob) });
+    setEditingJob(null);
+    await reload();
+  }
+  async function deleteJob(job) {
+    if (!confirm(`${t("deleteJob")}: ${job.title}?`)) return;
+    await api(`/admin/jobs/${job.id}`, { method: "DELETE" });
+    if (editingJob?.id === job.id) setEditingJob(null);
+    await reload();
+  }
+  async function updateApplicationStatus(application, status) {
+    if (!status) return;
+    await api(`/admin/applications/${application.id}`, { method: "PATCH", body: JSON.stringify({ status }) });
+    setApplications(await api("/admin/applications"));
     await reload();
   }
   async function scheduleInterview(event) {
@@ -777,11 +1007,21 @@ function Admin({ t, admin, users, setUsers, jobs, supportThreads, reload, openSu
               <Metric label={t("totalUsers")} value={admin.metrics.users} />
               <Metric label={t("verifiedProfiles")} value={admin.metrics.verifiedProfiles} />
               <Metric label={t("applications")} value={admin.metrics.applications} />
-              <Metric label={t("monthlyRevenue")} value={`$${Number(admin.metrics.monthlyRevenue).toLocaleString()}`} />
+              <Metric label={t("activeJobs")} value={admin.metrics.activeJobs} />
+              <Metric label={t("suspendedUsers")} value={admin.metrics.suspendedUsers} />
+              <Metric label={t("pendingInterviews")} value={admin.metrics.pendingInterviews} />
             </section>
-            <section className="admin-layout">
-              <article className="panel span-two"><h2>Growth analytics</h2><div className="bar-chart">{admin.growth.map((item) => <div className="bar-group" key={item.month}><span style={{ height: `${Math.min(100, item.users)}%` }} /><small>{item.month}</small></div>)}</div></article>
-              <article className="panel"><h2>{t("riskQueue")}</h2><div className="risk-list"><strong>{admin.metrics.pendingDocuments}</strong><span>{t("pendingDocs")}</span></div></article>
+            <section className="analytics-grid">
+              <AnalyticsBars title={t("usersGrowth")} data={admin.analytics?.usersGrowth || []} />
+              <AnalyticsBars title={t("jobsPosted")} data={admin.analytics?.jobsPosted || []} />
+              <AnalyticsBars title={t("monthlyApplications")} data={admin.analytics?.monthlyApplications || []} />
+              <AnalyticsList title={t("applicationOutcomes")} data={admin.analytics?.applicationOutcomes || []} />
+              <AnalyticsList title={t("jobCategories")} data={admin.analytics?.jobCategories || []} />
+              <article className="panel">
+                <h2>{t("riskQueue")}</h2>
+                <div className="risk-list"><strong>{admin.metrics.pendingDocuments}</strong><span>{t("pendingDocs")}</span></div>
+              </article>
+              <AnalyticsList title={t("profileHealth")} data={admin.analytics?.profileHealth || []} />
             </section>
           </>}
 
@@ -853,15 +1093,58 @@ function Admin({ t, admin, users, setUsers, jobs, supportThreads, reload, openSu
             </section>
           </section>}
 
-          {tab === "jobs" && <form className="panel admin-form" onSubmit={addJob}>
-            <h2>{t("addJob")}</h2>
-            <input placeholder={t("company")} value={jobForm.companyName} onChange={(e) => setJobForm({ ...jobForm, companyName: e.target.value })} />
-            <input placeholder={t("title")} value={jobForm.title} onChange={(e) => setJobForm({ ...jobForm, title: e.target.value })} />
-            <input placeholder={t("location")} value={jobForm.location} onChange={(e) => setJobForm({ ...jobForm, location: e.target.value })} />
-            <input placeholder={t("salary")} value={jobForm.salaryRange} onChange={(e) => setJobForm({ ...jobForm, salaryRange: e.target.value })} />
-            <textarea placeholder={t("description")} value={jobForm.description} onChange={(e) => setJobForm({ ...jobForm, description: e.target.value })} />
-            <button className="primary-button">{t("addJob")}</button>
-          </form>}
+          {tab === "jobs" && <section className="job-admin-grid">
+            <form className="panel admin-form" onSubmit={addJob}>
+              <h2>{t("addJob")}</h2>
+              <input placeholder={t("company")} value={jobForm.companyName} onChange={(e) => setJobForm({ ...jobForm, companyName: e.target.value })} />
+              <input placeholder={t("title")} value={jobForm.title} onChange={(e) => setJobForm({ ...jobForm, title: e.target.value })} />
+              <select value={jobForm.category} onChange={(e) => setJobForm({ ...jobForm, category: e.target.value })}>
+                {JOB_CATEGORIES.map((item) => <option value={item.value} key={item.value}>{item[lang]}</option>)}
+              </select>
+              <input placeholder={t("location")} value={jobForm.location} onChange={(e) => setJobForm({ ...jobForm, location: e.target.value })} />
+              <input placeholder={t("salary")} value={jobForm.salaryRange} onChange={(e) => setJobForm({ ...jobForm, salaryRange: e.target.value })} />
+              <textarea placeholder={t("description")} value={jobForm.description} onChange={(e) => setJobForm({ ...jobForm, description: e.target.value })} />
+              <button className="primary-button">{t("addJob")}</button>
+            </form>
+
+            {editingJob && <form className="panel admin-form" onSubmit={saveJob}>
+              <h2>{t("editJob")}</h2>
+              <input placeholder={t("company")} value={editingJob.companyName} onChange={(e) => setEditingJob({ ...editingJob, companyName: e.target.value })} />
+              <input placeholder={t("title")} value={editingJob.title} onChange={(e) => setEditingJob({ ...editingJob, title: e.target.value })} />
+              <select value={editingJob.category} onChange={(e) => setEditingJob({ ...editingJob, category: e.target.value })}>
+                {JOB_CATEGORIES.map((item) => <option value={item.value} key={item.value}>{item[lang]}</option>)}
+              </select>
+              <input placeholder={t("location")} value={editingJob.location} onChange={(e) => setEditingJob({ ...editingJob, location: e.target.value })} />
+              <input placeholder={t("type")} value={editingJob.type} onChange={(e) => setEditingJob({ ...editingJob, type: e.target.value })} />
+              <input placeholder={t("salary")} value={editingJob.salaryRange} onChange={(e) => setEditingJob({ ...editingJob, salaryRange: e.target.value })} />
+              <select value={editingJob.status} onChange={(e) => setEditingJob({ ...editingJob, status: e.target.value })}><option value="active">active</option><option value="paused">paused</option><option value="closed">closed</option></select>
+              <textarea placeholder={t("description")} value={editingJob.description} onChange={(e) => setEditingJob({ ...editingJob, description: e.target.value })} />
+              <div className="row-fields">
+                <button className="primary-button">{t("save")}</button>
+                <button className="secondary-button" type="button" onClick={() => setEditingJob(null)}>{t("cancel")}</button>
+              </div>
+            </form>}
+
+            <section className="panel span-two">
+              <div className="section-head"><h2>{t("jobManagement")}</h2><span className="status">{jobs.length}</span></div>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>{t("job")}</th><th>{t("category")}</th><th>{t("location")}</th><th>{t("status")}</th><th>{t("actions")}</th></tr></thead>
+                  <tbody>{jobs.map((job) => <tr key={job.id}><td><strong>{job.title}</strong><span>{job.company_name}</span></td><td>{jobCategoryLabel(job.category, lang)}</td><td>{job.location}</td><td><span className={`status ${job.status}`}>{job.status}</span></td><td><div className="row-actions"><button className="secondary-button compact" type="button" onClick={() => startEditJob(job)}>{t("editJob")}</button><button className="secondary-button compact danger-button" type="button" onClick={() => deleteJob(job)}>{t("deleteJob")}</button></div></td></tr>)}</tbody>
+                </table>
+              </div>
+            </section>
+          </section>}
+
+          {tab === "applications" && <section className="panel">
+            <div className="section-head"><h2>{t("applications")}</h2><span className="status">{applications.length}</span></div>
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>{t("applicant")}</th><th>{t("job")}</th><th>{t("location")}</th><th>{t("applicationStatus")}</th><th>{t("actions")}</th></tr></thead>
+                <tbody>{applications.map((application) => <tr key={application.id}><td><div className="table-user"><Avatar user={{ full_name: application.full_name, avatar_url: application.avatar_url }} size="small" /><div><strong>{application.full_name}</strong><span>{application.email}</span></div></div></td><td><strong>{application.job_title}</strong><span>{application.company_name}</span></td><td>{application.location}</td><td><span className={`status ${application.status}`}>{application.status}</span></td><td><select className="action-select" value={application.status} onChange={(e) => updateApplicationStatus(application, e.target.value)}><option value="submitted">submitted</option><option value="review">review</option><option value="interview">interview</option><option value="accepted">accepted</option><option value="rejected">rejected</option></select></td></tr>)}</tbody>
+              </table>
+            </div>
+          </section>}
 
           {tab === "interviews" && <form className="panel admin-form" onSubmit={scheduleInterview}>
             <h2>{t("scheduleInterview")}</h2>
@@ -955,7 +1238,38 @@ function DocumentLinks({ t, documents = [], avatarUrl = "", compact = false, onD
 }
 
 function Metric({ label, value }) {
-  return <article className="metric-card"><span>{label}</span><strong>{value}</strong><small>+12.4%</small></article>;
+  return <article className="metric-card"><span>{label}</span><strong>{formatNumber(value)}</strong></article>;
+}
+
+function AnalyticsBars({ title, data = [] }) {
+  const max = Math.max(1, ...data.map((item) => Number(item.value || 0)));
+  return (
+    <article className="panel analytics-card">
+      <h2>{title}</h2>
+      <div className="bar-chart compact-chart">
+        {data.map((item) => {
+          const value = Number(item.value || 0);
+          return <div className="bar-group" key={item.label}><span title={`${item.label}: ${value}`} style={{ height: `${Math.max(8, (value / max) * 100)}%` }} /><small>{item.label}</small><b>{value}</b></div>;
+        })}
+      </div>
+    </article>
+  );
+}
+
+function AnalyticsList({ title, data = [] }) {
+  const total = data.reduce((sum, item) => sum + Number(item.value || 0), 0);
+  return (
+    <article className="panel analytics-card">
+      <h2>{title}</h2>
+      <div className="analytics-list">
+        {data.length ? data.map((item) => {
+          const value = Number(item.value || 0);
+          const percent = total ? Math.round((value / total) * 100) : 0;
+          return <div className="analytics-row" key={item.label}><span>{item.label}</span><strong>{value}</strong><div><i style={{ width: `${percent}%` }} /></div></div>;
+        }) : <p>0</p>}
+      </div>
+    </article>
+  );
 }
 
 function Avatar({ user, size = "" }) {

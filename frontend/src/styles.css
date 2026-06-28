@@ -28,6 +28,7 @@ body {
 html[dir="rtl"] body { font-family: "Noto Kufi Arabic", Inter, system-ui, sans-serif; }
 button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: 0.68; }
 
 .app-shell { min-height: 100vh; padding-bottom: 72px; }
 
@@ -35,6 +36,7 @@ button { cursor: pointer; }
   position: sticky;
   top: 0;
   z-index: 20;
+  direction: ltr;
   display: grid;
   grid-template-columns: auto minmax(220px, 420px) 1fr auto;
   gap: 18px;
@@ -162,6 +164,26 @@ button { cursor: pointer; }
 .secondary-button { color: var(--brand); background: #fff; }
 .compact { min-height: 38px; white-space: nowrap; }
 
+.loading-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.42);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 main {
   max-width: 1180px;
   margin: 24px auto;
@@ -172,7 +194,7 @@ main.admin-main {
   max-width: min(1540px, calc(100vw - 36px));
 }
 
-.panel, .profile-card, .network-card, .metric-card, .login-card {
+.panel, .profile-card, .metric-card, .login-card {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -267,6 +289,19 @@ html[dir="rtl"] .online-dot { right: auto; left: 8px; }
 .feed, .profile-page, .admin-page, .job-list { display: grid; gap: 14px; }
 .panel { padding: 18px; }
 
+.job-filter-bar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.job-filter-bar label {
+  display: grid;
+  gap: 6px;
+  min-width: min(260px, 100%);
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .composer {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -330,6 +365,11 @@ html[dir="rtl"] .online-dot { right: auto; left: 8px; }
   margin-top: 18px;
 }
 
+.side-feature-grid {
+  display: grid;
+  gap: 8px;
+}
+
 .feature-card {
   min-height: 112px;
   padding: 14px;
@@ -366,6 +406,23 @@ button.feature-card:hover {
   font-size: 0.86rem;
 }
 
+.side-feature-grid .feature-card {
+  min-height: 64px;
+  padding: 10px 12px;
+  text-align: start;
+}
+
+.side-feature-grid .feature-card strong {
+  margin-bottom: 3px;
+  font-size: 0.86rem;
+  line-height: 1.2;
+}
+
+.side-feature-grid .feature-card span {
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
 .job-strip, .chips {
   display: flex;
   flex-wrap: wrap;
@@ -380,6 +437,88 @@ button.feature-card:hover {
   border-radius: 999px;
   font-size: 0.86rem;
   font-weight: 700;
+}
+
+.job-strip .application-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px 7px 11px;
+}
+
+.side-job-strip {
+  display: grid;
+  gap: 6px;
+}
+
+.side-job-strip span {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  font-size: 0.74rem;
+  line-height: 1.25;
+}
+
+.side-job-strip .application-chip {
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.side-job-strip .status {
+  flex: 0 0 auto;
+  padding: 3px 6px;
+  font-size: 0.68rem;
+}
+
+.side-stat {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--brand);
+  font-size: 1.7rem;
+  line-height: 1;
+}
+
+.more-link {
+  margin-top: 8px;
+  padding-bottom: 0;
+  color: var(--brand);
+}
+
+.admin-post-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.admin-post {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+  color: inherit;
+  text-align: start;
+}
+
+.admin-post:hover {
+  border-color: rgba(16, 183, 167, 0.42);
+  background: #fff;
+}
+
+.admin-post strong {
+  font-size: 1rem;
+}
+
+.admin-post span,
+.admin-post p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.admin-post p {
+  font-size: 0.9rem;
 }
 
 .side-panel h2, .panel h2 {
@@ -620,11 +759,6 @@ textarea { min-height: 110px; resize: vertical; }
   gap: 14px;
 }
 
-.network-card { padding: 18px; text-align: center; }
-.network-card .avatar { margin: 0 auto 12px; width: 62px; height: 62px; }
-.network-card h2 { margin: 0 0 4px; font-size: 1rem; }
-.network-card p { min-height: 42px; margin: 0 0 14px; color: var(--muted); font-size: 0.86rem; }
-
 .job-card {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -634,6 +768,52 @@ textarea { min-height: 110px; resize: vertical; }
 
 .job-card h2 { margin: 0 0 4px; font-size: 1.1rem; }
 .job-card p { margin: 0; }
+.job-actions {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+}
+.application-status {
+  display: inline-flex;
+  margin-top: 8px;
+}
+
+.job-details {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.job-details dl {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.job-details dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.job-details dd {
+  margin: 3px 0 0;
+  font-weight: 800;
+}
+
+.job-details h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.job-details p {
+  color: var(--ink);
+  white-space: pre-wrap;
+}
 
 .admin-heading {
   display: flex;
@@ -719,15 +899,32 @@ textarea { min-height: 110px; resize: vertical; }
   gap: 14px;
 }
 
+.job-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
 .notify-button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
 
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.danger-button {
+  border-color: #c2410c;
+  color: #c2410c;
+}
+
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 14px;
 }
 
@@ -735,6 +932,16 @@ textarea { min-height: 110px; resize: vertical; }
 .metric-card span, .metric-card small { display: block; color: var(--muted); font-weight: 700; }
 .metric-card strong { display: block; margin: 8px 0 4px; font-size: clamp(1.8rem, 4vw, 2.35rem); line-height: 1; }
 .metric-card small { color: var(--green); }
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.analytics-card {
+  min-width: 0;
+}
 
 .admin-layout {
   display: grid;
@@ -756,9 +963,14 @@ textarea { min-height: 110px; resize: vertical; }
   border-radius: var(--radius);
 }
 
+.compact-chart {
+  height: 190px;
+  min-height: 190px;
+}
+
 .bar-group {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   align-items: end;
   gap: 7px;
   min-width: 0;
@@ -774,6 +986,47 @@ textarea { min-height: 110px; resize: vertical; }
   border-radius: 999px 999px 4px 4px;
 }
 .bar-group small { color: var(--muted); text-align: center; font-weight: 800; }
+.bar-group b { color: var(--ink); text-align: center; font-size: 0.82rem; }
+
+.analytics-list {
+  display: grid;
+  gap: 12px;
+}
+
+.analytics-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  align-items: center;
+}
+
+.analytics-row span {
+  overflow: hidden;
+  color: var(--muted);
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analytics-row strong {
+  color: var(--brand);
+}
+
+.analytics-row div {
+  grid-column: 1 / -1;
+  height: 8px;
+  overflow: hidden;
+  background: #edf1f5;
+  border-radius: 999px;
+}
+
+.analytics-row i {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  background: linear-gradient(90deg, var(--brand), var(--green));
+  border-radius: inherit;
+}
 
 .risk-list {
   display: grid;
@@ -829,6 +1082,10 @@ td span { display: block; color: var(--muted); font-size: 0.84rem; }
 }
 .status.review { color: #84500d; background: #fff3d9; }
 .status.suspended { color: #9c1c1c; background: #fde8e8; }
+.status.submitted { color: #384250; background: #eef2f6; }
+.status.interview { color: #075985; background: #e0f2fe; }
+.status.accepted { color: #14633f; background: #e5f6ee; }
+.status.rejected { color: #9c1c1c; background: #fde8e8; }
 
 .table-actions {
   display: flex;
@@ -1063,29 +1320,110 @@ html[dir="rtl"] .support-window {
 }
 
 .login-page {
-  display: grid;
-  grid-template-columns: 1fr 390px;
-  gap: 18px;
-  align-items: center;
+  direction: ltr;
+  display: block;
+  width: min(1120px, calc(100vw - 56px));
   min-height: 100vh;
+  margin: 0 auto;
+  padding: 34px clamp(28px, 6vw, 104px) 48px;
+  background: #fff;
 }
 
-.login-hero {
-  min-height: 560px;
-  padding: 36px;
-  color: #fff;
-  background:
-    linear-gradient(135deg, rgba(6, 29, 58, 0.98), rgba(9, 42, 83, 0.92), rgba(16, 183, 167, 0.78)),
-    radial-gradient(circle at 82% 20%, rgba(255, 255, 255, 0.3), transparent 32%);
-  border-radius: var(--radius);
+.login-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 58px;
 }
 
-.login-hero .brand small { color: #c8f5ef; }
-.login-hero h1 { max-width: 680px; margin: 0; font-size: clamp(2.1rem, 5vw, 3.8rem); line-height: 1.04; }
-.login-hero p { max-width: 620px; color: #e7f7f5; font-size: 1rem; }
-.login-card { display: grid; gap: 14px; padding: 22px; }
+.login-top-logo {
+  display: block;
+  width: 190px;
+  height: auto;
+  object-fit: contain;
+}
+
+.login-stage {
+  display: grid;
+  grid-template-columns: minmax(340px, 430px) minmax(390px, 1fr);
+  gap: clamp(54px, 8vw, 118px);
+  align-items: center;
+}
+
+.login-copy {
+  display: grid;
+  gap: 28px;
+  align-content: start;
+}
+
+.login-page-rtl .login-copy {
+  grid-column: 2;
+  grid-row: 1;
+  direction: rtl;
+  text-align: right;
+  justify-items: stretch;
+}
+
+.login-copy h1 {
+  max-width: 430px;
+  margin: 0;
+  color: var(--brand);
+  font-size: clamp(2rem, 3.3vw, 2.75rem);
+  font-weight: 400;
+  line-height: 1.16;
+}
+
+.login-card {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  max-width: 430px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.login-card input {
+  min-height: 52px;
+  border-radius: 4px;
+}
+
+.login-card .primary-button {
+  min-height: 52px;
+}
+
+.login-visual {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-height: 500px;
+  overflow: visible;
+}
+
+.login-page-rtl .login-visual {
+  grid-column: 1;
+  grid-row: 1;
+  justify-content: flex-start;
+}
+
+.login-visual img {
+  width: min(520px, 100%);
+  height: auto;
+  object-fit: contain;
+}
 .error { margin: 0; color: #b42318; font-weight: 700; }
-.demo-actions button { border: 0; background: transparent; color: var(--brand); font-weight: 700; }
+.notice { margin: 0; color: var(--brand); font-weight: 800; }
+.auth-switch {
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--brand);
+  font-weight: 800;
+  text-align: start;
+}
 
 @media (max-width: 1040px) {
   .topbar { grid-template-columns: auto 1fr auto; }
@@ -1094,6 +1432,7 @@ html[dir="rtl"] .support-window {
   .insight-rail { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; }
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
   .admin-console { grid-template-columns: 190px minmax(0, 1fr); }
+  .analytics-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 760px) {
@@ -1101,9 +1440,20 @@ html[dir="rtl"] .support-window {
   .topbar { grid-template-columns: 1fr auto; gap: 10px; padding: 8px 12px; }
   .brand small, .desktop-nav, .top-actions .primary-button { display: none; }
   main { margin: 14px auto; padding: 0 12px; }
-  .layout-grid, .admin-console, .admin-layout, .admin-profile-grid, .form-grid, .upload-grid, .metric-grid, .login-page, .profile-hero {
+  .layout-grid, .admin-console, .admin-layout, .admin-profile-grid, .job-admin-grid, .form-grid, .upload-grid, .metric-grid, .login-stage, .profile-hero {
     grid-template-columns: 1fr;
   }
+  .login-page { width: min(100%, calc(100vw - 24px)); padding: 18px 18px 28px; }
+  .login-top { margin-bottom: 24px; }
+  .login-top-logo { width: 160px; }
+  .login-stage { gap: 18px; }
+  .login-page-rtl .login-copy,
+  .login-page-rtl .login-visual {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .login-visual { min-height: auto; }
+  .login-visual img { width: min(360px, 92vw); }
   .admin-menu {
     position: static;
     display: flex;
@@ -1118,6 +1468,8 @@ html[dir="rtl"] .support-window {
   .job-card, .admin-heading, .section-head { display: grid; grid-template-columns: 1fr; }
   .support-thread { grid-template-columns: auto 1fr; }
   .support-thread-actions { grid-column: 1 / -1; justify-content: flex-end; }
+  .job-actions { justify-content: start; }
+  .job-details dl { grid-template-columns: 1fr; }
   .row-fields { grid-template-columns: 1fr; }
   .builder-grid { grid-template-columns: 1fr; max-height: calc(100vh - 190px); padding: 14px; }
   .builder-panel.span { grid-column: auto; }

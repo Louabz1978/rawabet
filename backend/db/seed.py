@@ -17,10 +17,10 @@ USERS = [
 ]
 
 JOBS = [
-    ("Rawabet Labs", "Product Manager", "New York / Remote", "Full-time", "$125k - $155k", "Lead product strategy for bilingual professional network features."),
-    ("MENA Growth Group", "Bilingual Talent Partner", "Dubai / Hybrid", "Full-time", "$80k - $110k", "Manage recruitment operations across Arabic and English markets."),
-    ("Blue Harbor Tech", "Frontend Engineer", "Remote", "Full-time", "$130k - $170k", "Build polished professional web experiences with React."),
-    ("Cedar Ventures", "Operations Lead", "Riyadh", "Full-time", "$95k - $120k", "Scale operations and reporting workflows."),
+    ("مختبرات روابط", "مدير منتج", "Product", "الرياض / عن بعد", "دوام كامل", "15,000 - 22,000 ريال", "قيادة استراتيجية المنتج وتحسين تجربة الملفات المهنية ثنائية اللغة."),
+    ("مجموعة نمو الشرق الأوسط", "أخصائي استقطاب مواهب", "HR", "دبي / هجين", "دوام كامل", "12,000 - 18,000 درهم", "إدارة عمليات التوظيف وبناء قنوات مرشحين للأسواق العربية."),
+    ("تقنيات الميناء الأزرق", "مهندس واجهات أمامية", "Technology", "عن بعد", "دوام كامل", "18,000 - 26,000 ريال", "بناء واجهات ويب احترافية وسريعة باستخدام React وتجارب استخدام مصقولة."),
+    ("سيدر للاستثمار", "قائد عمليات", "Operations", "الرياض", "دوام كامل", "14,000 - 20,000 ريال", "تطوير سير العمل والتقارير التشغيلية ودعم توسع الفرق."),
 ]
 
 
@@ -48,7 +48,7 @@ def seed():
                     (user_id, "Experienced professional using Rawabet to build a verified bilingual career profile.", ["Leadership", "Communication", "Arabic", "English", "Product"], 88 if status == "verified" else 64),
                 )
 
-            cur.execute("SELECT id FROM users WHERE email = 'loui@rawabet.app'")
+            cur.execute("SELECT id FROM users WHERE email = 'lou@rawabet.app'")
             loui_id = cur.fetchone()[0]
             cur.execute(
                 """
@@ -70,8 +70,8 @@ def seed():
             for job in JOBS:
                 cur.execute(
                     """
-                    INSERT INTO jobs (company_name, title, location, type, salary_range, description)
-                    SELECT %s,%s,%s,%s,%s,%s
+                    INSERT INTO jobs (company_name, title, category, location, type, salary_range, description)
+                    SELECT %s,%s,%s,%s,%s,%s,%s
                     WHERE NOT EXISTS (SELECT 1 FROM jobs WHERE company_name = %s AND title = %s)
                     """,
                     (*job, job[0], job[1]),

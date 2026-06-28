@@ -36,7 +36,7 @@ API docs: http://localhost:4000/docs
 ## Demo Accounts
 
 - Admin: `admin@rawabet.app` / `admin123`
-- User: `loui@rawabet.app` / `user123`
+- User: `lou@rawabet.app` / `user123`
 
 ## Notes
 

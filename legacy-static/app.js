@@ -319,7 +319,7 @@ const jobs = [
 ];
 
 const adminUsers = [
-  { name: "Loui Abouzaid", email: "loui@rawabet.app", role: "Admin", plan: "Founder", status: "verified", lastActive: "Today", initials: "LA" },
+  { name: "Loui Abouzaid", email: "lou@rawabet.app", role: "Admin", plan: "Founder", status: "verified", lastActive: "Today", initials: "LA" },
   { name: "Sara Alami", email: "sara.alami@example.com", role: "Member", plan: "Premium", status: "active", lastActive: "12 min ago", initials: "SA" },
   { name: "Omar Khaled", email: "omar.khaled@example.com", role: "Recruiter", plan: "Business", status: "active", lastActive: "1 hour ago", initials: "OK" },
   { name: "Lina Nader", email: "lina.nader@example.com", role: "Member", plan: "Free", status: "review", lastActive: "Yesterday", initials: "LN" },

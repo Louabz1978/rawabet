@@ -52,6 +52,8 @@ def current_user(credentials: Annotated[HTTPAuthorizationCredentials, Depends(se
     )
     if not user:
         raise HTTPException(status_code=401, detail="Invalid session")
+    if user.get("status") == "suspended":
+        raise HTTPException(status_code=403, detail="This account is suspended")
     return user
 
 
