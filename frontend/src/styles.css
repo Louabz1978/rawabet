@@ -605,6 +605,43 @@ button.feature-card:hover {
   font-size: 0.74rem;
 }
 
+.interview-admin-list {
+  display: grid;
+  gap: 8px;
+}
+
+.interview-admin-item {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.interview-admin-item div {
+  min-width: 0;
+}
+
+.interview-admin-item strong,
+.interview-admin-item span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.interview-admin-item strong {
+  font-size: 0.82rem;
+}
+
+.interview-admin-item span {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
 .side-panel h2, .panel h2 {
   margin: 0 0 14px;
   font-size: 1rem;

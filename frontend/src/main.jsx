@@ -171,7 +171,9 @@ const text = {
     scheduleInterview: "Schedule interview",
     interviewEmailSent: "Interview email sent to",
     interviewEmailFailed: "Interview was scheduled, but email failed",
+    recipientEmail: "Recipient email",
     interviewTime: "Interview time",
+    upcomingAdminInterviews: "Upcoming interviews",
     channel: "Channel",
     notes: "Notes",
     language: "ع"
@@ -343,7 +345,9 @@ const text = {
     scheduleInterview: "جدولة مقابلة",
     interviewEmailSent: "تم إرسال بريد المقابلة إلى",
     interviewEmailFailed: "تمت جدولة المقابلة، لكن فشل إرسال البريد",
+    recipientEmail: "بريد المستلم",
     interviewTime: "وقت المقابلة",
+    upcomingAdminInterviews: "المقابلات القادمة",
     channel: "القناة",
     notes: "ملاحظات",
     language: "EN"
@@ -427,6 +431,7 @@ function App() {
   const [admin, setAdmin] = useState(null);
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminApplications, setAdminApplications] = useState([]);
+  const [adminInterviews, setAdminInterviews] = useState([]);
   const [supportThreads, setSupportThreads] = useState([]);
   const [supportTarget, setSupportTarget] = useState("");
   const [adminStartTab, setAdminStartTab] = useState("");
@@ -461,6 +466,7 @@ function App() {
       setAdmin(await api("/admin/overview"));
       setAdminUsers(await api("/admin/users"));
       setAdminApplications(await api("/admin/applications"));
+      setAdminInterviews(await api("/admin/interviews"));
       setSupportThreads(await api("/admin/support/threads"));
     }
   }
@@ -573,7 +579,7 @@ function App() {
         {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} />}
         {view === "profile" && <Profile t={t} me={me} reload={loadApp} />}
         {view === "jobs" && <Jobs t={t} lang={lang} jobs={jobs} applications={me.applications || []} interviews={me.interviews || []} search={jobSearch} mode={jobMode} setMode={setJobMode} selectedJobId={selectedJobId} clearSelectedJob={() => setSelectedJobId("")} reload={loadApp} />}
-        {view === "admin" && session.role === "admin" && <Admin t={t} lang={lang} admin={admin} users={adminUsers} setUsers={setAdminUsers} jobs={jobs} applications={adminApplications} setApplications={setAdminApplications} supportThreads={supportThreads} initialTab={adminStartTab} clearInitialTab={() => setAdminStartTab("")} reload={loadApp} openSupport={(userId) => { setSupportTarget(userId || ""); setSupportOpen(true); }} />}
+        {view === "admin" && session.role === "admin" && <Admin t={t} lang={lang} admin={admin} users={adminUsers} setUsers={setAdminUsers} jobs={jobs} applications={adminApplications} setApplications={setAdminApplications} interviews={adminInterviews} supportThreads={supportThreads} initialTab={adminStartTab} clearInitialTab={() => setAdminStartTab("")} reload={loadApp} openSupport={(userId) => { setSupportTarget(userId || ""); setSupportOpen(true); }} />}
       </main>
       {builderOpen && <ProfileBuilder t={t} me={me} reload={loadApp} close={() => setBuilderOpen(false)} />}
       {supportOpen && <SupportWindow t={t} me={me} users={adminUsers} initialUserId={supportTarget} onUpdate={loadSupportThreads} close={() => { setSupportOpen(false); setSupportTarget(""); }} />}
@@ -1069,7 +1075,7 @@ function Jobs({ t, lang, jobs, applications, interviews = [], search = "", mode 
   </section>;
 }
 
-function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplications, supportThreads, initialTab, clearInitialTab, reload, openSupport }) {
+function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplications, interviews = [], supportThreads, initialTab, clearInitialTab, reload, openSupport }) {
   const [tab, setTab] = useState("overview");
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState(null);
@@ -1078,6 +1084,7 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
   const [jobForm, setJobForm] = useState({ companyName: "مختبرات روابط", title: "", category: "General", location: "عن بعد", type: "دوام كامل", salaryRange: "", description: "" });
   const [editingJob, setEditingJob] = useState(null);
   const [interview, setInterview] = useState({ userId: "", jobId: "", scheduledAt: "", channel: "Video call", notes: "" });
+  const [schedulingInterview, setSchedulingInterview] = useState(false);
   const unreadTotal = supportThreads.filter((thread) => Number(thread.unread_count || 0) > 0).length;
   const adminTabs = [
     ["overview", t("overview"), "▦"],
@@ -1249,17 +1256,22 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
   async function scheduleInterview(event) {
     event.preventDefault();
     if (!interview.userId || !interview.scheduledAt) return;
-    const result = await api("/admin/interviews", {
-      method: "POST",
-      body: JSON.stringify({ ...interview, jobId: interview.jobId || null })
-    });
-    if (result.emailSent) {
-      alert(`${t("interviewEmailSent")} ${result.recipientEmail}`);
-    } else {
-      alert(`${t("interviewEmailFailed")}: ${result.emailError || "-"}`);
+    setSchedulingInterview(true);
+    try {
+      const result = await api("/admin/interviews", {
+        method: "POST",
+        body: JSON.stringify({ ...interview, jobId: interview.jobId || null })
+      });
+      if (result.emailSent) {
+        alert(`${t("interviewEmailSent")} ${result.recipientEmail}`);
+      } else {
+        alert(`${t("interviewEmailFailed")}: ${result.emailError || "-"}`);
+      }
+      setInterview({ userId: "", jobId: "", scheduledAt: "", channel: "Video call", notes: "" });
+      await reload();
+    } finally {
+      setSchedulingInterview(false);
     }
-    setInterview({ userId: "", jobId: "", scheduledAt: "", channel: "Video call", notes: "" });
-    await reload();
   }
   if (!admin) return null;
   return (
@@ -1420,15 +1432,27 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
             </div>
           </section>}
 
-          {tab === "interviews" && <form id="schedule-interview-form" className="panel admin-form" onSubmit={scheduleInterview}>
-            <h2>{t("scheduleInterview")}</h2>
-            <select value={interview.userId} onChange={(e) => setInterview({ ...interview, userId: e.target.value })}><option value="">{t("users")}</option>{users.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select>
-            <select value={interview.jobId} onChange={(e) => setInterview({ ...interview, jobId: e.target.value })}><option value="">{t("jobs")}</option>{jobs.map((job) => <option key={job.id} value={job.id}>{job.title}</option>)}</select>
-            <input type="datetime-local" value={interview.scheduledAt} onChange={(e) => setInterview({ ...interview, scheduledAt: e.target.value })} />
-            <input placeholder={t("channel")} value={interview.channel} onChange={(e) => setInterview({ ...interview, channel: e.target.value })} />
-            <textarea placeholder={t("notes")} value={interview.notes} onChange={(e) => setInterview({ ...interview, notes: e.target.value })} />
-            <button className="primary-button">{t("scheduleInterview")}</button>
-          </form>}
+          {tab === "interviews" && <>
+            <form id="schedule-interview-form" className="panel admin-form" onSubmit={scheduleInterview}>
+              <h2>{t("scheduleInterview")}</h2>
+              <select value={interview.userId} onChange={(e) => setInterview({ ...interview, userId: e.target.value })}><option value="">{t("users")}</option>{users.map((user) => <option key={user.id} value={user.id}>{user.full_name} - {user.email}</option>)}</select>
+              <select value={interview.jobId} onChange={(e) => setInterview({ ...interview, jobId: e.target.value })}><option value="">{t("jobs")}</option>{jobs.map((job) => <option key={job.id} value={job.id}>{job.title}</option>)}</select>
+              <input type="datetime-local" value={interview.scheduledAt} onChange={(e) => setInterview({ ...interview, scheduledAt: e.target.value })} />
+              <input placeholder={t("channel")} value={interview.channel} onChange={(e) => setInterview({ ...interview, channel: e.target.value })} />
+              <textarea placeholder={t("notes")} value={interview.notes} onChange={(e) => setInterview({ ...interview, notes: e.target.value })} />
+              <button className="primary-button loading-button" disabled={schedulingInterview}>{schedulingInterview && <span className="spinner" aria-hidden="true"></span>}{t("scheduleInterview")}</button>
+            </form>
+            <section className="panel">
+              <div className="section-head"><h2>{t("upcomingAdminInterviews")}</h2><span className="status">{interviews.length}</span></div>
+              <div className="interview-admin-list">
+                {interviews.length ? interviews.map((item) => <article className="interview-admin-item" key={item.id}>
+                  <div><strong>{item.full_name}</strong><span>{item.email}</span></div>
+                  <div><strong>{item.job_title || t("job")}</strong><span>{item.company_name || "-"}</span></div>
+                  <div><strong>{new Date(item.scheduled_at).toLocaleString()}</strong><span>{item.channel}</span></div>
+                </article>) : <p>{t("noAppliedJobs")}</p>}
+              </div>
+            </section>
+          </>}
 
           {tab === "support" && <section className="panel">
             <div className="section-head"><h2>{t("supportInbox")}</h2><span className="status">{unreadTotal} {t("unreadMessages")}</span></div>

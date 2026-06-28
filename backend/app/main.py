@@ -594,8 +594,9 @@ def me(user: Annotated[dict, Depends(current_user)]):
         SELECT i.id, i.job_id, i.scheduled_at, i.channel, i.notes, i.status,
           j.title AS job_title, j.company_name, j.location, j.salary_range
         FROM interviews i
+        JOIN applications a ON a.user_id = i.user_id AND a.job_id = i.job_id AND a.status = 'interview'
         LEFT JOIN jobs j ON j.id = i.job_id
-        WHERE i.user_id = %s AND i.status = 'scheduled'
+        WHERE i.user_id = %s AND i.status = 'scheduled' AND i.scheduled_at >= NOW()
         ORDER BY i.scheduled_at ASC
         """,
         (user["id"],),
@@ -748,9 +749,18 @@ def update_admin_application(application_id: UUID, body: ApplicationStatusBody, 
     allowed = {"submitted", "review", "interview", "accepted", "rejected"}
     if body.status not in allowed:
         raise HTTPException(status_code=400, detail="Invalid application status")
-    updated = execute("UPDATE applications SET status = %s WHERE id = %s RETURNING id", (body.status, application_id))
+    updated = execute("UPDATE applications SET status = %s WHERE id = %s RETURNING id, user_id, job_id", (body.status, application_id))
     if not updated:
         raise HTTPException(status_code=404, detail="Application not found")
+    if body.status != "interview":
+        execute(
+            """
+            UPDATE interviews
+            SET status = 'cancelled'
+            WHERE user_id = %s AND job_id = %s AND status = 'scheduled'
+            """,
+            (updated["user_id"], updated["job_id"]),
+        )
     return {"ok": True}
 
 
@@ -1116,11 +1126,12 @@ def delete_admin_job(job_id: UUID, user: Annotated[dict, Depends(admin_user)]):
 def list_admin_interviews(user: Annotated[dict, Depends(admin_user)]):
     return fetch_all(
         """
-        SELECT i.*, u.full_name, u.email, j.title AS job_title
+        SELECT i.*, u.full_name, u.email, j.title AS job_title, j.company_name, j.location AS job_location
         FROM interviews i
         JOIN users u ON u.id = i.user_id
         LEFT JOIN jobs j ON j.id = i.job_id
-        ORDER BY i.scheduled_at DESC
+        WHERE i.status = 'scheduled' AND i.scheduled_at >= NOW()
+        ORDER BY i.scheduled_at ASC
         """
     )
 
