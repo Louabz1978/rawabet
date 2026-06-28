@@ -126,6 +126,14 @@ def health():
     return {"ok": True, "service": "rawabet-python-api"}
 
 
+@app.get("/api/support/bot-version")
+def support_bot_version():
+    return {
+        "version": "rawabet-guide-2026-06-28-apply-intents",
+        "sample": platform_bot_reply("كيف اتقدم ارشدني"),
+    }
+
+
 def send_plain_email(email: str, subject: str, body: str) -> tuple[bool, str | None]:
     if not SMTP_HOST or not SMTP_PASSWORD or SMTP_PASSWORD == "PUT_GMAIL_APP_PASSWORD_HERE":
         return False, "SMTP is not configured."
@@ -153,20 +161,42 @@ def send_verification_email(email: str, otp: str) -> tuple[bool, str | None]:
 
 RAWABET_CONTEXT = """
 Rawabet / روابط is a professional employment platform for Arab professionals.
-Users can register with email verification, log in when active, create and update a professional profile,
-upload or replace a profile picture, upload or replace one resume, upload up to five certificates,
-add skills and work history, browse jobs, filter jobs by category and salary, open job details, apply to jobs,
-track application status, see upcoming interviews, and chat with support.
+It has a user platform and an admin platform.
 
-Admins can manage users, change plan between free and premium, verify/activate/deactivate/delete users,
-view user attachments, add/edit/delete jobs, schedule interviews, update application statuses, view support
-threads, chat with users, and view analytics for users, jobs, applications, categories, and profile health.
+User platform:
+- Register with full name, email, phone, date of birth, and password.
+- Verify registration by email OTP before the account is created.
+- Log in only when the account is active or verified; suspended accounts must not log in.
+- Use Home to see profile strength, applied jobs count, profile completion shortcuts, admin-posted jobs, and upcoming interviews.
+- Use Profile to edit name, phone, date of birth, headline, location, about, skills, profile picture, resume, certificates, and work history.
+- Profile picture uploads replace the previous picture.
+- Resume uploads replace the previous resume.
+- Certificate uploads can add up to five certificates.
+- Use Jobs to search job title/company, filter by category and salary, view details, apply, and track application status.
+- Applied jobs can be filtered by status, category, salary, and company.
+- Support chat lets users ask the bot or request live admin support.
+- Clear chat removes the current support conversation.
 
-The platform supports Arabic and English UI. Application statuses include submitted, review, interview,
-accepted, and rejected. User statuses include active, verified, review, and suspended. Job statuses include
-active, paused, and closed. The support bot must answer only Rawabet platform questions. If the question is
-outside Rawabet or cannot be answered from this context, it must ask whether the user wants a live support
-agent or wants to end the conversation.
+Admin platform:
+- Overview shows analytics for users, jobs posted, applications, outcomes, categories, profile health, pending documents, active jobs, suspended users, and interviews.
+- User Management lets admins search users, open a user profile, change plan between free/premium, verify, activate, deactivate/suspend, delete, and view attachments.
+- User profile editing lets admins update user information, plan, role, status, about, skills, profile picture, resume, and certificates.
+- Job Management lets admins add jobs, edit jobs, delete jobs, search by job number/title/company, and manage job status.
+- Applications lets admins review applicants and change application status to submitted, review, interview, accepted, or rejected.
+- Interviews lets admins select a user, select a job, schedule date/time, channel, notes, mark application as interview, and send email notification.
+- Support Inbox shows users who messaged support, unread counts by user, and lets admin open each chat and reply.
+
+Statuses:
+- Application statuses: submitted, review, interview, accepted, rejected.
+- User statuses: active, verified, review, suspended.
+- Job statuses: active, paused, closed.
+- Plans: free, premium.
+
+Bot rules:
+- Answer only questions about Rawabet and how to use this platform.
+- Prefer clear numbered steps and mention the exact page/menu/button names.
+- Use Arabic by default unless the user writes English.
+- If a question is outside Rawabet or cannot be answered from this context, ask whether the user wants live support or wants to end the conversation.
 """
 
 LIVE_AGENT_REPLY = "تم إشعار فريق الدعم بطلبك. سيقوم موظف دعم مباشر بالرد عليك من صندوق الدعم."
@@ -174,39 +204,129 @@ END_CHAT_REPLY = "حسنا، يمكنك إنهاء المحادثة الآن. إ
 UNKNOWN_REPLY = "لا أملك إجابة مؤكدة عن هذا السؤال داخل معلومات منصة روابط. هل تريد التحدث مع موظف دعم مباشر أم إنهاء المحادثة؟"
 
 
+def normalize_arabic_text(value: str) -> str:
+    replacements = {
+        "أ": "ا",
+        "إ": "ا",
+        "آ": "ا",
+        "ى": "ي",
+        "ة": "ه",
+        "ؤ": "و",
+        "ئ": "ي",
+    }
+    normalized = value.lower()
+    for source, target in replacements.items():
+        normalized = normalized.replace(source, target)
+    return normalized
+
+
+RAWABET_GUIDES = [
+    {
+        "terms": ["register", "sign up", "create account", "otp", "verification", "تسجيل", "إنشاء حساب", "حساب جديد", "رمز", "تحقق", "تأكيد"],
+        "answer": "لإنشاء حساب في روابط:\n1. من صفحة الدخول اختر إنشاء حساب.\n2. أدخل الاسم الكامل، البريد الإلكتروني، رقم الهاتف، تاريخ الميلاد، وكلمة المرور.\n3. اضغط إنشاء حساب وانتظر ظهور صفحة التحقق.\n4. افتح بريدك وخذ رمز OTP.\n5. أدخل الرمز واضغط تأكيد البريد.\n6. بعد نجاح التحقق يتم إنشاء الحساب ثم تنتقل إلى الصفحة الرئيسية."
+    },
+    {
+        "terms": ["login", "sign in", "suspended", "تسجيل الدخول", "دخول", "موقوف", "معلق"],
+        "answer": "لتسجيل الدخول:\n1. افتح صفحة الدخول.\n2. أدخل البريد الإلكتروني وكلمة المرور.\n3. اضغط تسجيل الدخول.\n4. إذا كان الحساب موقوفا فلن يسمح النظام بالدخول ويجب التواصل مع الدعم أو الإدارة.\n5. إذا نسيت بيانات الدخول اطلب مساعدة الدعم المباشر."
+    },
+    {
+        "terms": ["complete profile", "profile strength", "profile", "headline", "about", "skills", "أكمل الملف", "قوة الملف", "الملف", "العنوان المهني", "نبذة", "المهارات"],
+        "answer": "لإكمال الملف ورفع قوة الملف:\n1. اضغط الملف أو أكمل الملف من الشريط العلوي.\n2. حدّث الاسم، الهاتف، تاريخ الميلاد، العنوان المهني، الموقع، والنبذة.\n3. أضف المهارات مفصولة بفواصل.\n4. ارفع الصورة الشخصية.\n5. ارفع السيرة الذاتية.\n6. أضف الشهادات إن وجدت.\n7. أضف تاريخ العمل من قسم الخبرات.\n8. اضغط حفظ الملف. قوة الملف تتحسن حسب اكتمال الصورة والسيرة والشهادات والمهارات والخبرات."
+    },
+    {
+        "terms": ["profile picture", "avatar", "photo", "صورة", "الصورة", "الصورة الشخصية"],
+        "answer": "لتغيير الصورة الشخصية:\n1. افتح صفحة الملف أو اضغط أكمل الملف.\n2. في قسم الصورة والسيرة والشهادات اختر الصورة الشخصية.\n3. اختر صورة من جهازك.\n4. يتم رفع الصورة واستبدال أي صورة قديمة تلقائيا.\n5. تظهر الصورة الجديدة في ملفك وفي شاشة الإدارة."
+    },
+    {
+        "terms": ["resume", "cv", "سيرة", "السيرة", "السيرة الذاتية"],
+        "answer": "لرفع السيرة الذاتية:\n1. افتح الملف أو أكمل الملف.\n2. اختر حقل السيرة الذاتية.\n3. ارفع ملف PDF أو DOC أو DOCX.\n4. روابط يحتفظ بسيرة واحدة فقط، لذلك أي رفع جديد يستبدل السيرة السابقة.\n5. يظهر رابط السيرة في مرفقات ملفك ولدى الإدارة."
+    },
+    {
+        "terms": ["certificate", "certificates", "license", "award", "شهادة", "الشهادات", "رخص", "جوائز"],
+        "answer": "لإضافة الشهادات:\n1. افتح الملف أو أكمل الملف.\n2. اختر حقل الشهادة.\n3. ارفع ملف PDF أو صورة.\n4. يمكنك إضافة حتى 5 شهادات.\n5. تظهر الشهادات كرابط في المرفقات ويمكن للإدارة مراجعتها أو حذفها من ملف المستخدم."
+    },
+    {
+        "terms": ["work history", "experience", "career", "خبرة", "تاريخ العمل", "الخبرات", "مسار"],
+        "answer": "لإضافة تاريخ العمل:\n1. افتح صفحة الملف.\n2. انتقل إلى قسم الخبرات.\n3. أدخل المسمى الوظيفي واسم الشركة.\n4. اضغط إضافة خبرة.\n5. ستظهر الخبرة في ملفك وتساعد في تحسين قوة الملف."
+    },
+    {
+        "terms": ["job", "jobs", "search job", "category", "salary", "filter", "وظيفة", "وظائف", "بحث", "فئة", "راتب", "فلتر"],
+        "answer": "للبحث عن وظيفة:\n1. افتح صفحة الوظائف من الشريط العلوي.\n2. استخدم مربع البحث للبحث باسم الوظيفة أو الشركة.\n3. اختر الفئة المناسبة من فلتر الفئات.\n4. اختر نطاق الراتب إذا أردت تضييق النتائج.\n5. اضغط تفاصيل الوظيفة لعرض الوصف والموقع والراتب والنوع.\n6. اضغط تقديم لإرسال طلبك."
+    },
+    {
+        "terms": ["apply", "application", "application status", "applied", "guide me apply", "تقديم", "اتقدم", "اقدم", "التقدم", "قدم", "كيف اتقدم", "ارشدني", "مناسبا", "مناسبه", "طلب", "طلبات", "حالة الطلب", "حاله الطلب", "الوظائف المقدمة", "الوظائف المقدمه"],
+        "answer": "للتقديم على وظيفة مناسبة:\n1. افتح صفحة الوظائف من الشريط العلوي.\n2. استخدم البحث لكتابة اسم الوظيفة أو الشركة التي تهمك.\n3. استخدم فلتر الفئة ونطاق الراتب لتقليل النتائج حسب اهتمامك.\n4. اضغط تفاصيل الوظيفة لقراءة الوصف، الشركة، الموقع، الراتب، والنوع.\n5. إذا وجدت نفسك مناسبا، اضغط تقديم.\n6. بعد التقديم افتح الوظائف المقدمة فقط لمتابعة حالة الطلب.\n7. الحالات الممكنة هي: تم التقديم، قيد المراجعة، مقابلة، مقبول، أو مرفوض."
+    },
+    {
+        "terms": ["interview", "schedule interview", "مقابلة", "المقابلات", "جدولة"],
+        "answer": "بالنسبة للمقابلات:\n1. الإدارة تفتح لوحة الإدارة ثم المقابلات.\n2. تختار المستخدم والوظيفة.\n3. تحدد التاريخ والوقت والقناة وتضيف الملاحظات.\n4. عند الحفظ يتم تحديث حالة الطلب إلى مقابلة.\n5. يصل للمستخدم إشعار بريد بالمقابلة، وتظهر المقابلة في الصفحة الرئيسية وتُميّز الوظيفة."
+    },
+    {
+        "terms": ["support", "chat", "clear chat", "live support", "دعم", "محادثة", "مسح المحادثة", "دعم مباشر"],
+        "answer": "لاستخدام الدعم:\n1. اضغط الدعم من الشريط العلوي.\n2. اكتب سؤالك عن منصة روابط.\n3. سيجيبك المساعد عن خطوات استخدام المنصة.\n4. إذا لم يجد جوابا سيعرض خيار التحدث مع دعم مباشر أو إنهاء المحادثة.\n5. لمسح المحادثة اضغط مسح المحادثة، وسيتم حذف رسائل هذه المحادثة فقط.\n6. في لوحة الإدارة تظهر رسائل المستخدمين في صندوق الدعم ويمكن فتح محادثة كل مستخدم والرد عليه."
+    },
+    {
+        "terms": ["admin", "dashboard", "analytics", "reports", "إدارة", "لوحة", "تحليلات", "تقارير"],
+        "answer": "لاستخدام لوحة الإدارة:\n1. سجّل الدخول بحساب مدير.\n2. اضغط الإدارة من الشريط العلوي.\n3. من القائمة الجانبية اختر: نظرة عامة، إدارة المستخدمين، إدارة الوظائف، طلبات التقديم، المقابلات، أو صندوق الدعم.\n4. نظرة عامة تعرض تحليلات المستخدمين والوظائف والتقديمات والنتائج والفئات وجودة الملفات.\n5. كل قسم له أدواته الخاصة للتحكم والمتابعة."
+    },
+    {
+        "terms": ["user management", "manage users", "verify", "activate", "deactivate", "delete user", "إدارة المستخدمين", "توثيق", "تفعيل", "إيقاف", "حذف المستخدم"],
+        "answer": "لإدارة المستخدمين كمدير:\n1. افتح الإدارة ثم إدارة المستخدمين.\n2. استخدم البحث للعثور على المستخدم.\n3. غيّر الخطة مباشرة من عمود الخطة بين مجاني ومميز.\n4. من قائمة الإجراءات اختر تعديل المستخدم، توثيق، تفعيل، إيقاف، أو حذف.\n5. عند اختيار تعديل المستخدم يتم فتح ملفه لتعديل البيانات والمرفقات والمهارات والنبذة.\n6. المستخدم الموقوف لا يستطيع تسجيل الدخول."
+    },
+    {
+        "terms": ["plan", "premium", "free", "الخطة", "مميز", "مجاني", "بريميوم"],
+        "answer": "لتغيير خطة المستخدم:\n1. افتح الإدارة ثم إدارة المستخدمين.\n2. ابحث عن المستخدم المطلوب.\n3. في عمود الخطة اختر مجاني أو مميز.\n4. يتم حفظ التغيير مباشرة.\n5. يمكنك أيضا فتح تعديل المستخدم وتغيير الخطة من داخل ملفه."
+    },
+    {
+        "terms": ["add job", "edit job", "delete job", "manage job", "post job", "job number", "job id", "إضافة وظيفة", "اضافة وظيفة", "أضيف وظيفة", "اضيف وظيفة", "أعدل وظيفة", "اعدل وظيفة", "تعديل وظيفة", "حذف وظيفة", "رقم الوظيفة", "إدارة الوظائف", "ادارة الوظائف"],
+        "answer": "لإدارة الوظائف كمدير:\n1. افتح الإدارة ثم إدارة الوظائف.\n2. لإضافة وظيفة، املأ الشركة، المسمى، الفئة، الموقع، الراتب، والوصف ثم اضغط إضافة وظيفة.\n3. النظام يعرض رقم وظيفة تلقائيا في جدول إدارة الوظائف.\n4. للبحث عن وظيفة استخدم رقم الوظيفة أو المسمى أو الشركة.\n5. من قائمة الإجراءات اختر تعديل الوظيفة أو حذف الوظيفة.\n6. عند التعديل حدّث البيانات والحالة ثم اضغط حفظ."
+    },
+    {
+        "terms": ["application management", "approve", "reject", "review", "طلبات التقديم", "قبول", "رفض", "مراجعة"],
+        "answer": "لإدارة طلبات التقديم:\n1. افتح الإدارة ثم طلبات التقديم.\n2. راجع اسم المتقدم والوظيفة والشركة والموقع.\n3. من قائمة الحالة اختر تم التقديم، قيد المراجعة، مقابلة، مقبول، أو مرفوض.\n4. تظهر الحالة الجديدة للمستخدم في الوظائف المقدمة."
+    },
+    {
+        "terms": ["language", "arabic", "english", "لغة", "عربي", "إنجليزي", "english"],
+        "answer": "لتغيير اللغة:\n1. اضغط زر اللغة في الشريط العلوي.\n2. إذا كانت الواجهة عربية سيظهر زر EN للتبديل للإنجليزية.\n3. إذا كانت الواجهة إنجليزية سيظهر زر ع للتبديل للعربية.\n4. الشعار يبقى في الجهة اليسرى كما طلبت."
+    }
+]
+
+
 def local_platform_reply(question: str) -> str | None:
     lowered = question.lower()
+    normalized_question = normalize_arabic_text(question)
     wants_live = ["live agent", "human", "support agent", "موظف", "دعم مباشر", "شخص", "انسان", "إنسان"]
     wants_end = ["end conversation", "close chat", "انهاء", "إنهاء", "انهي", "إنهي", "نهاية"]
-    if any(term in lowered for term in wants_live):
+    if any(term in lowered or normalize_arabic_text(term) in normalized_question for term in wants_live):
         return LIVE_AGENT_REPLY
-    if any(term in lowered for term in wants_end):
+    if any(term in lowered or normalize_arabic_text(term) in normalized_question for term in wants_end):
         return END_CHAT_REPLY
-
-    answers = [
-        (["profile picture", "avatar", "photo", "صورة", "الصورة"], "يمكنك تحديث الصورة الشخصية من صفحة الملف أو نافذة أكمل الملف. يتم استبدال الصورة القديمة بالجديدة مباشرة."),
-        (["resume", "cv", "سيرة", "السيرة"], "يمكنك رفع السيرة الذاتية من الملف أو أكمل الملف. روابط يحتفظ بملف سيرة واحد فقط، وأي رفع جديد يستبدل الملف السابق."),
-        (["certificate", "certificates", "شهادة", "الشهادات"], "يمكنك إضافة حتى 5 شهادات للملف. تظهر المرفقات للمستخدم وللإدارة كرابط يمكن فتحه."),
-        (["work history", "experience", "خبرة", "تاريخ العمل", "الخبرات"], "يمكنك إضافة تاريخ العمل من صفحة الملف عبر إدخال المسمى والشركة ثم حفظ الخبرة."),
-        (["apply", "application", "status", "تقديم", "طلب", "حالة الطلب"], "يمكن للمستخدم التقديم على الوظائف من صفحة الوظائف. بعد التقديم تظهر حالة الطلب مثل تم التقديم، قيد المراجعة، مقابلة، مقبول، أو مرفوض."),
-        (["job", "jobs", "salary", "category", "وظيفة", "وظائف", "راتب", "فئة"], "صفحة الوظائف تعرض الوظائف التي تضيفها الإدارة. يمكن البحث باسم الوظيفة أو الشركة، والتصفية حسب الفئة ونطاق الراتب، وفتح تفاصيل كل وظيفة."),
-        (["interview", "مقابلة", "المقابلات"], "عندما تجدول الإدارة مقابلة، تظهر للمستخدم في المقابلات القادمة ويتم تمييز الوظيفة المرتبطة بها."),
-        (["admin", "dashboard", "analytics", "إدارة", "لوحة", "تحليلات"], "لوحة الإدارة تتيح إدارة المستخدمين والوظائف والطلبات والمقابلات وصندوق الدعم، مع تحليلات للنمو والوظائف والطلبات وحالة الملفات."),
-        (["plan", "premium", "free", "الخطة", "مميز", "مجاني"], "يمكن للإدارة تغيير خطة المستخدم من إدارة المستخدمين بين مجاني ومميز."),
-        (["verify", "activate", "deactivate", "suspend", "توثيق", "تفعيل", "إيقاف", "موقوف"], "يمكن للإدارة توثيق المستخدم أو تفعيله أو إيقافه من إدارة المستخدمين. الحساب الموقوف لا يسمح له بتسجيل الدخول."),
-        (["support", "chat", "دعم", "محادثة"], "نافذة الدعم تسمح للمستخدم بإرسال رسالة. تظهر الرسائل في صندوق الدعم لدى الإدارة، ويمكن للإدارة فتح محادثة كل مستخدم والرد عليه."),
-        (["language", "arabic", "english", "لغة", "عربي", "إنجليزي"], "روابط يدعم العربية والإنجليزية، ويمكن تبديل اللغة من زر اللغة في الشريط العلوي.")
-    ]
-    for terms, answer in answers:
-        if any(term in lowered for term in terms):
-            return answer
-    return None
+    best_guide = None
+    best_score = 0
+    for guide in RAWABET_GUIDES:
+        score = sum(
+            3 if " " in term else 1
+            for term in guide["terms"]
+            if term in lowered or normalize_arabic_text(term) in normalized_question
+        )
+        if score > best_score:
+            best_score = score
+            best_guide = guide
+    return best_guide["answer"] if best_guide and best_score else None
 
 
 def platform_bot_reply(question: str) -> str:
     lowered = question.lower()
-    platform_terms = ["rawabet", "روابط", "platform", "profile", "resume", "certificate", "job", "apply", "application", "interview", "support", "admin", "plan", "premium", "free", "status", "ملف", "وظيفة", "وظائف", "تقديم", "طلب", "طلبات", "حالة", "مقابلة", "دعم", "شهادة", "سيرة", "الخطة", "مميز", "مجاني", "الحالة"]
-    if not any(term in lowered for term in platform_terms):
+    normalized_question = normalize_arabic_text(question)
+    platform_terms = [
+        "rawabet", "روابط", "platform", "profile", "resume", "cv", "certificate", "job", "jobs", "apply", "application",
+        "interview", "support", "admin", "dashboard", "analytics", "plan", "premium", "free", "status", "otp", "register",
+        "login", "upload", "attachment", "photo", "avatar", "skill", "experience", "salary", "category", "filter",
+        "ملف", "وظيفة", "وظائف", "تقديم", "اتقدم", "اقدم", "التقدم", "قدم", "ارشدني", "مناسب", "مناسبا", "طلب", "طلبات", "حالة", "مقابلة", "دعم", "شهادة", "شهادات", "سيرة",
+        "الخطة", "مميز", "مجاني", "الحالة", "تسجيل", "دخول", "تحقق", "رمز", "رفع", "مرفق", "مرفقات", "صورة",
+        "مهارات", "خبرات", "راتب", "فئة", "بحث", "فلتر", "إدارة", "لوحة", "تحليلات", "مستخدم", "مستخدمين"
+    ]
+    if not any(term in lowered or normalize_arabic_text(term) in normalized_question for term in platform_terms):
         return UNKNOWN_REPLY
     local_reply = local_platform_reply(question)
     if local_reply:
@@ -217,11 +337,11 @@ def platform_bot_reply(question: str) -> str:
     payload = {
         "model": "gpt-4o-mini",
         "messages": [
-            {"role": "system", "content": f"Answer only questions about Rawabet. Use Arabic by default unless the user writes English. Use only the context below. If the answer is not in this context, reply exactly with: {UNKNOWN_REPLY}\n\n{RAWABET_CONTEXT}"},
+            {"role": "system", "content": f"You are Rawabet's in-platform support guide. Answer only questions about Rawabet. Use Arabic by default unless the user writes English. Give practical numbered steps using page/menu/button names from the context. Be specific and helpful. If the user asks about a feature not in the context, reply exactly with: {UNKNOWN_REPLY}\n\n{RAWABET_CONTEXT}"},
             {"role": "user", "content": question},
         ],
         "temperature": 0.2,
-        "max_tokens": 220,
+        "max_tokens": 520,
     }
     request = urllib.request.Request(
         "https://api.openai.com/v1/chat/completions",
