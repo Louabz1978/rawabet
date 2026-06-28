@@ -1230,6 +1230,18 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
   }
   async function updateApplicationStatus(application, status) {
     if (!status) return;
+    if (status === "interview") {
+      setInterview({
+        userId: application.user_id,
+        jobId: application.job_id,
+        scheduledAt: "",
+        channel: interview.channel || "Video call",
+        notes: `${application.full_name} - ${application.job_title}`
+      });
+      setTab("interviews");
+      setTimeout(() => document.getElementById("schedule-interview-form")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+      return;
+    }
     await api(`/admin/applications/${application.id}`, { method: "PATCH", body: JSON.stringify({ status }) });
     setApplications(await api("/admin/applications"));
     await reload();
@@ -1408,7 +1420,7 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
             </div>
           </section>}
 
-          {tab === "interviews" && <form className="panel admin-form" onSubmit={scheduleInterview}>
+          {tab === "interviews" && <form id="schedule-interview-form" className="panel admin-form" onSubmit={scheduleInterview}>
             <h2>{t("scheduleInterview")}</h2>
             <select value={interview.userId} onChange={(e) => setInterview({ ...interview, userId: e.target.value })}><option value="">{t("users")}</option>{users.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select>
             <select value={interview.jobId} onChange={(e) => setInterview({ ...interview, jobId: e.target.value })}><option value="">{t("jobs")}</option>{jobs.map((job) => <option key={job.id} value={job.id}>{job.title}</option>)}</select>
