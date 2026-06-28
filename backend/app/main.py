@@ -3,8 +3,11 @@ from uuid import uuid4
 from typing import Annotated
 from uuid import UUID
 from email.message import EmailMessage
+import json
 import secrets
 import smtplib
+import urllib.error
+import urllib.request
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr
 
 from .auth import admin_user, create_token, current_user, hash_password, public_user, verify_password
-from .config import SMTP_FROM, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USER, UPLOAD_DIR
+from .config import OPENAI_API_KEY, SMTP_FROM, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USER, UPLOAD_DIR
 from .db import execute, fetch_all, fetch_one
 
 
@@ -32,6 +35,8 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 class RegisterBody(BaseModel):
     fullName: str
     email: EmailStr
+    phone: str
+    dob: str
     password: str
     role: str = "member"
 
@@ -48,6 +53,8 @@ class VerifyRegistrationBody(BaseModel):
 
 class ProfileBody(BaseModel):
     fullName: str
+    phone: str | None = None
+    dob: str | None = None
     headline: str | None = None
     location: str | None = None
     about: str | None = None
@@ -68,6 +75,8 @@ class ExperienceBody(BaseModel):
 class AdminUserPatch(BaseModel):
     fullName: str | None = None
     email: EmailStr | None = None
+    phone: str | None = None
+    dob: str | None = None
     headline: str | None = None
     location: str | None = None
     role: str | None = None
@@ -108,19 +117,23 @@ class SupportMessageBody(BaseModel):
     userId: UUID | None = None
 
 
+class ClearSupportBody(BaseModel):
+    userId: UUID | None = None
+
+
 @app.get("/api/health")
 def health():
     return {"ok": True, "service": "rawabet-python-api"}
 
 
-def send_verification_email(email: str, otp: str) -> tuple[bool, str | None]:
+def send_plain_email(email: str, subject: str, body: str) -> tuple[bool, str | None]:
     if not SMTP_HOST or not SMTP_PASSWORD or SMTP_PASSWORD == "PUT_GMAIL_APP_PASSWORD_HERE":
         return False, "SMTP is not configured."
     message = EmailMessage()
-    message["Subject"] = "Rawabet verification code"
+    message["Subject"] = subject
     message["From"] = SMTP_FROM
     message["To"] = email
-    message.set_content(f"Your Rawabet verification code is: {otp}\n\nThis code expires in 15 minutes.")
+    message.set_content(body)
     try:
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as smtp:
             smtp.starttls()
@@ -132,6 +145,135 @@ def send_verification_email(email: str, otp: str) -> tuple[bool, str | None]:
         return False, "Gmail rejected the SMTP login. Use a Google App Password, not your normal Gmail password."
     except smtplib.SMTPException as exc:
         return False, f"SMTP failed: {exc}"
+
+
+def send_verification_email(email: str, otp: str) -> tuple[bool, str | None]:
+    return send_plain_email(email, "Rawabet verification code", f"Your Rawabet verification code is: {otp}\n\nThis code expires in 15 minutes.")
+
+
+RAWABET_CONTEXT = """
+Rawabet / روابط is a professional employment platform for Arab professionals.
+Users can register with email verification, log in when active, create and update a professional profile,
+upload or replace a profile picture, upload or replace one resume, upload up to five certificates,
+add skills and work history, browse jobs, filter jobs by category and salary, open job details, apply to jobs,
+track application status, see upcoming interviews, and chat with support.
+
+Admins can manage users, change plan between free and premium, verify/activate/deactivate/delete users,
+view user attachments, add/edit/delete jobs, schedule interviews, update application statuses, view support
+threads, chat with users, and view analytics for users, jobs, applications, categories, and profile health.
+
+The platform supports Arabic and English UI. Application statuses include submitted, review, interview,
+accepted, and rejected. User statuses include active, verified, review, and suspended. Job statuses include
+active, paused, and closed. The support bot must answer only Rawabet platform questions. If the question is
+outside Rawabet or cannot be answered from this context, it must ask whether the user wants a live support
+agent or wants to end the conversation.
+"""
+
+LIVE_AGENT_REPLY = "تم إشعار فريق الدعم بطلبك. سيقوم موظف دعم مباشر بالرد عليك من صندوق الدعم."
+END_CHAT_REPLY = "حسنا، يمكنك إنهاء المحادثة الآن. إذا احتجت مساعدة لاحقا افتح نافذة الدعم مرة أخرى."
+UNKNOWN_REPLY = "لا أملك إجابة مؤكدة عن هذا السؤال داخل معلومات منصة روابط. هل تريد التحدث مع موظف دعم مباشر أم إنهاء المحادثة؟"
+
+
+def local_platform_reply(question: str) -> str | None:
+    lowered = question.lower()
+    wants_live = ["live agent", "human", "support agent", "موظف", "دعم مباشر", "شخص", "انسان", "إنسان"]
+    wants_end = ["end conversation", "close chat", "انهاء", "إنهاء", "انهي", "إنهي", "نهاية"]
+    if any(term in lowered for term in wants_live):
+        return LIVE_AGENT_REPLY
+    if any(term in lowered for term in wants_end):
+        return END_CHAT_REPLY
+
+    answers = [
+        (["profile picture", "avatar", "photo", "صورة", "الصورة"], "يمكنك تحديث الصورة الشخصية من صفحة الملف أو نافذة أكمل الملف. يتم استبدال الصورة القديمة بالجديدة مباشرة."),
+        (["resume", "cv", "سيرة", "السيرة"], "يمكنك رفع السيرة الذاتية من الملف أو أكمل الملف. روابط يحتفظ بملف سيرة واحد فقط، وأي رفع جديد يستبدل الملف السابق."),
+        (["certificate", "certificates", "شهادة", "الشهادات"], "يمكنك إضافة حتى 5 شهادات للملف. تظهر المرفقات للمستخدم وللإدارة كرابط يمكن فتحه."),
+        (["work history", "experience", "خبرة", "تاريخ العمل", "الخبرات"], "يمكنك إضافة تاريخ العمل من صفحة الملف عبر إدخال المسمى والشركة ثم حفظ الخبرة."),
+        (["apply", "application", "status", "تقديم", "طلب", "حالة الطلب"], "يمكن للمستخدم التقديم على الوظائف من صفحة الوظائف. بعد التقديم تظهر حالة الطلب مثل تم التقديم، قيد المراجعة، مقابلة، مقبول، أو مرفوض."),
+        (["job", "jobs", "salary", "category", "وظيفة", "وظائف", "راتب", "فئة"], "صفحة الوظائف تعرض الوظائف التي تضيفها الإدارة. يمكن البحث باسم الوظيفة أو الشركة، والتصفية حسب الفئة ونطاق الراتب، وفتح تفاصيل كل وظيفة."),
+        (["interview", "مقابلة", "المقابلات"], "عندما تجدول الإدارة مقابلة، تظهر للمستخدم في المقابلات القادمة ويتم تمييز الوظيفة المرتبطة بها."),
+        (["admin", "dashboard", "analytics", "إدارة", "لوحة", "تحليلات"], "لوحة الإدارة تتيح إدارة المستخدمين والوظائف والطلبات والمقابلات وصندوق الدعم، مع تحليلات للنمو والوظائف والطلبات وحالة الملفات."),
+        (["plan", "premium", "free", "الخطة", "مميز", "مجاني"], "يمكن للإدارة تغيير خطة المستخدم من إدارة المستخدمين بين مجاني ومميز."),
+        (["verify", "activate", "deactivate", "suspend", "توثيق", "تفعيل", "إيقاف", "موقوف"], "يمكن للإدارة توثيق المستخدم أو تفعيله أو إيقافه من إدارة المستخدمين. الحساب الموقوف لا يسمح له بتسجيل الدخول."),
+        (["support", "chat", "دعم", "محادثة"], "نافذة الدعم تسمح للمستخدم بإرسال رسالة. تظهر الرسائل في صندوق الدعم لدى الإدارة، ويمكن للإدارة فتح محادثة كل مستخدم والرد عليه."),
+        (["language", "arabic", "english", "لغة", "عربي", "إنجليزي"], "روابط يدعم العربية والإنجليزية، ويمكن تبديل اللغة من زر اللغة في الشريط العلوي.")
+    ]
+    for terms, answer in answers:
+        if any(term in lowered for term in terms):
+            return answer
+    return None
+
+
+def platform_bot_reply(question: str) -> str:
+    lowered = question.lower()
+    platform_terms = ["rawabet", "روابط", "platform", "profile", "resume", "certificate", "job", "apply", "application", "interview", "support", "admin", "plan", "premium", "free", "status", "ملف", "وظيفة", "وظائف", "تقديم", "طلب", "طلبات", "حالة", "مقابلة", "دعم", "شهادة", "سيرة", "الخطة", "مميز", "مجاني", "الحالة"]
+    if not any(term in lowered for term in platform_terms):
+        return UNKNOWN_REPLY
+    local_reply = local_platform_reply(question)
+    if local_reply:
+        return local_reply
+    fallback = UNKNOWN_REPLY
+    if not OPENAI_API_KEY:
+        return fallback
+    payload = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {"role": "system", "content": f"Answer only questions about Rawabet. Use Arabic by default unless the user writes English. Use only the context below. If the answer is not in this context, reply exactly with: {UNKNOWN_REPLY}\n\n{RAWABET_CONTEXT}"},
+            {"role": "user", "content": question},
+        ],
+        "temperature": 0.2,
+        "max_tokens": 220,
+    }
+    request = urllib.request.Request(
+        "https://api.openai.com/v1/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=12) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            return data["choices"][0]["message"]["content"].strip()
+    except (urllib.error.URLError, KeyError, IndexError, json.JSONDecodeError):
+        return fallback
+
+
+def jobs_have_job_number_column() -> bool:
+    row = fetch_one(
+        """
+        SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_name = 'jobs' AND column_name = 'job_number'
+        ) AS exists
+        """
+    )
+    return bool(row and row.get("exists"))
+
+
+def list_jobs_with_number(active_only: bool = False):
+    outer_where = "WHERE status = 'active'" if active_only else ""
+    if jobs_have_job_number_column():
+        return fetch_all(
+            f"""
+            SELECT id, job_number, company_name, title, category, location, type, salary_range, description, status, created_at
+            FROM jobs
+            {outer_where}
+            ORDER BY created_at DESC
+            """
+        )
+    return fetch_all(
+        f"""
+        SELECT *
+        FROM (
+          SELECT id,
+            (1000 + ROW_NUMBER() OVER (ORDER BY created_at ASC))::int AS job_number,
+            company_name, title, category, location, type, salary_range, description, status, created_at
+          FROM jobs
+        ) numbered_jobs
+        {outer_where}
+        ORDER BY created_at DESC
+        """
+    )
 
 
 def calculate_profile_strength(user_id: UUID | str) -> int:
@@ -189,17 +331,19 @@ def register(body: RegisterBody):
     otp = f"{secrets.randbelow(1000000):06d}"
     execute(
         """
-        INSERT INTO pending_registrations (full_name, email, password_hash, role, otp_hash, expires_at)
-        VALUES (%s,%s,%s,%s,%s,NOW() + interval '15 minutes')
+        INSERT INTO pending_registrations (full_name, email, phone, dob, password_hash, role, otp_hash, expires_at)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,NOW() + interval '15 minutes')
         ON CONFLICT (email) DO UPDATE
         SET full_name = EXCLUDED.full_name,
+            phone = EXCLUDED.phone,
+            dob = EXCLUDED.dob,
             password_hash = EXCLUDED.password_hash,
             role = EXCLUDED.role,
             otp_hash = EXCLUDED.otp_hash,
             expires_at = EXCLUDED.expires_at,
             created_at = NOW()
         """,
-        (body.fullName, body.email.lower(), hash_password(body.password), body.role, hash_password(otp)),
+        (body.fullName, body.email.lower(), body.phone, body.dob or None, hash_password(body.password), body.role, hash_password(otp)),
     )
     email_sent, email_error = send_verification_email(body.email.lower(), otp)
     response = {"ok": True, "needsVerification": True, "emailSent": email_sent, "message": "Check your email for the verification code."}
@@ -228,11 +372,11 @@ def verify_registration(body: VerifyRegistrationBody):
         raise HTTPException(status_code=409, detail="Email already registered")
     verified_user = execute(
         """
-        INSERT INTO users (full_name, email, password_hash, role, status, email_verified)
-        VALUES (%s,%s,%s,%s,'active',true)
-        RETURNING id, full_name, email, role, plan, status, headline, location, avatar_url
+        INSERT INTO users (full_name, email, phone, dob, password_hash, role, status, email_verified)
+        VALUES (%s,%s,%s,%s,%s,%s,'active',true)
+        RETURNING id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url
         """,
-        (pending["full_name"], pending["email"], pending["password_hash"], pending["role"]),
+        (pending["full_name"], pending["email"], pending["phone"], pending["dob"], pending["password_hash"], pending["role"]),
     )
     execute("INSERT INTO profiles (user_id, about, skills, profile_strength) VALUES (%s, '', '{}', 0)", (verified_user["id"],))
     sync_profile_strength(verified_user["id"])
@@ -251,6 +395,11 @@ def login(body: LoginBody):
         raise HTTPException(status_code=403, detail="This account is suspended")
     execute("UPDATE users SET last_active_at = NOW() WHERE id = %s", (user["id"],))
     return {"user": public_user(user), "token": create_token(user)}
+
+
+@app.get("/api/auth/login")
+def login_get_hint():
+    return {"detail": "Login requires the Rawabet frontend form. Open http://35.174.9.208:5173 and sign in there."}
 
 
 @app.get("/api/me")
@@ -279,6 +428,17 @@ def me(user: Annotated[dict, Depends(current_user)]):
         """,
         (user["id"],),
     )
+    interviews = fetch_all(
+        """
+        SELECT i.id, i.job_id, i.scheduled_at, i.channel, i.notes, i.status,
+          j.title AS job_title, j.company_name, j.location, j.salary_range
+        FROM interviews i
+        LEFT JOIN jobs j ON j.id = i.job_id
+        WHERE i.user_id = %s AND i.status = 'scheduled'
+        ORDER BY i.scheduled_at ASC
+        """,
+        (user["id"],),
+    )
     stats = fetch_one(
         """
         SELECT
@@ -292,12 +452,15 @@ def me(user: Annotated[dict, Depends(current_user)]):
         """,
         (user["id"], user["id"], user["id"]),
     )
-    return {"user": public_user(user), "profile": profile, "experiences": experiences, "education": education, "documents": documents, "applications": applications, "stats": stats}
+    return {"user": public_user(user), "profile": profile, "experiences": experiences, "education": education, "documents": documents, "applications": applications, "interviews": interviews, "stats": stats}
 
 
 @app.put("/api/me/profile")
 def update_profile(body: ProfileBody, user: Annotated[dict, Depends(current_user)]):
-    execute("UPDATE users SET full_name = %s, headline = %s, location = %s WHERE id = %s", (body.fullName, body.headline, body.location, user["id"]))
+    execute(
+        "UPDATE users SET full_name = %s, phone = %s, dob = %s, headline = %s, location = %s WHERE id = %s",
+        (body.fullName, body.phone, body.dob or None, body.headline, body.location, user["id"]),
+    )
     execute(
         """
         INSERT INTO profiles (user_id, about, skills, languages, profile_strength, updated_at)
@@ -389,7 +552,12 @@ async def upload_avatar(user: Annotated[dict, Depends(current_user)], file: Uplo
 
 @app.get("/api/jobs")
 def list_jobs(user: Annotated[dict, Depends(current_user)]):
-    return fetch_all("SELECT * FROM jobs WHERE status = 'active' ORDER BY created_at DESC")
+    return list_jobs_with_number(active_only=True)
+
+
+@app.get("/api/admin/jobs")
+def list_admin_jobs(user: Annotated[dict, Depends(admin_user)]):
+    return list_jobs_with_number()
 
 
 @app.post("/api/jobs/{job_id}/apply", status_code=201)
@@ -538,7 +706,7 @@ def admin_users(user: Annotated[dict, Depends(admin_user)], search: str = ""):
     return fetch_all(
         """
         SELECT
-          u.id, u.full_name, u.email, u.role, u.plan, u.status, u.headline, u.location, u.avatar_url, u.created_at, u.last_active_at,
+          u.id, u.full_name, u.email, u.phone, u.dob, u.role, u.plan, u.status, u.headline, u.location, u.avatar_url, u.created_at, u.last_active_at,
           COALESCE(
             json_agg(
               json_build_object(
@@ -568,7 +736,7 @@ def admin_users(user: Annotated[dict, Depends(admin_user)], search: str = ""):
 def admin_user_profile(user_id: UUID, user: Annotated[dict, Depends(admin_user)]):
     sync_profile_strength(user_id)
     target_user = fetch_one(
-        "SELECT id, full_name, email, role, plan, status, headline, location, avatar_url, created_at, last_active_at FROM users WHERE id = %s",
+        "SELECT id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url, created_at, last_active_at FROM users WHERE id = %s",
         (user_id,),
     )
     if not target_user:
@@ -596,6 +764,8 @@ def update_admin_profile(user_id: UUID, body: AdminProfilePatch, user: Annotated
         UPDATE users
         SET full_name = COALESCE(%s, full_name),
             email = COALESCE(%s, email),
+            phone = COALESCE(%s, phone),
+            dob = COALESCE(%s, dob),
             headline = COALESCE(%s, headline),
             location = COALESCE(%s, location),
             role = COALESCE(%s, role),
@@ -604,7 +774,7 @@ def update_admin_profile(user_id: UUID, body: AdminProfilePatch, user: Annotated
         WHERE id = %s
         RETURNING id
         """,
-        (body.fullName, str(body.email).lower() if body.email else None, body.headline, body.location, body.role, body.plan, body.status, user_id),
+        (body.fullName, str(body.email).lower() if body.email else None, body.phone, body.dob or None, body.headline, body.location, body.role, body.plan, body.status, user_id),
     )
     if not updated:
         raise HTTPException(status_code=404, detail="User not found")
@@ -701,15 +871,17 @@ def update_admin_user(user_id: UUID, body: AdminUserPatch, user: Annotated[dict,
         UPDATE users
         SET full_name = COALESCE(%s, full_name),
             email = COALESCE(%s, email),
+            phone = COALESCE(%s, phone),
+            dob = COALESCE(%s, dob),
             headline = COALESCE(%s, headline),
             location = COALESCE(%s, location),
             role = COALESCE(%s, role),
             plan = COALESCE(%s, plan),
             status = COALESCE(%s, status)
         WHERE id = %s
-        RETURNING id, full_name, email, role, plan, status, headline, location, created_at, last_active_at
+        RETURNING id, full_name, email, phone, dob, role, plan, status, headline, location, created_at, last_active_at
         """,
-        (body.fullName, str(body.email).lower() if body.email else None, body.headline, body.location, body.role, body.plan, body.status, user_id),
+        (body.fullName, str(body.email).lower() if body.email else None, body.phone, body.dob or None, body.headline, body.location, body.role, body.plan, body.status, user_id),
     )
     if not updated:
         raise HTTPException(status_code=404, detail="User not found")
@@ -830,7 +1002,7 @@ def list_support_threads(user: Annotated[dict, Depends(admin_user)]):
 
 @app.post("/api/admin/interviews", status_code=201)
 def create_admin_interview(body: InterviewBody, user: Annotated[dict, Depends(admin_user)]):
-    return execute(
+    interview = execute(
         """
         INSERT INTO interviews (user_id, admin_id, job_id, scheduled_at, channel, notes)
         VALUES (%s,%s,%s,%s,%s,%s)
@@ -838,6 +1010,18 @@ def create_admin_interview(body: InterviewBody, user: Annotated[dict, Depends(ad
         """,
         (body.userId, user["id"], body.jobId, body.scheduledAt, body.channel, body.notes),
     )
+    if body.jobId:
+        execute("UPDATE applications SET status = 'interview' WHERE user_id = %s AND job_id = %s", (body.userId, body.jobId))
+    recipient = fetch_one("SELECT full_name, email FROM users WHERE id = %s", (body.userId,))
+    job = fetch_one("SELECT title, company_name, location FROM jobs WHERE id = %s", (body.jobId,)) if body.jobId else None
+    if recipient:
+        job_line = f"Job: {job['title']} - {job['company_name']} ({job['location']})" if job else "Job: General interview"
+        send_plain_email(
+            recipient["email"],
+            "Rawabet interview scheduled",
+            f"Hello {recipient['full_name']},\n\nYour interview has been scheduled.\n\n{job_line}\nTime: {body.scheduledAt}\nChannel: {body.channel}\nNotes: {body.notes or '-'}\n\nRawabet Team",
+        )
+    return interview
 
 
 @app.get("/api/support/messages")
@@ -875,6 +1059,32 @@ def create_support_message(body: SupportMessageBody, user: Annotated[dict, Depen
             VALUES (%s,'bot',%s)
             RETURNING *
             """,
-            (target_user_id, "Thanks for contacting Rawabet support. I received your message and an admin can follow up from the dashboard."),
+            (target_user_id, platform_bot_reply(body.message)),
         )
     return {"message": message, "botReply": bot_reply}
+
+
+def clear_support_thread(user: dict, user_id: UUID | None = None):
+    target_user_id = user_id if user["role"] == "admin" and user_id else user["id"]
+    result = fetch_one(
+        """
+        WITH deleted AS (
+          DELETE FROM support_messages
+          WHERE user_id = %s
+          RETURNING 1
+        )
+        SELECT COUNT(*)::int AS deleted_count FROM deleted
+        """,
+        (target_user_id,),
+    )
+    return {"ok": True, "userId": target_user_id, "deletedCount": result["deleted_count"] if result else 0}
+
+
+@app.post("/api/support/messages/clear")
+def clear_support_messages_post(body: ClearSupportBody, user: Annotated[dict, Depends(current_user)]):
+    return clear_support_thread(user, body.userId)
+
+
+@app.delete("/api/support/messages")
+def clear_support_messages(user: Annotated[dict, Depends(current_user)], user_id: UUID | None = None):
+    return clear_support_thread(user, user_id)

@@ -49,6 +49,8 @@ const text = {
     welcomeBody: "Rawabet helps professionals create bilingual profiles, upload resumes and certificates, apply to jobs, and connect with opportunity.",
     editProfile: "Save profile",
     fullName: "Full name",
+    phone: "Phone number",
+    dob: "Date of birth",
     headline: "Headline",
     location: "Location",
     about: "About",
@@ -80,7 +82,13 @@ const text = {
     appliedJobs: "Applied jobs",
     whereIApplied: "Where I applied for",
     noAppliedJobs: "No applications yet",
+    appliedOnly: "Applied jobs only",
+    allJobs: "All jobs",
+    companySearch: "Company search",
+    allStatuses: "All statuses",
     more: "More",
+    upcomingInterviews: "Upcoming interviews",
+    clearChat: "Clear chat",
     adminPosts: "Admin posts",
     noAdminPosts: "No admin posts yet",
     apply: "Apply",
@@ -91,13 +99,24 @@ const text = {
     applicationStatus: "Application status",
     applicant: "Applicant",
     job: "Job",
+    jobId: "Job ID",
     jobDetails: "Job details",
     category: "Category",
     allCategories: "All categories",
+    salaryRange: "Salary range",
+    allSalaries: "All salaries",
+    salaryUnder2k: "Under $2,000",
+    salary2to4k: "$2,000 - $4,000",
+    salary4to6k: "$4,000 - $6,000",
+    salary6kPlus: "$6,000+",
+    previous: "Previous",
+    next: "Next",
+    page: "Page",
     noJobsMatching: "No jobs match this filter",
     monthlyRevenue: "Monthly revenue",
     users: "Users",
     searchUsers: "Search users",
+    searchJobs: "Search by job ID, title, or company",
     reports: "Reports",
     growthAnalytics: "Growth analytics",
     usersGrowth: "Users growth",
@@ -134,6 +153,11 @@ const text = {
     support: "Support",
     supportMessage: "Write a support message",
     send: "Send",
+    clearingChat: "Clearing...",
+    speakLive: "Speak with live support",
+    endConversation: "End conversation",
+    liveAgentRequest: "I want to speak with live support.",
+    clearFailed: "Could not clear the conversation.",
     editUser: "Edit user",
     delete: "Delete",
     verify: "Verify",
@@ -195,6 +219,8 @@ const text = {
     welcomeBody: "روابط تساعد المهنيين على إنشاء ملفات ثنائية اللغة ورفع السير الذاتية والشهادات والتقديم للوظائف والتواصل مع الفرص.",
     editProfile: "حفظ الملف",
     fullName: "الاسم الكامل",
+    phone: "رقم الهاتف",
+    dob: "تاريخ الميلاد",
     headline: "العنوان المهني",
     location: "الموقع",
     about: "نبذة",
@@ -226,7 +252,13 @@ const text = {
     appliedJobs: "الوظائف المقدمة",
     whereIApplied: "الوظائف التي تقدمت إليها",
     noAppliedJobs: "لا توجد طلبات بعد",
+    appliedOnly: "الوظائف المقدمة فقط",
+    allJobs: "كل الوظائف",
+    companySearch: "البحث باسم الشركة",
+    allStatuses: "كل الحالات",
     more: "المزيد",
+    upcomingInterviews: "المقابلات القادمة",
+    clearChat: "مسح المحادثة",
     adminPosts: "منشورات الإدارة",
     noAdminPosts: "لا توجد منشورات من الإدارة بعد",
     apply: "تقديم",
@@ -237,13 +269,24 @@ const text = {
     applicationStatus: "حالة الطلب",
     applicant: "المتقدم",
     job: "الوظيفة",
+    jobId: "رقم الوظيفة",
     jobDetails: "تفاصيل الوظيفة",
     category: "الفئة",
     allCategories: "كل الفئات",
+    salaryRange: "نطاق الراتب",
+    allSalaries: "كل الرواتب",
+    salaryUnder2k: "أقل من $2,000",
+    salary2to4k: "$2,000 - $4,000",
+    salary4to6k: "$4,000 - $6,000",
+    salary6kPlus: "$6,000+",
+    previous: "السابق",
+    next: "التالي",
+    page: "الصفحة",
     noJobsMatching: "لا توجد وظائف مطابقة لهذا الفلتر",
     monthlyRevenue: "الإيراد الشهري",
     users: "المستخدمون",
     searchUsers: "ابحث عن مستخدمين",
+    searchJobs: "ابحث برقم الوظيفة أو المسمى أو الشركة",
     reports: "التقارير",
     growthAnalytics: "تحليلات النمو",
     usersGrowth: "نمو المستخدمين",
@@ -280,6 +323,11 @@ const text = {
     support: "الدعم",
     supportMessage: "اكتب رسالة للدعم",
     send: "إرسال",
+    clearingChat: "جار المسح...",
+    speakLive: "التحدث مع دعم مباشر",
+    endConversation: "إنهاء المحادثة",
+    liveAgentRequest: "أريد التحدث مع موظف دعم مباشر.",
+    clearFailed: "تعذر مسح المحادثة.",
     editUser: "تعديل المستخدم",
     delete: "حذف",
     verify: "توثيق",
@@ -319,6 +367,53 @@ function jobCategoryLabel(value, lang) {
   return match ? match[lang] : value || JOB_CATEGORIES[0][lang];
 }
 
+const STATUS_LABELS = {
+  submitted: { en: "Submitted", ar: "تم التقديم" },
+  review: { en: "In review", ar: "قيد المراجعة" },
+  interview: { en: "Interview", ar: "مقابلة" },
+  accepted: { en: "Accepted", ar: "مقبول" },
+  rejected: { en: "Rejected", ar: "مرفوض" },
+  active: { en: "Active", ar: "نشط" },
+  verified: { en: "Verified", ar: "موثق" },
+  suspended: { en: "Suspended", ar: "موقوف" },
+  paused: { en: "Paused", ar: "متوقف" },
+  closed: { en: "Closed", ar: "مغلق" }
+};
+
+const APPLICATION_STATUSES = ["submitted", "review", "interview", "accepted", "rejected"];
+const USER_STATUSES = ["active", "verified", "review", "suspended"];
+const JOB_STATUSES = ["active", "paused", "closed"];
+const PLAN_OPTIONS = ["free", "premium"];
+
+function statusLabel(value, lang) {
+  return STATUS_LABELS[value]?.[lang] || value || "-";
+}
+
+function planLabel(value, lang) {
+  const labels = {
+    free: { en: "Free", ar: "مجاني" },
+    premium: { en: "Premium", ar: "مميز" }
+  };
+  return labels[value]?.[lang] || value || "-";
+}
+
+function salaryBounds(salary = "") {
+  const values = String(salary).match(/\$?\s*[\d,]+/g)?.map((item) => Number(item.replace(/[^\d]/g, ""))).filter(Boolean) || [];
+  if (!values.length) return { min: 0, max: 0 };
+  return { min: Math.min(...values), max: Math.max(...values) };
+}
+
+function matchesSalaryRange(job, range) {
+  if (!range) return true;
+  const { min, max } = salaryBounds(job.salary_range);
+  if (!max) return false;
+  if (range === "under-2000") return min < 2000;
+  if (range === "2000-4000") return max >= 2000 && min <= 4000;
+  if (range === "4000-6000") return max >= 4000 && min <= 6000;
+  if (range === "6000-plus") return max >= 6000;
+  return true;
+}
+
 function App() {
   const [lang, setLang] = useState(localStorage.getItem("rawabet_lang") || "en");
   const [view, setView] = useState("home");
@@ -332,6 +427,8 @@ function App() {
   const [supportTarget, setSupportTarget] = useState("");
   const [adminStartTab, setAdminStartTab] = useState("");
   const [jobSearch, setJobSearch] = useState("");
+  const [selectedJobId, setSelectedJobId] = useState("");
+  const [jobMode, setJobMode] = useState("all");
   const [error, setError] = useState("");
   const [builderOpen, setBuilderOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
@@ -347,7 +444,15 @@ function App() {
     const data = await api("/me");
     setMe(data);
     setSession(data.user);
-    setJobs(await api("/jobs"));
+    if (data.user.role === "admin") {
+      try {
+        setJobs(await api("/admin/jobs"));
+      } catch {
+        setJobs(await api("/jobs"));
+      }
+    } else {
+      setJobs(await api("/jobs"));
+    }
     if (data.user.role === "admin") {
       setAdmin(await api("/admin/overview"));
       setAdminUsers(await api("/admin/users"));
@@ -379,7 +484,15 @@ function App() {
     try {
       const data = await api("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
       setToken(data.token);
-      await loadApp();
+      try {
+        await loadApp();
+        setView("home");
+      } catch (loadError) {
+        clearToken();
+        setSession(null);
+        setMe(null);
+        throw loadError;
+      }
     } catch (err) {
       setError(err.message);
     }
@@ -409,6 +522,20 @@ function App() {
 
   const supportUnread = supportThreads.filter((thread) => Number(thread.unread_count || 0) > 0).length;
 
+  function openJob(jobId) {
+    setJobMode("all");
+    setSelectedJobId(jobId);
+    setJobSearch("");
+    setView("jobs");
+  }
+
+  function openAppliedJobs() {
+    setJobMode("applied");
+    setSelectedJobId("");
+    setJobSearch("");
+    setView("jobs");
+  }
+
   if (!session || !me) return <Login lang={lang} setLang={setLang} t={t} login={login} verifyAndLoad={verifyAndLoad} error={error} setError={setError} />;
 
   return (
@@ -420,7 +547,7 @@ function App() {
         </button>
         <label className="search">
           <span>⌕</span>
-          <input placeholder={t("search")} value={jobSearch} onChange={(event) => { setJobSearch(event.target.value); setView("jobs"); }} />
+          <input placeholder={t("search")} value={jobSearch} onChange={(event) => { setJobMode("all"); setJobSearch(event.target.value); setView("jobs"); }} />
         </label>
         <nav className="desktop-nav">
           {[
@@ -439,9 +566,9 @@ function App() {
       </header>
 
       <main className={view === "admin" ? "admin-main" : ""}>
-        {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} setView={setView} openBuilder={() => setBuilderOpen(true)} />}
+        {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} />}
         {view === "profile" && <Profile t={t} me={me} reload={loadApp} />}
-        {view === "jobs" && <Jobs t={t} lang={lang} jobs={jobs} applications={me.applications || []} search={jobSearch} reload={loadApp} />}
+        {view === "jobs" && <Jobs t={t} lang={lang} jobs={jobs} applications={me.applications || []} interviews={me.interviews || []} search={jobSearch} mode={jobMode} setMode={setJobMode} selectedJobId={selectedJobId} clearSelectedJob={() => setSelectedJobId("")} reload={loadApp} />}
         {view === "admin" && session.role === "admin" && <Admin t={t} lang={lang} admin={admin} users={adminUsers} setUsers={setAdminUsers} jobs={jobs} applications={adminApplications} setApplications={setAdminApplications} supportThreads={supportThreads} initialTab={adminStartTab} clearInitialTab={() => setAdminStartTab("")} reload={loadApp} openSupport={(userId) => { setSupportTarget(userId || ""); setSupportOpen(true); }} />}
       </main>
       {builderOpen && <ProfileBuilder t={t} me={me} reload={loadApp} close={() => setBuilderOpen(false)} />}
@@ -454,6 +581,8 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
   const [mode, setMode] = useState("login");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("admin@rawabet.app");
+  const [phone, setPhone] = useState("");
+  const [dob, setDob] = useState("");
   const [password, setPassword] = useState("admin123");
   const [otp, setOtp] = useState("");
   const [notice, setNotice] = useState("");
@@ -466,7 +595,7 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
     setNotice("");
     setRegistering(true);
     try {
-      const data = await api("/auth/register", { method: "POST", body: JSON.stringify({ fullName, email, password }) });
+      const data = await api("/auth/register", { method: "POST", body: JSON.stringify({ fullName, email, phone, dob, password }) });
       setNotice(data.devOtp ? `${data.message} OTP: ${data.devOtp}` : data.message || t("checkEmail"));
       setMode("verify");
     } catch (err) {
@@ -510,6 +639,8 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
           {mode === "register" && <form className="login-card" onSubmit={register}>
             <label>{t("fullName")}<input value={fullName} onChange={(event) => setFullName(event.target.value)} required /></label>
             <label>{t("email")}<input value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
+            <label>{t("phone")}<input value={phone} onChange={(event) => setPhone(event.target.value)} required /></label>
+            <label>{t("dob")}<input type="date" value={dob} onChange={(event) => setDob(event.target.value)} required /></label>
             <label>{t("password")}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
             {error && <p className="error">{error}</p>}
             <button className="primary-button loading-button" disabled={registering}>{registering && <span className="spinner" aria-hidden="true"></span>}{t("createAccount")}</button>
@@ -533,9 +664,12 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
   );
 }
 
-function Home({ t, lang, me, jobs, setView, openBuilder }) {
+function Home({ t, lang, me, jobs, setView, openJob, openAppliedJobs, openBuilder }) {
   const strength = Number(me.profile?.profile_strength ?? 0);
   const applications = me.applications || [];
+  const interviews = me.interviews || [];
+  const scheduledJobIds = new Set(interviews.map((item) => item.job_id).filter(Boolean));
+  const orderedJobs = [...jobs].sort((a, b) => Number(scheduledJobIds.has(b.id)) - Number(scheduledJobIds.has(a.id))).slice(0, 20);
   return (
     <div className="layout-grid">
       <aside className="profile-rail">
@@ -546,6 +680,10 @@ function Home({ t, lang, me, jobs, setView, openBuilder }) {
           <p>{me.user.headline}</p>
           <button className="secondary-button" onClick={openBuilder}>{t("editProfile")}</button>
         </section>
+        {!!interviews.length && <section className="panel side-panel interview-panel">
+          <h2>{t("upcomingInterviews")}</h2>
+          {interviews.slice(0, 3).map((interview) => <button className="panel-link interview-link" type="button" onClick={() => setView("jobs")} key={interview.id}><span>◌</span><div><strong>{interview.job_title || t("job")}</strong><small>{new Date(interview.scheduled_at).toLocaleString()}</small></div></button>)}
+        </section>}
         <section className="panel side-panel workspace-panel">
           <h2>{t("workspace")}</h2>
           <button className="panel-link" onClick={() => setView("profile")}><span>↗</span>{t("publicProfile")}</button>
@@ -557,12 +695,12 @@ function Home({ t, lang, me, jobs, setView, openBuilder }) {
         <article className="panel post-card">
           <div className="post-head"><div className="company-logo">R</div><div><h2>{t("adminPosts")}</h2><p>{t("jobs")}</p></div></div>
           <div className="admin-post-list">
-            {jobs.length ? jobs.slice(0, 5).map((job) => (
-              <button className="admin-post" type="button" onClick={() => setView("jobs")} key={job.id}>
+            {orderedJobs.length ? orderedJobs.map((job) => (
+              <article className={scheduledJobIds.has(job.id) ? "admin-post highlighted-job" : "admin-post"} key={job.id}>
                 <strong>{job.title}</strong>
-                <span>{job.company_name} · {jobCategoryLabel(job.category, lang)} · {job.location}</span>
-                {job.description && <p>{job.description}</p>}
-              </button>
+                <span>{job.salary_range || "-"} · {job.company_name}</span>
+                <button className="secondary-button compact" type="button" onClick={() => openJob(job.id)}>{t("more")}</button>
+              </article>
             )) : <p>{t("noAdminPosts")}</p>}
           </div>
         </article>
@@ -576,8 +714,8 @@ function Home({ t, lang, me, jobs, setView, openBuilder }) {
         <section className="panel side-panel">
           <h2>{t("profileViews")}</h2>
           <strong className="side-stat">{formatNumber(applications.length)}</strong>
-          <div className="job-strip side-job-strip">{applications.length ? applications.slice(0, 5).map((item) => <span className="application-chip" key={item.id}>{item.title}<b className={`status ${item.status}`}>{item.status}</b></span>) : <span>{t("noAppliedJobs")}</span>}</div>
-          {applications.length > 5 && <button className="panel-link more-link" type="button" onClick={() => setView("jobs")}><span>↗</span>{t("more")}</button>}
+          <div className="job-strip side-job-strip">{applications.length ? applications.slice(0, 5).map((item) => <span className="application-chip" key={item.id}>{item.title}<b className={`status ${item.status}`}>{statusLabel(item.status, lang)}</b></span>) : <span>{t("noAppliedJobs")}</span>}</div>
+          {!!applications.length && <button className="panel-link more-link" type="button" onClick={openAppliedJobs}><span>↗</span>{t("more")}</button>}
         </section>
         <section className="panel side-panel">
           <h2>{t("completeProfile")}</h2>
@@ -595,6 +733,8 @@ function Home({ t, lang, me, jobs, setView, openBuilder }) {
 function ProfileBuilder({ t, me, reload, close }) {
   const [form, setForm] = useState({
     fullName: me.user.fullName || "",
+    phone: me.user.phone || "",
+    dob: me.user.dob || "",
     headline: me.user.headline || "",
     location: me.user.location || "",
     about: me.profile?.about || "",
@@ -661,6 +801,8 @@ function ProfileBuilder({ t, me, reload, close }) {
           <form className="builder-panel" onSubmit={saveProfile}>
             <h3>{t("basicInfo")}</h3>
             <label>{t("fullName")}<input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></label>
+            <label>{t("phone")}<input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></label>
+            <label>{t("dob")}<input type="date" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} /></label>
             <label>{t("headline")}<input value={form.headline} onChange={(e) => setForm({ ...form, headline: e.target.value })} /></label>
             <label>{t("location")}<input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></label>
             <label>{t("about")}<textarea value={form.about} onChange={(e) => setForm({ ...form, about: e.target.value })} /></label>
@@ -705,6 +847,8 @@ function ProfileBuilder({ t, me, reload, close }) {
 function Profile({ t, me, reload }) {
   const [form, setForm] = useState({
     fullName: me.user.fullName || "",
+    phone: me.user.phone || "",
+    dob: me.user.dob || "",
     headline: me.user.headline || "",
     location: me.user.location || "",
     about: me.profile?.about || "",
@@ -753,10 +897,11 @@ function Profile({ t, me, reload }) {
     <div className="profile-page">
       <section className="profile-hero panel">
         <Avatar user={me.user} size="large" />
-        <div><h1>{me.user.fullName}</h1><p>{me.user.headline}</p><span>{me.user.location}</span></div>
+        <div><h1>{me.user.fullName}</h1><p>{me.user.headline}</p><span>{me.user.location}</span><span>{t("dob")}: {me.user.dob || "-"}</span></div>
       </section>
       <form className="panel form-grid" onSubmit={saveProfile}>
-        {["fullName", "headline", "location"].map((key) => <label key={key}>{t(key)}<input value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} /></label>)}
+        {["fullName", "phone", "headline", "location"].map((key) => <label key={key}>{t(key)}<input value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} /></label>)}
+        <label>{t("dob")}<input type="date" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} /></label>
         <label className="span">{t("about")}<textarea value={form.about} onChange={(e) => setForm({ ...form, about: e.target.value })} /></label>
         <label className="span">{t("skills")}<input value={form.skills} onChange={(e) => setForm({ ...form, skills: e.target.value })} /></label>
         <button className="primary-button">{t("editProfile")}</button>
@@ -780,49 +925,110 @@ function Profile({ t, me, reload }) {
   );
 }
 
-function Jobs({ t, lang, jobs, applications, search = "", reload }) {
+function Jobs({ t, lang, jobs, applications, interviews = [], search = "", mode = "all", setMode, selectedJobId = "", clearSelectedJob, reload }) {
   const [openJobId, setOpenJobId] = useState("");
   const [category, setCategory] = useState("");
+  const [salaryRange, setSalaryRange] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [companySearch, setCompanySearch] = useState("");
+  const [page, setPage] = useState(1);
   const appliedByJob = new Map(applications.map((item) => [item.job_id, item]));
+  const scheduledJobIds = new Set(interviews.map((item) => item.job_id).filter(Boolean));
   const normalizedSearch = search.trim().toLowerCase();
-  const visibleJobs = jobs.filter((job) => {
-    const matchesSearch = !normalizedSearch || `${job.title || ""} ${job.company_name || ""}`.toLowerCase().includes(normalizedSearch);
+  const appliedJobs = applications.map((application) => ({
+    id: application.job_id,
+    title: application.title,
+    company_name: application.company_name,
+    category: application.category,
+    location: application.location,
+    type: application.type,
+    salary_range: application.salary_range,
+    description: application.description,
+    status: application.job_status,
+    applicationStatus: application.status,
+    applicationCreatedAt: application.created_at
+  }));
+  const sourceJobs = mode === "applied" ? appliedJobs : jobs;
+  const visibleJobs = sourceJobs.filter((job) => {
+    const matchesSearch = mode === "applied"
+      ? (!companySearch.trim() || `${job.company_name || ""}`.toLowerCase().includes(companySearch.trim().toLowerCase()))
+      : (!normalizedSearch || `${job.title || ""} ${job.company_name || ""}`.toLowerCase().includes(normalizedSearch));
     const matchesCategory = !category || (job.category || "General") === category;
-    return matchesSearch && matchesCategory;
-  });
+    const matchesSalary = matchesSalaryRange(job, salaryRange);
+    const matchesStatus = mode !== "applied" || !statusFilter || job.applicationStatus === statusFilter;
+    return matchesSearch && matchesCategory && matchesSalary && matchesStatus;
+  }).sort((a, b) => Number(scheduledJobIds.has(b.id)) - Number(scheduledJobIds.has(a.id)));
+  useEffect(() => {
+    if (!selectedJobId) return;
+    const index = visibleJobs.findIndex((job) => job.id === selectedJobId);
+    if (index >= 0) {
+      setPage(Math.max(1, Math.ceil((index + 1) / 20)));
+      setOpenJobId(selectedJobId);
+      setTimeout(() => document.getElementById(`job-${selectedJobId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
+    }
+    clearSelectedJob?.();
+  }, [selectedJobId]);
+  const pageSize = 20;
+  const totalPages = Math.max(1, Math.ceil(visibleJobs.length / pageSize));
+  const pagedJobs = visibleJobs.slice((page - 1) * pageSize, page * pageSize);
   async function apply(jobId) {
     await api(`/jobs/${jobId}/apply`, { method: "POST" });
     await reload();
   }
   return <section className="job-list">
     <div className="panel job-filter-bar">
+      <div className="segmented-control">
+        <button type="button" className={mode === "all" ? "active" : ""} onClick={() => { setMode?.("all"); setPage(1); }}>{t("allJobs")}</button>
+        <button type="button" className={mode === "applied" ? "active" : ""} onClick={() => { setMode?.("applied"); setPage(1); }}>{t("appliedOnly")}</button>
+      </div>
+      {mode === "applied" && <label>{t("companySearch")}
+        <input value={companySearch} onChange={(event) => { setCompanySearch(event.target.value); setPage(1); }} />
+      </label>}
       <label>{t("category")}
-        <select value={category} onChange={(event) => setCategory(event.target.value)}>
+        <select value={category} onChange={(event) => { setCategory(event.target.value); setPage(1); }}>
           <option value="">{t("allCategories")}</option>
           {JOB_CATEGORIES.map((item) => <option value={item.value} key={item.value}>{item[lang]}</option>)}
         </select>
       </label>
+      {mode === "applied" && <label>{t("applicationStatus")}
+        <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }}>
+          <option value="">{t("allStatuses")}</option>
+          {APPLICATION_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}
+        </select>
+      </label>}
+      <label>{t("salaryRange")}
+        <select value={salaryRange} onChange={(event) => { setSalaryRange(event.target.value); setPage(1); }}>
+          <option value="">{t("allSalaries")}</option>
+          <option value="under-2000">{t("salaryUnder2k")}</option>
+          <option value="2000-4000">{t("salary2to4k")}</option>
+          <option value="4000-6000">{t("salary4to6k")}</option>
+          <option value="6000-plus">{t("salary6kPlus")}</option>
+        </select>
+      </label>
     </div>
-    {visibleJobs.length ? visibleJobs.map((job) => {
+    {visibleJobs.length ? pagedJobs.map((job) => {
     const application = appliedByJob.get(job.id);
+    const applicationStatus = job.applicationStatus || application?.status;
     const isOpen = openJobId === job.id;
-    return <article className="job-card panel" key={job.id}>
+    const isScheduled = scheduledJobIds.has(job.id);
+    return <article id={`job-${job.id}`} className={isScheduled || openJobId === job.id ? "job-card panel highlighted-job" : "job-card panel"} key={job.id}>
       <div>
         <h2>{job.title}</h2>
         <p>{job.company_name} · {jobCategoryLabel(job.category, lang)} · {job.location}</p>
         <span>{job.salary_range}</span>
-        {application && <small className={`application-status status ${application.status}`}>{t("applicationStatus")}: {application.status}</small>}
+        {isScheduled && <small className="application-status status interview">{t("upcomingInterviews")}</small>}
+        {applicationStatus && <small className={`application-status status ${applicationStatus}`}>{t("applicationStatus")}: {statusLabel(applicationStatus, lang)}</small>}
       </div>
       <div className="job-actions">
         <button className="secondary-button" onClick={() => setOpenJobId(isOpen ? "" : job.id)}>{t("jobDetails")}</button>
-        <button className="primary-button" disabled={!!application} onClick={() => apply(job.id)}>{application ? application.status : t("apply")}</button>
+        <button className="primary-button" disabled={!!applicationStatus} onClick={() => apply(job.id)}>{applicationStatus ? statusLabel(applicationStatus, lang) : t("apply")}</button>
       </div>
       {isOpen && <section className="job-details">
         <dl>
           <div><dt>{t("company")}</dt><dd>{job.company_name}</dd></div>
           <div><dt>{t("category")}</dt><dd>{jobCategoryLabel(job.category, lang)}</dd></div>
           <div><dt>{t("location")}</dt><dd>{job.location}</dd></div>
-          <div><dt>{t("status")}</dt><dd>{job.status}</dd></div>
+          <div><dt>{t("status")}</dt><dd>{statusLabel(job.status, lang)}</dd></div>
           <div><dt>{t("salary")}</dt><dd>{job.salary_range || "-"}</dd></div>
           <div><dt>{t("type")}</dt><dd>{job.type}</dd></div>
         </dl>
@@ -831,6 +1037,11 @@ function Jobs({ t, lang, jobs, applications, search = "", reload }) {
       </section>}
     </article>;
   }) : <article className="panel"><p>{t("noJobsMatching")}</p></article>}
+    {visibleJobs.length > pageSize && <div className="pagination panel">
+      <button className="secondary-button compact" type="button" disabled={page <= 1} onClick={() => setPage(page - 1)}>{t("previous")}</button>
+      <span>{t("page")} {page} / {totalPages}</span>
+      <button className="secondary-button compact" type="button" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>{t("next")}</button>
+    </div>}
   </section>;
 }
 
@@ -839,6 +1050,7 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState(null);
   const [selectedProfile, setSelectedProfile] = useState(null);
+  const [jobAdminSearch, setJobAdminSearch] = useState("");
   const [jobForm, setJobForm] = useState({ companyName: "مختبرات روابط", title: "", category: "General", location: "عن بعد", type: "دوام كامل", salaryRange: "", description: "" });
   const [editingJob, setEditingJob] = useState(null);
   const [interview, setInterview] = useState({ userId: "", jobId: "", scheduledAt: "", channel: "Video call", notes: "" });
@@ -851,6 +1063,11 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
     ["interviews", t("interviews"), "◌"],
     ["support", t("supportInbox"), "✉"]
   ];
+  const normalizedJobAdminSearch = jobAdminSearch.trim().toLowerCase();
+  const adminVisibleJobs = jobs.filter((job) => {
+    if (!normalizedJobAdminSearch) return true;
+    return `${job.job_number || ""} ${job.title || ""} ${job.company_name || ""}`.toLowerCase().includes(normalizedJobAdminSearch);
+  });
   useEffect(() => {
     if (initialTab) {
       setTab(initialTab);
@@ -895,6 +1112,8 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
       body: JSON.stringify({
         fullName: selectedProfile.user.full_name,
         email: selectedProfile.user.email,
+        phone: selectedProfile.user.phone,
+        dob: selectedProfile.user.dob,
         headline: selectedProfile.user.headline,
         location: selectedProfile.user.location,
         role: selectedProfile.user.role,
@@ -936,6 +1155,8 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
       body: JSON.stringify({
         fullName: editing.full_name,
         email: editing.email,
+        phone: editing.phone,
+        dob: editing.dob,
         headline: editing.headline,
         location: editing.location,
         role: editing.role,
@@ -964,6 +1185,12 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
       description: job.description || "",
       status: job.status || "active"
     });
+    setTimeout(() => document.getElementById("edit-job-form")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+  }
+  async function runJobAction(job, action) {
+    if (!action) return;
+    if (action === "edit") startEditJob(job);
+    if (action === "delete") await deleteJob(job);
   }
   async function saveJob(event) {
     event.preventDefault();
@@ -1031,7 +1258,7 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
               <div className="table-wrap">
                 <table>
                   <thead><tr><th>{t("users")}</th><th>{t("role")}</th><th>{t("plan")}</th><th>{t("status")}</th><th>{t("attachments")}</th><th>{t("lastActive")}</th><th>{t("actions")}</th></tr></thead>
-                  <tbody>{users.map((user) => <tr key={user.id}><td><div className="table-user"><Avatar user={user} size="small" /><div><strong>{user.full_name}</strong><span>{user.email}</span></div></div></td><td>{user.role}</td><td>{user.plan}</td><td><span className={`status ${user.status}`}>{user.status}</span></td><td><DocumentLinks t={t} documents={user.documents} avatarUrl={user.avatar_url} compact /></td><td>{new Date(user.last_active_at).toLocaleDateString()}</td><td><select className="action-select" defaultValue="" onChange={(e) => { runUserAction(user, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option><option value="edit">{t("editUser")}</option><option value="verify">{t("verify")}</option><option value="activate">{t("activate")}</option><option value="deactivate">{t("deactivate")}</option><option value="delete">{t("delete")}</option></select></td></tr>)}</tbody>
+                  <tbody>{users.map((user) => <tr key={user.id}><td><div className="table-user"><Avatar user={user} size="small" /><div><strong>{user.full_name}</strong><span>{user.email}</span></div></div></td><td>{user.role}</td><td><select className="plan-select" value={user.plan || "free"} onChange={(e) => patchUser(user, { plan: e.target.value })}>{PLAN_OPTIONS.map((plan) => <option value={plan} key={plan}>{planLabel(plan, lang)}</option>)}</select></td><td><span className={`status ${user.status}`}>{statusLabel(user.status, lang)}</span></td><td><DocumentLinks t={t} documents={user.documents} avatarUrl={user.avatar_url} compact /></td><td>{new Date(user.last_active_at).toLocaleDateString()}</td><td><select className="action-select" defaultValue="" onChange={(e) => { runUserAction(user, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option><option value="edit">{t("editUser")}</option><option value="verify">{t("verify")}</option><option value="activate">{t("activate")}</option><option value="deactivate">{t("deactivate")}</option><option value="delete">{t("delete")}</option></select></td></tr>)}</tbody>
                 </table>
               </div>
             </section>
@@ -1039,11 +1266,14 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
               <h2>{t("editUser")}</h2>
               <input value={editing.full_name || ""} onChange={(e) => setEditing({ ...editing, full_name: e.target.value })} />
               <input value={editing.email || ""} onChange={(e) => setEditing({ ...editing, email: e.target.value })} />
+              <input value={editing.phone || ""} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} placeholder={t("phone")} />
+              <input type="date" value={editing.dob || ""} onChange={(e) => setEditing({ ...editing, dob: e.target.value })} />
               <input value={editing.headline || ""} onChange={(e) => setEditing({ ...editing, headline: e.target.value })} placeholder={t("headline")} />
               <input value={editing.location || ""} onChange={(e) => setEditing({ ...editing, location: e.target.value })} placeholder={t("location")} />
               <div className="row-fields">
                 <select value={editing.role} onChange={(e) => setEditing({ ...editing, role: e.target.value })}><option value="member">member</option><option value="recruiter">recruiter</option><option value="company">company</option><option value="admin">admin</option></select>
-                <select value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value })}><option value="active">active</option><option value="verified">verified</option><option value="review">review</option><option value="suspended">suspended</option></select>
+                <select value={editing.plan || "free"} onChange={(e) => setEditing({ ...editing, plan: e.target.value })}>{PLAN_OPTIONS.map((plan) => <option value={plan} key={plan}>{planLabel(plan, lang)}</option>)}</select>
+                <select value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value })}>{USER_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select>
                 <button className="primary-button">{t("save")}</button>
               </div>
             </form>}
@@ -1063,14 +1293,16 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
                 <h2>{t("editUser")}</h2>
                 <input value={selectedProfile.user.full_name || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, full_name: e.target.value } })} />
                 <input value={selectedProfile.user.email || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, email: e.target.value } })} />
+                <input value={selectedProfile.user.phone || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, phone: e.target.value } })} placeholder={t("phone")} />
+                <input type="date" value={selectedProfile.user.dob || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, dob: e.target.value } })} />
                 <input value={selectedProfile.user.headline || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, headline: e.target.value } })} placeholder={t("headline")} />
                 <input value={selectedProfile.user.location || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, location: e.target.value } })} placeholder={t("location")} />
-                <input value={selectedProfile.user.plan || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, plan: e.target.value } })} placeholder={t("plan")} />
+                <select value={selectedProfile.user.plan || "free"} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, plan: e.target.value } })}>{PLAN_OPTIONS.map((plan) => <option value={plan} key={plan}>{planLabel(plan, lang)}</option>)}</select>
                 <textarea value={selectedProfile.profile?.about || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, profile: { ...(selectedProfile.profile || {}), about: e.target.value } })} placeholder={t("about")} />
                 <input value={Array.isArray(selectedProfile.profile?.skills) ? selectedProfile.profile.skills.join(", ") : selectedProfile.profile?.skills || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, profile: { ...(selectedProfile.profile || {}), skills: e.target.value } })} placeholder={t("skills")} />
                 <div className="row-fields">
                   <select value={selectedProfile.user.role} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, role: e.target.value } })}><option value="member">member</option><option value="recruiter">recruiter</option><option value="company">company</option><option value="admin">admin</option></select>
-                  <select value={selectedProfile.user.status} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, status: e.target.value } })}><option value="active">active</option><option value="verified">verified</option><option value="review">review</option><option value="suspended">suspended</option></select>
+                  <select value={selectedProfile.user.status} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, status: e.target.value } })}>{USER_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select>
                   <button className="primary-button">{t("save")}</button>
                 </div>
               </form>
@@ -1094,7 +1326,7 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
           </section>}
 
           {tab === "jobs" && <section className="job-admin-grid">
-            <form className="panel admin-form" onSubmit={addJob}>
+            <form className="panel admin-form job-editor-form" onSubmit={addJob}>
               <h2>{t("addJob")}</h2>
               <input placeholder={t("company")} value={jobForm.companyName} onChange={(e) => setJobForm({ ...jobForm, companyName: e.target.value })} />
               <input placeholder={t("title")} value={jobForm.title} onChange={(e) => setJobForm({ ...jobForm, title: e.target.value })} />
@@ -1107,7 +1339,7 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
               <button className="primary-button">{t("addJob")}</button>
             </form>
 
-            {editingJob && <form className="panel admin-form" onSubmit={saveJob}>
+            {editingJob && <form id="edit-job-form" className="panel admin-form job-editor-form" onSubmit={saveJob}>
               <h2>{t("editJob")}</h2>
               <input placeholder={t("company")} value={editingJob.companyName} onChange={(e) => setEditingJob({ ...editingJob, companyName: e.target.value })} />
               <input placeholder={t("title")} value={editingJob.title} onChange={(e) => setEditingJob({ ...editingJob, title: e.target.value })} />
@@ -1117,7 +1349,7 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
               <input placeholder={t("location")} value={editingJob.location} onChange={(e) => setEditingJob({ ...editingJob, location: e.target.value })} />
               <input placeholder={t("type")} value={editingJob.type} onChange={(e) => setEditingJob({ ...editingJob, type: e.target.value })} />
               <input placeholder={t("salary")} value={editingJob.salaryRange} onChange={(e) => setEditingJob({ ...editingJob, salaryRange: e.target.value })} />
-              <select value={editingJob.status} onChange={(e) => setEditingJob({ ...editingJob, status: e.target.value })}><option value="active">active</option><option value="paused">paused</option><option value="closed">closed</option></select>
+              <select value={editingJob.status} onChange={(e) => setEditingJob({ ...editingJob, status: e.target.value })}>{JOB_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select>
               <textarea placeholder={t("description")} value={editingJob.description} onChange={(e) => setEditingJob({ ...editingJob, description: e.target.value })} />
               <div className="row-fields">
                 <button className="primary-button">{t("save")}</button>
@@ -1125,12 +1357,12 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
               </div>
             </form>}
 
-            <section className="panel span-two">
-              <div className="section-head"><h2>{t("jobManagement")}</h2><span className="status">{jobs.length}</span></div>
-              <div className="table-wrap">
+            <section className="panel span-two job-management-card">
+              <div className="section-head"><h2>{t("jobManagement")}</h2><input placeholder={t("searchJobs")} value={jobAdminSearch} onChange={(e) => setJobAdminSearch(e.target.value)} /><span className="status">{adminVisibleJobs.length}</span></div>
+              <div className="table-wrap job-table-wrap">
                 <table>
-                  <thead><tr><th>{t("job")}</th><th>{t("category")}</th><th>{t("location")}</th><th>{t("status")}</th><th>{t("actions")}</th></tr></thead>
-                  <tbody>{jobs.map((job) => <tr key={job.id}><td><strong>{job.title}</strong><span>{job.company_name}</span></td><td>{jobCategoryLabel(job.category, lang)}</td><td>{job.location}</td><td><span className={`status ${job.status}`}>{job.status}</span></td><td><div className="row-actions"><button className="secondary-button compact" type="button" onClick={() => startEditJob(job)}>{t("editJob")}</button><button className="secondary-button compact danger-button" type="button" onClick={() => deleteJob(job)}>{t("deleteJob")}</button></div></td></tr>)}</tbody>
+                  <thead><tr><th>{t("jobId")}</th><th>{t("job")}</th><th>{t("category")}</th><th>{t("location")}</th><th>{t("status")}</th><th>{t("actions")}</th></tr></thead>
+                  <tbody>{adminVisibleJobs.map((job) => <tr key={job.id}><td><strong className="job-number">#{job.job_number || "-"}</strong></td><td><strong>{job.title}</strong><span>{job.company_name}</span></td><td>{jobCategoryLabel(job.category, lang)}</td><td>{job.location}</td><td><span className={`status ${job.status}`}>{statusLabel(job.status, lang)}</span></td><td><select className="action-select" defaultValue="" onChange={(e) => { runJobAction(job, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option><option value="edit">{t("editJob")}</option><option value="delete">{t("deleteJob")}</option></select></td></tr>)}</tbody>
                 </table>
               </div>
             </section>
@@ -1141,7 +1373,7 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
             <div className="table-wrap">
               <table>
                 <thead><tr><th>{t("applicant")}</th><th>{t("job")}</th><th>{t("location")}</th><th>{t("applicationStatus")}</th><th>{t("actions")}</th></tr></thead>
-                <tbody>{applications.map((application) => <tr key={application.id}><td><div className="table-user"><Avatar user={{ full_name: application.full_name, avatar_url: application.avatar_url }} size="small" /><div><strong>{application.full_name}</strong><span>{application.email}</span></div></div></td><td><strong>{application.job_title}</strong><span>{application.company_name}</span></td><td>{application.location}</td><td><span className={`status ${application.status}`}>{application.status}</span></td><td><select className="action-select" value={application.status} onChange={(e) => updateApplicationStatus(application, e.target.value)}><option value="submitted">submitted</option><option value="review">review</option><option value="interview">interview</option><option value="accepted">accepted</option><option value="rejected">rejected</option></select></td></tr>)}</tbody>
+                <tbody>{applications.map((application) => <tr key={application.id}><td><div className="table-user"><Avatar user={{ full_name: application.full_name, avatar_url: application.avatar_url }} size="small" /><div><strong>{application.full_name}</strong><span>{application.email}</span></div></div></td><td><strong>{application.job_title}</strong><span>{application.company_name}</span></td><td>{application.location}</td><td><span className={`status ${application.status}`}>{statusLabel(application.status, lang)}</span></td><td><select className="action-select" value={application.status} onChange={(e) => updateApplicationStatus(application, e.target.value)}>{APPLICATION_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select></td></tr>)}</tbody>
               </table>
             </div>
           </section>}
@@ -1176,6 +1408,9 @@ function SupportWindow({ t, me, users, initialUserId = "", onUpdate, close }) {
   const [targetUserId, setTargetUserId] = useState(me.user.role === "admin" ? initialUserId || users[0]?.id || "" : me.user.id);
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [chatError, setChatError] = useState("");
   async function loadMessages(userId = targetUserId) {
     const query = me.user.role === "admin" && userId ? `?user_id=${userId}` : "";
     setMessages(await api(`/support/messages${query}`));
@@ -1184,24 +1419,68 @@ function SupportWindow({ t, me, users, initialUserId = "", onUpdate, close }) {
   useEffect(() => {
     if (me.user.role === "admin" && !targetUserId && users[0]?.id) setTargetUserId(users[0].id);
   }, [users.length, targetUserId, me.user.role]);
+  useEffect(() => {
+    if (me.user.role === "admin" && initialUserId && initialUserId !== targetUserId) setTargetUserId(initialUserId);
+  }, [initialUserId, me.user.role, targetUserId]);
   useEffect(() => { loadMessages(); }, [targetUserId]);
   async function sendMessage(event) {
     event.preventDefault();
     if (!message.trim()) return;
-    await api("/support/messages", { method: "POST", body: JSON.stringify({ message, userId: me.user.role === "admin" ? targetUserId : undefined }) });
-    setMessage("");
-    await loadMessages();
+    setSending(true);
+    try {
+      await api("/support/messages", { method: "POST", body: JSON.stringify({ message, userId: me.user.role === "admin" ? targetUserId : undefined }) });
+      setMessage("");
+      await loadMessages();
+    } finally {
+      setSending(false);
+    }
   }
+  async function clearChat() {
+    setClearing(true);
+    setChatError("");
+    try {
+      await api("/support/messages/clear", {
+        method: "POST",
+        body: JSON.stringify({ userId: me.user.role === "admin" ? targetUserId : undefined })
+      });
+      setMessages([]);
+      await onUpdate?.();
+    } catch (err) {
+      setChatError(err.message || t("clearFailed"));
+    } finally {
+      setClearing(false);
+    }
+  }
+  async function requestLiveSupport() {
+    setSending(true);
+    try {
+      await api("/support/messages", { method: "POST", body: JSON.stringify({ message: t("liveAgentRequest"), userId: me.user.role === "admin" ? targetUserId : undefined }) });
+      await loadMessages();
+    } finally {
+      setSending(false);
+    }
+  }
+  async function endConversation() {
+    await clearChat();
+    close();
+  }
+  const lastMessage = messages[messages.length - 1];
+  const showBotOptions = lastMessage?.sender_role === "bot" && /دعم مباشر|live support|end the conversation|إنهاء المحادثة/.test(lastMessage.message || "");
   return (
     <div className="support-window">
-      <header><strong>{t("support")}</strong><button onClick={close}>×</button></header>
+      <header><strong>{t("support")}</strong><div><button type="button" onClick={clearChat} disabled={clearing}>{clearing ? t("clearingChat") : t("clearChat")}</button><button onClick={close}>×</button></div></header>
       {me.user.role === "admin" && <select value={targetUserId} onChange={(e) => setTargetUserId(e.target.value)}>{users.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select>}
       <div className="support-messages">
         {messages.map((item) => <p className={`support-bubble ${item.sender_role}`} key={item.id}><strong>{item.sender_role}</strong>{item.message}</p>)}
       </div>
+      {showBotOptions && <div className="support-options">
+        <button className="secondary-button compact" type="button" onClick={requestLiveSupport} disabled={sending}>{t("speakLive")}</button>
+        <button className="secondary-button compact" type="button" onClick={endConversation} disabled={clearing}>{t("endConversation")}</button>
+      </div>}
+      {chatError && <p className="error support-error">{chatError}</p>}
       <form onSubmit={sendMessage}>
         <input placeholder={t("supportMessage")} value={message} onChange={(e) => setMessage(e.target.value)} />
-        <button className="primary-button">{t("send")}</button>
+        <button className="primary-button" disabled={sending}>{t("send")}</button>
       </form>
     </div>
   );

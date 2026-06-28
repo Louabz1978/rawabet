@@ -291,7 +291,9 @@ html[dir="rtl"] .online-dot { right: auto; left: 8px; }
 
 .job-filter-bar {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  gap: 12px;
 }
 
 .job-filter-bar label {
@@ -300,6 +302,41 @@ html[dir="rtl"] .online-dot { right: auto; left: 8px; }
   min-width: min(260px, 100%);
   color: var(--muted);
   font-weight: 700;
+}
+
+.segmented-control {
+  display: flex;
+  align-self: end;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-soft);
+}
+
+.segmented-control button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.segmented-control button.active {
+  background: var(--brand);
+  color: #fff;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.pagination span {
+  color: var(--muted);
+  font-weight: 800;
 }
 
 .composer {
@@ -486,15 +523,18 @@ button.feature-card:hover {
 
 .admin-post-list {
   display: grid;
-  gap: 12px;
-  margin-top: 14px;
+  gap: 6px;
+  margin-top: 10px;
 }
 
 .admin-post {
   display: grid;
-  gap: 5px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 10px;
+  align-items: center;
   width: 100%;
-  padding: 14px;
+  min-height: 46px;
+  padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface-soft);
@@ -508,7 +548,11 @@ button.feature-card:hover {
 }
 
 .admin-post strong {
-  font-size: 1rem;
+  overflow: hidden;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .admin-post span,
@@ -517,8 +561,48 @@ button.feature-card:hover {
   color: var(--muted);
 }
 
+.admin-post span {
+  overflow: hidden;
+  font-size: 0.76rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .admin-post p {
   font-size: 0.9rem;
+}
+
+.admin-post .compact {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 0.76rem;
+}
+
+.highlighted-job {
+  border-color: rgba(16, 183, 167, 0.78);
+  box-shadow: 0 0 0 3px rgba(16, 183, 167, 0.12);
+}
+
+.interview-panel {
+  border-color: rgba(16, 183, 167, 0.42);
+}
+
+.interview-link div {
+  display: grid;
+  gap: 2px;
+}
+
+.interview-link strong,
+.interview-link small {
+  display: block;
+}
+
+.interview-link small {
+  color: var(--muted);
+  font-size: 0.74rem;
 }
 
 .side-panel h2, .panel h2 {
@@ -901,8 +985,69 @@ textarea { min-height: 110px; resize: vertical; }
 
 .job-admin-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 14px;
+  align-items: start;
+}
+
+.job-admin-grid .span-two {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.job-management-card {
+  min-width: 0;
+}
+
+.job-table-wrap {
+  overflow-x: visible;
+}
+
+.job-table-wrap table {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.job-table-wrap th:nth-child(1),
+.job-table-wrap td:nth-child(1) {
+  width: 10%;
+}
+
+.job-table-wrap th:nth-child(2),
+.job-table-wrap td:nth-child(2) {
+  width: 31%;
+}
+
+.job-table-wrap th:nth-child(3),
+.job-table-wrap td:nth-child(3) {
+  width: 16%;
+}
+
+.job-table-wrap th:nth-child(4),
+.job-table-wrap td:nth-child(4) {
+  width: 20%;
+}
+
+.job-table-wrap th:nth-child(5),
+.job-table-wrap td:nth-child(5) {
+  width: 9%;
+}
+
+.job-table-wrap th:nth-child(6),
+.job-table-wrap td:nth-child(6) {
+  width: 14%;
+}
+
+.job-table-wrap td strong,
+.job-table-wrap td span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.job-number {
+  color: var(--brand);
+  font-variant-numeric: tabular-nums;
 }
 
 .notify-button {
@@ -1222,16 +1367,23 @@ html[dir="rtl"] .support-window {
   justify-content: space-between;
 }
 
+.support-window header div {
+  display: flex;
+  gap: 6px;
+}
+
 .support-window header button {
-  display: grid;
-  place-items: center;
-  width: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
   height: 34px;
+  padding: 0 10px;
   border: 1px solid var(--line);
-  border-radius: 50%;
+  border-radius: 999px;
   background: #fff;
   color: var(--muted);
-  font-size: 1.2rem;
+  font-size: 0.86rem;
   line-height: 1;
 }
 
@@ -1279,6 +1431,19 @@ html[dir="rtl"] .support-window {
 
 .support-bubble.bot {
   background: var(--brand-soft);
+}
+
+.support-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+}
+
+.support-error {
+  margin: 0 12px;
+  font-size: 0.78rem;
 }
 
 .support-thread-list {
@@ -1423,6 +1588,306 @@ html[dir="rtl"] .support-window {
   color: var(--brand);
   font-weight: 800;
   text-align: start;
+}
+
+/* Professional content typography pass: keep navigation prominent, make workspace content denser. */
+main {
+  font-size: 0.9rem;
+}
+
+.panel,
+.profile-card,
+.metric-card {
+  font-size: 0.88rem;
+}
+
+.panel {
+  padding: 15px;
+}
+
+.side-panel h2,
+.panel h2,
+.post-head h2,
+.builder-panel h3,
+.admin-form h2 {
+  font-size: 0.9rem;
+  line-height: 1.25;
+  font-weight: 800;
+}
+
+.panel p,
+.profile-card p,
+.admin-post span,
+.job-card p,
+.job-details p,
+.timeline-item span,
+.upload-preview p {
+  font-size: 0.8rem;
+  line-height: 1.42;
+}
+
+.profile-card h2 {
+  font-size: 1.02rem;
+}
+
+.panel-link,
+.feature-card strong,
+.job-card h2,
+.admin-post strong,
+.timeline-item strong {
+  font-size: 0.86rem;
+}
+
+.feature-card span,
+.side-feature-grid .feature-card span {
+  font-size: 0.74rem;
+}
+
+.job-card {
+  gap: 12px;
+  padding: 14px;
+}
+
+.job-card h2 {
+  margin-bottom: 2px;
+  line-height: 1.24;
+}
+
+.job-details h3 {
+  font-size: 0.86rem;
+}
+
+input,
+textarea,
+select {
+  min-height: 40px;
+  font-size: 0.86rem;
+}
+
+textarea {
+  min-height: 94px;
+}
+
+th,
+td {
+  padding: 10px 12px;
+  font-size: 0.82rem;
+}
+
+td span {
+  font-size: 0.76rem;
+}
+
+.metric-card {
+  padding: 14px;
+}
+
+.metric-card strong {
+  font-size: clamp(1.35rem, 2.8vw, 1.8rem);
+}
+
+.admin-heading h1 {
+  font-size: clamp(1.35rem, 3vw, 2rem);
+}
+
+.builder-head h2 {
+  font-size: 1.05rem;
+}
+
+.builder-panel {
+  padding: 14px;
+}
+
+.builder-panel label {
+  font-size: 0.82rem;
+}
+
+/* Dense content controls: keep the header readable, make working areas feel closer to LinkedIn. */
+main .primary-button,
+main .secondary-button {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 0.8rem;
+  font-weight: 760;
+}
+
+main .compact {
+  min-height: 31px;
+  padding: 0 10px;
+}
+
+.job-filter-bar {
+  align-items: end;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.job-filter-bar label {
+  gap: 4px;
+  min-width: min(220px, 100%);
+  font-size: 0.76rem;
+}
+
+.job-filter-bar input,
+.job-filter-bar select {
+  min-height: 35px;
+  padding: 0 10px;
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.segmented-control button {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 0.78rem;
+  font-weight: 760;
+}
+
+.job-card {
+  min-height: 76px;
+  gap: 10px;
+  padding: 11px 14px;
+}
+
+.job-card h2 {
+  font-size: 0.88rem;
+  line-height: 1.2;
+}
+
+.job-card p,
+.job-card > div > span {
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.job-actions {
+  gap: 7px;
+}
+
+.job-actions .primary-button,
+.job-actions .secondary-button {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 0.78rem;
+}
+
+.application-status {
+  margin-top: 5px;
+}
+
+.job-details {
+  gap: 9px;
+  padding-top: 10px;
+}
+
+.job-details dl {
+  gap: 8px;
+}
+
+.job-details dt,
+.job-details dd,
+.job-details p {
+  font-size: 0.76rem;
+}
+
+th,
+td {
+  padding: 8px 10px;
+  font-size: 0.78rem;
+}
+
+th {
+  font-size: 0.72rem;
+}
+
+td span {
+  font-size: 0.76rem;
+}
+
+.table-user {
+  gap: 8px;
+  min-width: 170px;
+}
+
+.table-user strong {
+  font-size: 0.82rem;
+  line-height: 1.2;
+}
+
+.status {
+  padding: 4px 7px;
+  font-size: 0.7rem;
+}
+
+.action-select,
+.attachment-select,
+.plan-select {
+  min-width: 0;
+  min-height: 34px;
+  max-width: 180px;
+  padding: 0 10px;
+  font-size: 0.76rem;
+  font-weight: 760;
+}
+
+.attachment-select {
+  max-width: 220px;
+}
+
+.plan-select {
+  max-width: 120px;
+}
+
+.admin-page .panel {
+  padding: 14px;
+}
+
+.section-head input,
+.admin-form input,
+.admin-form select,
+.admin-form textarea {
+  min-height: 36px;
+  font-size: 0.8rem;
+}
+
+.job-editor-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  max-width: none;
+  padding: 18px;
+}
+
+.job-editor-form h2 {
+  grid-column: 1 / -1;
+  font-size: 1rem;
+}
+
+.job-editor-form input,
+.job-editor-form select,
+.job-editor-form textarea {
+  min-height: 40px;
+  font-size: 0.86rem;
+}
+
+.job-editor-form textarea {
+  grid-column: 1 / -1;
+  min-height: 94px;
+}
+
+.job-editor-form .primary-button,
+.job-editor-form .secondary-button {
+  min-height: 38px;
+  font-size: 0.86rem;
+}
+
+.job-editor-form > .row-fields {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
+}
+
+.row-actions {
+  gap: 6px;
 }
 
 @media (max-width: 1040px) {

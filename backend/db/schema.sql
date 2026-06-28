@@ -4,6 +4,8 @@ CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   full_name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
+  phone TEXT,
+  dob DATE,
   password_hash TEXT NOT NULL,
   email_verified BOOLEAN NOT NULL DEFAULT true,
   role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('member', 'recruiter', 'company', 'admin')),
@@ -17,6 +19,8 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS dob DATE;
 
 CREATE TABLE IF NOT EXISTS profiles (
   user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -40,12 +44,17 @@ CREATE TABLE IF NOT EXISTS pending_registrations (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   full_name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
+  phone TEXT NOT NULL,
+  dob DATE NOT NULL,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('member', 'recruiter', 'company', 'admin')),
   otp_hash TEXT NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE pending_registrations ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE pending_registrations ADD COLUMN IF NOT EXISTS dob DATE;
 
 CREATE TABLE IF NOT EXISTS experiences (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -83,8 +92,11 @@ CREATE TABLE IF NOT EXISTS documents (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE SEQUENCE IF NOT EXISTS jobs_job_number_seq START WITH 1001;
+
 CREATE TABLE IF NOT EXISTS jobs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  job_number INTEGER UNIQUE DEFAULT nextval('jobs_job_number_seq'),
   company_name TEXT NOT NULL,
   title TEXT NOT NULL,
   category TEXT NOT NULL DEFAULT 'General',
@@ -96,7 +108,13 @@ CREATE TABLE IF NOT EXISTS jobs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS job_number INTEGER;
+UPDATE jobs SET job_number = nextval('jobs_job_number_seq') WHERE job_number IS NULL;
+SELECT setval('jobs_job_number_seq', GREATEST(1000, COALESCE((SELECT MAX(job_number) FROM jobs), 1000)));
+ALTER TABLE jobs ALTER COLUMN job_number SET DEFAULT nextval('jobs_job_number_seq');
+ALTER SEQUENCE jobs_job_number_seq OWNED BY jobs.job_number;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'General';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_job_number ON jobs(job_number);
 
 CREATE TABLE IF NOT EXISTS applications (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
