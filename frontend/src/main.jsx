@@ -169,6 +169,8 @@ const text = {
     salary: "Salary",
     description: "Description",
     scheduleInterview: "Schedule interview",
+    interviewEmailSent: "Interview email sent to",
+    interviewEmailFailed: "Interview was scheduled, but email failed",
     interviewTime: "Interview time",
     channel: "Channel",
     notes: "Notes",
@@ -339,6 +341,8 @@ const text = {
     salary: "الراتب",
     description: "الوصف",
     scheduleInterview: "جدولة مقابلة",
+    interviewEmailSent: "تم إرسال بريد المقابلة إلى",
+    interviewEmailFailed: "تمت جدولة المقابلة، لكن فشل إرسال البريد",
     interviewTime: "وقت المقابلة",
     channel: "القناة",
     notes: "ملاحظات",
@@ -580,14 +584,34 @@ function App() {
 function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
   const [mode, setMode] = useState("login");
   const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("admin@rawabet.app");
+  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [dob, setDob] = useState("");
-  const [password, setPassword] = useState("admin123");
+  const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
   const [notice, setNotice] = useState("");
+  const [loggingIn, setLoggingIn] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [verifying, setVerifying] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setEmail("");
+      setPassword("");
+    }, 120);
+    return () => clearTimeout(timer);
+  }, []);
+
+  async function submitLogin(event) {
+    event.preventDefault();
+    setError("");
+    setLoggingIn(true);
+    try {
+      await login(email, password);
+    } finally {
+      setLoggingIn(false);
+    }
+  }
 
   async function register(event) {
     event.preventDefault();
@@ -628,11 +652,11 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
       <section className="login-stage">
         <div className="login-copy">
           <h1>{t("welcome")}</h1>
-          {mode === "login" && <form className="login-card" onSubmit={(event) => { event.preventDefault(); login(email, password); }}>
-            <label>{t("email")}<input value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-            <label>{t("password")}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+          {mode === "login" && <form className="login-card" onSubmit={submitLogin} autoComplete="off">
+            <label>{t("email")}<input name="rawabet-login-email" autoComplete="new-password" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+            <label>{t("password")}<input name="rawabet-login-password" autoComplete="new-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
             {error && <p className="error">{error}</p>}
-            <button className="primary-button">{t("login")}</button>
+            <button className="primary-button loading-button" disabled={loggingIn}>{loggingIn && <span className="spinner" aria-hidden="true"></span>}{t("login")}</button>
             <button className="auth-switch" type="button" onClick={() => { setMode("register"); setError(""); }}>{t("needAccount")}</button>
           </form>}
 
@@ -1213,11 +1237,17 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
   async function scheduleInterview(event) {
     event.preventDefault();
     if (!interview.userId || !interview.scheduledAt) return;
-    await api("/admin/interviews", {
+    const result = await api("/admin/interviews", {
       method: "POST",
       body: JSON.stringify({ ...interview, jobId: interview.jobId || null })
     });
+    if (result.emailSent) {
+      alert(`${t("interviewEmailSent")} ${result.recipientEmail}`);
+    } else {
+      alert(`${t("interviewEmailFailed")}: ${result.emailError || "-"}`);
+    }
     setInterview({ userId: "", jobId: "", scheduledAt: "", channel: "Video call", notes: "" });
+    await reload();
   }
   if (!admin) return null;
   return (

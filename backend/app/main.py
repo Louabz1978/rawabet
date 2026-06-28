@@ -153,10 +153,30 @@ def send_plain_email(email: str, subject: str, body: str) -> tuple[bool, str | N
         return False, "Gmail rejected the SMTP login. Use a Google App Password, not your normal Gmail password."
     except smtplib.SMTPException as exc:
         return False, f"SMTP failed: {exc}"
+    except OSError as exc:
+        return False, f"SMTP connection failed: {exc}"
 
 
 def send_verification_email(email: str, otp: str) -> tuple[bool, str | None]:
     return send_plain_email(email, "Rawabet verification code", f"Your Rawabet verification code is: {otp}\n\nThis code expires in 15 minutes.")
+
+
+def send_interview_email(email: str, full_name: str, job: dict | None, scheduled_at: str, channel: str, notes: str | None) -> tuple[bool, str | None]:
+    job_line = f"Job: {job['title']} - {job['company_name']} ({job['location']})" if job else "Job: General interview"
+    return send_plain_email(
+        email,
+        "Rawabet interview scheduled",
+        (
+            f"Hello {full_name},\n\n"
+            "Your interview has been scheduled on Rawabet.\n\n"
+            f"{job_line}\n"
+            f"Time: {scheduled_at}\n"
+            f"Channel: {channel}\n"
+            f"Notes: {notes or '-'}\n\n"
+            "Please log in to Rawabet to review the interview and related job.\n\n"
+            "Rawabet Team"
+        ),
+    )
 
 
 RAWABET_CONTEXT = """
@@ -220,6 +240,11 @@ def normalize_arabic_text(value: str) -> str:
     return normalized
 
 
+def contains_any_intent(value: str, stems: list[str]) -> bool:
+    normalized = normalize_arabic_text(value)
+    return any(stem in normalized for stem in stems)
+
+
 RAWABET_GUIDES = [
     {
         "terms": ["register", "sign up", "create account", "otp", "verification", "تسجيل", "إنشاء حساب", "حساب جديد", "رمز", "تحقق", "تأكيد"],
@@ -234,15 +259,21 @@ RAWABET_GUIDES = [
         "answer": "لإكمال الملف ورفع قوة الملف:\n1. اضغط الملف أو أكمل الملف من الشريط العلوي.\n2. حدّث الاسم، الهاتف، تاريخ الميلاد، العنوان المهني، الموقع، والنبذة.\n3. أضف المهارات مفصولة بفواصل.\n4. ارفع الصورة الشخصية.\n5. ارفع السيرة الذاتية.\n6. أضف الشهادات إن وجدت.\n7. أضف تاريخ العمل من قسم الخبرات.\n8. اضغط حفظ الملف. قوة الملف تتحسن حسب اكتمال الصورة والسيرة والشهادات والمهارات والخبرات."
     },
     {
-        "terms": ["profile picture", "avatar", "photo", "صورة", "الصورة", "الصورة الشخصية"],
+        "intent": "profile_photo",
+        "stems": ["صور", "فوتو", "بروفايل"],
+        "terms": ["profile picture", "avatar", "photo", "صورة", "الصورة", "الصورة الشخصية", "صورتي", "تعديل صورتي", "اغير صورتي", "تغيير صورتي"],
         "answer": "لتغيير الصورة الشخصية:\n1. افتح صفحة الملف أو اضغط أكمل الملف.\n2. في قسم الصورة والسيرة والشهادات اختر الصورة الشخصية.\n3. اختر صورة من جهازك.\n4. يتم رفع الصورة واستبدال أي صورة قديمة تلقائيا.\n5. تظهر الصورة الجديدة في ملفك وفي شاشة الإدارة."
     },
     {
-        "terms": ["resume", "cv", "سيرة", "السيرة", "السيرة الذاتية"],
+        "intent": "resume",
+        "stems": ["سير", "cv"],
+        "terms": ["resume", "cv", "سيرة", "السيرة", "السيرة الذاتية", "سيرتي", "تعديل سيرتي", "ارفع سيرتي"],
         "answer": "لرفع السيرة الذاتية:\n1. افتح الملف أو أكمل الملف.\n2. اختر حقل السيرة الذاتية.\n3. ارفع ملف PDF أو DOC أو DOCX.\n4. روابط يحتفظ بسيرة واحدة فقط، لذلك أي رفع جديد يستبدل السيرة السابقة.\n5. يظهر رابط السيرة في مرفقات ملفك ولدى الإدارة."
     },
     {
-        "terms": ["certificate", "certificates", "license", "award", "شهادة", "الشهادات", "رخص", "جوائز"],
+        "intent": "certificates",
+        "stems": ["شهاد", "رخص", "جوايز", "جوائز"],
+        "terms": ["certificate", "certificates", "license", "award", "شهادة", "الشهادات", "شهادتي", "شهاداتي", "رخص", "جوائز"],
         "answer": "لإضافة الشهادات:\n1. افتح الملف أو أكمل الملف.\n2. اختر حقل الشهادة.\n3. ارفع ملف PDF أو صورة.\n4. يمكنك إضافة حتى 5 شهادات.\n5. تظهر الشهادات كرابط في المرفقات ويمكن للإدارة مراجعتها أو حذفها من ملف المستخدم."
     },
     {
@@ -254,6 +285,8 @@ RAWABET_GUIDES = [
         "answer": "للبحث عن وظيفة:\n1. افتح صفحة الوظائف من الشريط العلوي.\n2. استخدم مربع البحث للبحث باسم الوظيفة أو الشركة.\n3. اختر الفئة المناسبة من فلتر الفئات.\n4. اختر نطاق الراتب إذا أردت تضييق النتائج.\n5. اضغط تفاصيل الوظيفة لعرض الوصف والموقع والراتب والنوع.\n6. اضغط تقديم لإرسال طلبك."
     },
     {
+        "intent": "apply_job",
+        "stems": ["تقدم", "اتقدم", "اقدم", "وظيف", "مناسب", "طلب"],
         "terms": ["apply", "application", "application status", "applied", "guide me apply", "تقديم", "اتقدم", "اقدم", "التقدم", "قدم", "كيف اتقدم", "ارشدني", "مناسبا", "مناسبه", "طلب", "طلبات", "حالة الطلب", "حاله الطلب", "الوظائف المقدمة", "الوظائف المقدمه"],
         "answer": "للتقديم على وظيفة مناسبة:\n1. افتح صفحة الوظائف من الشريط العلوي.\n2. استخدم البحث لكتابة اسم الوظيفة أو الشركة التي تهمك.\n3. استخدم فلتر الفئة ونطاق الراتب لتقليل النتائج حسب اهتمامك.\n4. اضغط تفاصيل الوظيفة لقراءة الوصف، الشركة، الموقع، الراتب، والنوع.\n5. إذا وجدت نفسك مناسبا، اضغط تقديم.\n6. بعد التقديم افتح الوظائف المقدمة فقط لمتابعة حالة الطلب.\n7. الحالات الممكنة هي: تم التقديم، قيد المراجعة، مقابلة، مقبول، أو مرفوض."
     },
@@ -304,7 +337,8 @@ def local_platform_reply(question: str) -> str | None:
     best_guide = None
     best_score = 0
     for guide in RAWABET_GUIDES:
-        score = sum(
+        stem_score = 4 if guide.get("stems") and contains_any_intent(question, guide["stems"]) else 0
+        score = stem_score + sum(
             3 if " " in term else 1
             for term in guide["terms"]
             if term in lowered or normalize_arabic_text(term) in normalized_question
@@ -323,7 +357,7 @@ def platform_bot_reply(question: str) -> str:
         "interview", "support", "admin", "dashboard", "analytics", "plan", "premium", "free", "status", "otp", "register",
         "login", "upload", "attachment", "photo", "avatar", "skill", "experience", "salary", "category", "filter",
         "ملف", "وظيفة", "وظائف", "تقديم", "اتقدم", "اقدم", "التقدم", "قدم", "ارشدني", "مناسب", "مناسبا", "طلب", "طلبات", "حالة", "مقابلة", "دعم", "شهادة", "شهادات", "سيرة",
-        "الخطة", "مميز", "مجاني", "الحالة", "تسجيل", "دخول", "تحقق", "رمز", "رفع", "مرفق", "مرفقات", "صورة",
+        "الخطة", "مميز", "مجاني", "الحالة", "تسجيل", "دخول", "تحقق", "رمز", "رفع", "مرفق", "مرفقات", "صورة", "صورتي", "صور",
         "مهارات", "خبرات", "راتب", "فئة", "بحث", "فلتر", "إدارة", "لوحة", "تحليلات", "مستخدم", "مستخدمين"
     ]
     if not any(term in lowered or normalize_arabic_text(term) in normalized_question for term in platform_terms):
@@ -1134,14 +1168,13 @@ def create_admin_interview(body: InterviewBody, user: Annotated[dict, Depends(ad
         execute("UPDATE applications SET status = 'interview' WHERE user_id = %s AND job_id = %s", (body.userId, body.jobId))
     recipient = fetch_one("SELECT full_name, email FROM users WHERE id = %s", (body.userId,))
     job = fetch_one("SELECT title, company_name, location FROM jobs WHERE id = %s", (body.jobId,)) if body.jobId else None
+    email_sent = False
+    email_error = "Recipient not found."
+    recipient_email = None
     if recipient:
-        job_line = f"Job: {job['title']} - {job['company_name']} ({job['location']})" if job else "Job: General interview"
-        send_plain_email(
-            recipient["email"],
-            "Rawabet interview scheduled",
-            f"Hello {recipient['full_name']},\n\nYour interview has been scheduled.\n\n{job_line}\nTime: {body.scheduledAt}\nChannel: {body.channel}\nNotes: {body.notes or '-'}\n\nRawabet Team",
-        )
-    return interview
+        recipient_email = recipient["email"]
+        email_sent, email_error = send_interview_email(recipient["email"], recipient["full_name"], job, body.scheduledAt, body.channel, body.notes)
+    return {**interview, "emailSent": email_sent, "emailError": email_error, "recipientEmail": recipient_email}
 
 
 @app.get("/api/support/messages")
