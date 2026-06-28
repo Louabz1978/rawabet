@@ -15,12 +15,13 @@ from .auth import admin_user, create_token, current_user, hash_password, public_
 from .config import SMTP_FROM, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USER, UPLOAD_DIR
 from .db import execute, fetch_all, fetch_one
 
+
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Rawabet API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://35.174.9.208:5173","http://35.174.9.208"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
