@@ -24,7 +24,14 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 app = FastAPI(title="Rawabet API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://35.174.9.208:5173","http://35.174.9.208"],
+    allow_origins=[
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://35.174.9.208:5173",
+    "http://35.174.9.208",
+    "http://rawabet-sy.com",
+    "http://www.rawabet-sy.com",
+],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
