@@ -397,6 +397,15 @@ function statusLabel(value, lang) {
   return STATUS_LABELS[value]?.[lang] || value || "-";
 }
 
+function normalizeStatusValue(value) {
+  if (!value) return "";
+  const normalized = String(value).trim().toLowerCase();
+  const match = Object.entries(STATUS_LABELS).find(([key, labels]) => {
+    return normalized === key || normalized === labels.en.toLowerCase() || normalized === labels.ar;
+  });
+  return match ? match[0] : normalized;
+}
+
 function planLabel(value, lang) {
   const labels = {
     free: { en: "Free", ar: "مجاني" },
@@ -1236,8 +1245,9 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
     await reload();
   }
   async function updateApplicationStatus(application, status) {
-    if (!status) return;
-    if (status === "interview") {
+    const nextStatus = normalizeStatusValue(status);
+    if (!nextStatus) return;
+    if (nextStatus === "interview") {
       setInterview({
         userId: application.user_id,
         jobId: application.job_id,
@@ -1249,7 +1259,7 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
       setTimeout(() => document.getElementById("schedule-interview-form")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
       return;
     }
-    await api(`/admin/applications/${application.id}`, { method: "PATCH", body: JSON.stringify({ status }) });
+    await api(`/admin/applications/${application.id}`, { method: "PATCH", body: JSON.stringify({ status: nextStatus }) });
     setApplications(await api("/admin/applications"));
     await reload();
   }
@@ -1427,7 +1437,7 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
             <div className="table-wrap">
               <table>
                 <thead><tr><th>{t("applicant")}</th><th>{t("job")}</th><th>{t("location")}</th><th>{t("applicationStatus")}</th><th>{t("actions")}</th></tr></thead>
-                <tbody>{applications.map((application) => <tr key={application.id}><td><div className="table-user"><Avatar user={{ full_name: application.full_name, avatar_url: application.avatar_url }} size="small" /><div><strong>{application.full_name}</strong><span>{application.email}</span></div></div></td><td><strong>{application.job_title}</strong><span>{application.company_name}</span></td><td>{application.location}</td><td><span className={`status ${application.status}`}>{statusLabel(application.status, lang)}</span></td><td><select className="action-select" value={application.status} onChange={(e) => updateApplicationStatus(application, e.target.value)}>{APPLICATION_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select></td></tr>)}</tbody>
+                <tbody>{applications.map((application) => <tr key={application.id}><td><div className="table-user"><Avatar user={{ full_name: application.full_name, avatar_url: application.avatar_url }} size="small" /><div><strong>{application.full_name}</strong><span>{application.email}</span></div></div></td><td><strong>{application.job_title}</strong><span>{application.company_name}</span></td><td>{application.location}</td><td><span className={`status ${application.status}`}>{statusLabel(application.status, lang)}</span></td><td><select className="action-select" defaultValue="" onChange={(e) => { updateApplicationStatus(application, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option>{APPLICATION_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select></td></tr>)}</tbody>
               </table>
             </div>
           </section>}
