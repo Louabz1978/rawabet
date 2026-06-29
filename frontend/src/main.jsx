@@ -510,6 +510,9 @@ function App() {
       } catch {
         setJobs(await api("/jobs"));
       }
+    } else if (data.user.role === "agent") {
+      setJobs([]);
+      setView("agent");
     } else {
       setJobs(await api("/jobs"));
     }
@@ -523,6 +526,7 @@ function App() {
     if (data.user.role === "agent") {
       setAgentShares(await api("/agent/shares"));
     }
+    return data.user;
   }
 
   async function loadSupportThreads() {
@@ -549,8 +553,8 @@ function App() {
       const data = await api("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
       setToken(data.token);
       try {
-        await loadApp();
-        setView("home");
+        const loadedUser = await loadApp();
+        setView(loadedUser.role === "agent" ? "agent" : "home");
       } catch (loadError) {
         clearToken();
         setSession(null);
@@ -565,8 +569,8 @@ function App() {
   async function verifyAndLoad(token) {
     setToken(token);
     try {
-      await loadApp();
-      setView("home");
+      const loadedUser = await loadApp();
+      setView(loadedUser.role === "agent" ? "agent" : "home");
     } catch (err) {
       clearToken();
       setSession(null);
@@ -601,44 +605,46 @@ function App() {
   }
 
   if (!session || !me) return <Login lang={lang} setLang={setLang} t={t} login={login} verifyAndLoad={verifyAndLoad} error={error} setError={setError} />;
+  const isAgent = session.role === "agent";
 
   return (
     <div className="app-shell">
       <header className="topbar">
-        <button className="brand" onClick={() => setView("home")}>
+        <button className="brand" onClick={() => setView(isAgent ? "agent" : "home")}>
           <img className="brand-mark" src="/brand/rawabet-mark.png" alt="" />
           <img className="brand-wordmark" src="/brand/rawabet-wordmark.png" alt="Rawabet - روابط تجمعنا" />
         </button>
-        <label className="search">
+        {!isAgent && <label className="search">
           <span>⌕</span>
           <input placeholder={t("search")} value={jobSearch} onChange={(event) => { setJobMode("all"); setJobSearch(event.target.value); setView("jobs"); }} />
-        </label>
+        </label>}
         <nav className="desktop-nav">
-          {[
+          {!isAgent && [
             ["home", "⌂"],
             ["profile", "◉"],
             ["jobs", "▣"]
           ].map(([item, icon]) => <button className={`nav-link ${view === item ? "active" : ""}`} onClick={() => setView(item)} key={item}><span>{icon}</span><b>{t(item)}</b></button>)}
           {session.role === "admin" && <button className={`nav-link ${view === "admin" ? "active" : ""}`} onClick={() => setView("admin")}><span>▥</span><b>{t("admin")}</b></button>}
-          {session.role === "agent" && <button className={`nav-link ${view === "agent" ? "active" : ""}`} onClick={() => setView("agent")}><span>◈</span><b>{t("agent")}</b></button>}
+          {isAgent && <button className="nav-link active" onClick={() => setView("agent")}><span>◈</span><b>{t("agentWorkspace")}</b></button>}
         </nav>
         <div className="top-actions">
           <button className="icon-button" onClick={() => setLang(lang === "en" ? "ar" : "en")}>{t("language")}</button>
-          <button className="secondary-button compact notify-button" onClick={() => session.role === "admin" ? (setAdminStartTab("support"), setView("admin")) : setSupportOpen(true)}>{t("support")}{supportUnread > 0 && <span>{supportUnread}</span>}</button>
-          <button className="primary-button compact" onClick={() => setBuilderOpen(true)}>{t("completeProfile")}</button>
+          {!isAgent && <button className="secondary-button compact notify-button" onClick={() => session.role === "admin" ? (setAdminStartTab("support"), setView("admin")) : setSupportOpen(true)}>{t("support")}{supportUnread > 0 && <span>{supportUnread}</span>}</button>}
+          {!isAgent && <button className="primary-button compact" onClick={() => setBuilderOpen(true)}>{t("completeProfile")}</button>}
           <button className="secondary-button compact" onClick={logout}>{t("logout")}</button>
         </div>
       </header>
 
       <main className={view === "admin" ? "admin-main" : ""}>
-        {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} />}
-        {view === "profile" && <Profile t={t} me={me} reload={loadApp} />}
-        {view === "jobs" && <Jobs t={t} lang={lang} jobs={jobs} applications={me.applications || []} interviews={me.interviews || []} search={jobSearch} mode={jobMode} setMode={setJobMode} selectedJobId={selectedJobId} clearSelectedJob={() => setSelectedJobId("")} reload={loadApp} />}
-        {view === "admin" && session.role === "admin" && <Admin t={t} lang={lang} admin={admin} users={adminUsers} setUsers={setAdminUsers} jobs={jobs} applications={adminApplications} setApplications={setAdminApplications} interviews={adminInterviews} supportThreads={supportThreads} initialTab={adminStartTab} clearInitialTab={() => setAdminStartTab("")} reload={loadApp} openSupport={(userId) => { setSupportTarget(userId || ""); setSupportOpen(true); }} />}
-        {view === "agent" && session.role === "agent" && <AgentWorkspace t={t} lang={lang} shares={agentShares} />}
+        {isAgent ? <AgentWorkspace t={t} lang={lang} shares={agentShares} /> : <>
+          {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} />}
+          {view === "profile" && <Profile t={t} me={me} reload={loadApp} />}
+          {view === "jobs" && <Jobs t={t} lang={lang} jobs={jobs} applications={me.applications || []} interviews={me.interviews || []} search={jobSearch} mode={jobMode} setMode={setJobMode} selectedJobId={selectedJobId} clearSelectedJob={() => setSelectedJobId("")} reload={loadApp} />}
+          {view === "admin" && session.role === "admin" && <Admin t={t} lang={lang} admin={admin} users={adminUsers} setUsers={setAdminUsers} jobs={jobs} applications={adminApplications} setApplications={setAdminApplications} interviews={adminInterviews} supportThreads={supportThreads} initialTab={adminStartTab} clearInitialTab={() => setAdminStartTab("")} reload={loadApp} openSupport={(userId) => { setSupportTarget(userId || ""); setSupportOpen(true); }} />}
+        </>}
       </main>
-      {builderOpen && <ProfileBuilder t={t} me={me} reload={loadApp} close={() => setBuilderOpen(false)} />}
-      {supportOpen && <SupportWindow t={t} me={me} users={adminUsers} initialUserId={supportTarget} onUpdate={loadSupportThreads} close={() => { setSupportOpen(false); setSupportTarget(""); }} />}
+      {!isAgent && builderOpen && <ProfileBuilder t={t} me={me} reload={loadApp} close={() => setBuilderOpen(false)} />}
+      {!isAgent && supportOpen && <SupportWindow t={t} me={me} users={adminUsers} initialUserId={supportTarget} onUpdate={loadSupportThreads} close={() => { setSupportOpen(false); setSupportTarget(""); }} />}
     </div>
   );
 }
@@ -1595,6 +1601,76 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
 }
 
 function AgentWorkspace({ t, lang, shares = [] }) {
+  const [selectedShareId, setSelectedShareId] = useState("");
+  const selectedShare = shares.find((share) => share.share_id === selectedShareId);
+  if (selectedShare) {
+    const skills = Array.isArray(selectedShare.skills) ? selectedShare.skills : [];
+    const experiences = Array.isArray(selectedShare.experiences) ? selectedShare.experiences : [];
+    const isApplicationShare = selectedShare.share_type === "application";
+    return (
+      <section className="agent-page">
+        <div className="section-head">
+          <div>
+            <h2>{selectedShare.full_name}</h2>
+            <p>{selectedShare.email}</p>
+          </div>
+          <button className="secondary-button compact" type="button" onClick={() => setSelectedShareId("")}>{t("backToUsers")}</button>
+        </div>
+        <article className="panel agent-share-card">
+          <header className="agent-profile-head">
+            <Avatar user={{ full_name: selectedShare.full_name, avatar_url: selectedShare.avatar_url }} size="large" />
+            <div>
+              <h2>{selectedShare.full_name}</h2>
+              <p>{selectedShare.headline || "-"}</p>
+              <span>{selectedShare.user_location || "-"}</span>
+            </div>
+            <div className="agent-job-summary">
+              {isApplicationShare ? <>
+                <strong>{selectedShare.job_title}</strong>
+                <span>{t("jobId")}: #{selectedShare.job_number || "-"}</span>
+                <span>{selectedShare.company_name} · {selectedShare.salary_range || "-"}</span>
+                <b className={`status ${selectedShare.application_status}`}>{statusLabel(selectedShare.application_status, lang)}</b>
+              </> : <>
+                <strong>{t("profileDetails")}</strong>
+                <span>{t("sharedProfiles")}</span>
+              </>}
+            </div>
+          </header>
+          <div className="agent-share-grid">
+            <section>
+              <h3>{t("profileDetails")}</h3>
+              <dl className="profile-facts">
+                <div><dt>{t("phone")}</dt><dd>{selectedShare.phone || "-"}</dd></div>
+                <div><dt>{t("dob")}</dt><dd>{selectedShare.dob || "-"}</dd></div>
+                <div><dt>{t("location")}</dt><dd>{selectedShare.user_location || "-"}</dd></div>
+                <div><dt>{t("about")}</dt><dd>{selectedShare.about || "-"}</dd></div>
+              </dl>
+              <div className="chips">{skills.length ? skills.map((skill) => <span key={skill}>{skill}</span>) : <span>{t("skills")}</span>}</div>
+            </section>
+            <section>
+              <h3>{t("attachments")}</h3>
+              <DocumentLinks t={t} documents={selectedShare.documents} avatarUrl={selectedShare.avatar_url} />
+            </section>
+            <section>
+              <h3>{t("experience")}</h3>
+              {experiences.length ? experiences.map((item) => (
+                <div className="timeline-item" key={item.id}>
+                  <strong>{item.title}</strong>
+                  <span>{item.company}{item.location ? ` · ${item.location}` : ""}</span>
+                  {item.description && <p>{item.description}</p>}
+                </div>
+              )) : <p className="muted-text">{t("workTimeline")}</p>}
+            </section>
+            {isApplicationShare && <section>
+              <h3>{t("submittedAnswers")}</h3>
+              <ApplicationAnswers t={t} answers={selectedShare.screening_answers} />
+            </section>}
+          </div>
+        </article>
+      </section>
+    );
+  }
+
   return (
     <section className="agent-page">
       <div className="section-head">
@@ -1604,65 +1680,25 @@ function AgentWorkspace({ t, lang, shares = [] }) {
         </div>
         <span className="status">{shares.length}</span>
       </div>
-      {shares.length ? shares.map((share) => {
-        const skills = Array.isArray(share.skills) ? share.skills : [];
-        const experiences = Array.isArray(share.experiences) ? share.experiences : [];
-        const isApplicationShare = share.share_type === "application";
-        return (
-          <article className="panel agent-share-card" key={share.share_id}>
-            <header className="agent-profile-head">
-              <Avatar user={{ full_name: share.full_name, avatar_url: share.avatar_url }} size="large" />
-              <div>
-                <h2>{share.full_name}</h2>
-                <p>{share.headline || "-"}</p>
-                <span>{share.email}</span>
-              </div>
-              <div className="agent-job-summary">
-                {isApplicationShare ? <>
-                  <strong>{share.job_title}</strong>
-                  <span>{t("jobId")}: #{share.job_number || "-"}</span>
-                  <span>{share.company_name} · {share.salary_range || "-"}</span>
-                  <b className={`status ${share.application_status}`}>{statusLabel(share.application_status, lang)}</b>
-                </> : <>
-                  <strong>{t("profileDetails")}</strong>
-                  <span>{t("sharedProfiles")}</span>
-                </>}
-              </div>
-            </header>
-
-            <div className="agent-share-grid">
-              <section>
-                <h3>{t("profileDetails")}</h3>
-                <dl className="profile-facts">
-                  <div><dt>{t("phone")}</dt><dd>{share.phone || "-"}</dd></div>
-                  <div><dt>{t("dob")}</dt><dd>{share.dob || "-"}</dd></div>
-                  <div><dt>{t("location")}</dt><dd>{share.user_location || "-"}</dd></div>
-                  <div><dt>{t("about")}</dt><dd>{share.about || "-"}</dd></div>
-                </dl>
-                <div className="chips">{skills.length ? skills.map((skill) => <span key={skill}>{skill}</span>) : <span>{t("skills")}</span>}</div>
-              </section>
-              <section>
-                <h3>{t("attachments")}</h3>
-                <DocumentLinks t={t} documents={share.documents} avatarUrl={share.avatar_url} />
-              </section>
-              <section>
-                <h3>{t("experience")}</h3>
-                {experiences.length ? experiences.map((item) => (
-                  <div className="timeline-item" key={item.id}>
-                    <strong>{item.title}</strong>
-                    <span>{item.company}{item.location ? ` · ${item.location}` : ""}</span>
-                    {item.description && <p>{item.description}</p>}
-                  </div>
-                )) : <p className="muted-text">{t("workTimeline")}</p>}
-              </section>
-              {isApplicationShare && <section>
-                <h3>{t("submittedAnswers")}</h3>
-                <ApplicationAnswers t={t} answers={share.screening_answers} />
-              </section>}
-            </div>
-          </article>
-        );
-      }) : <article className="panel"><p>{t("noSharedProfiles")}</p></article>}
+      {shares.length ? <section className="panel">
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>{t("users")}</th><th>{t("headline")}</th><th>{t("job")}</th><th>{t("applicationStatus")}</th><th>{t("sharedProfiles")}</th></tr></thead>
+            <tbody>{shares.map((share) => {
+              const isApplicationShare = share.share_type === "application";
+              return (
+                <tr key={share.share_id}>
+                  <td><div className="table-user"><Avatar user={{ full_name: share.full_name, avatar_url: share.avatar_url }} size="small" /><div><button className="link-button" type="button" onClick={() => setSelectedShareId(share.share_id)}>{share.full_name}</button><span>{share.email}</span></div></div></td>
+                  <td>{share.headline || "-"}</td>
+                  <td>{isApplicationShare ? <><strong>{share.job_title}</strong><span>{share.company_name}</span></> : <span>{t("profileDetails")}</span>}</td>
+                  <td>{isApplicationShare ? <span className={`status ${share.application_status}`}>{statusLabel(share.application_status, lang)}</span> : <span className="status">{t("sharedProfiles")}</span>}</td>
+                  <td>{new Date(share.shared_at).toLocaleDateString()}</td>
+                </tr>
+              );
+            })}</tbody>
+          </table>
+        </div>
+      </section> : <article className="panel"><p>{t("noSharedProfiles")}</p></article>}
     </section>
   );
 }

@@ -1994,6 +1994,21 @@ td span {
   line-height: 1.2;
 }
 
+.link-button {
+  border: 0;
+  background: transparent;
+  color: var(--brand);
+  padding: 0;
+  font: inherit;
+  font-weight: 850;
+  cursor: pointer;
+  text-align: start;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}
+
 .status {
   padding: 4px 7px;
   font-size: 0.7rem;
