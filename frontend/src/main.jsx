@@ -106,10 +106,11 @@ const text = {
     allCategories: "All categories",
     salaryRange: "Salary range",
     allSalaries: "All salaries",
-    salaryUnder2k: "Under $2,000",
-    salary2to4k: "$2,000 - $4,000",
-    salary4to6k: "$4,000 - $6,000",
-    salary6kPlus: "$6,000+",
+    salary150to300: "$150 - $300",
+    salary300to500: "$300 - $500",
+    salary500to800: "$500 - $800",
+    salary800to1200: "$800 - $1,200",
+    salary1200Plus: "$1,200+",
     previous: "Previous",
     next: "Next",
     page: "Page",
@@ -281,10 +282,11 @@ const text = {
     allCategories: "كل الفئات",
     salaryRange: "نطاق الراتب",
     allSalaries: "كل الرواتب",
-    salaryUnder2k: "أقل من $2,000",
-    salary2to4k: "$2,000 - $4,000",
-    salary4to6k: "$4,000 - $6,000",
-    salary6kPlus: "$6,000+",
+    salary150to300: "$150 - $300",
+    salary300to500: "$300 - $500",
+    salary500to800: "$500 - $800",
+    salary800to1200: "$800 - $1,200",
+    salary1200Plus: "$1,200+",
     previous: "السابق",
     next: "التالي",
     page: "الصفحة",
@@ -426,10 +428,11 @@ function matchesSalaryRange(job, range) {
   if (!range) return true;
   const { min, max } = salaryBounds(job.salary_range);
   if (!max) return false;
-  if (range === "under-2000") return min < 2000;
-  if (range === "2000-4000") return max >= 2000 && min <= 4000;
-  if (range === "4000-6000") return max >= 4000 && min <= 6000;
-  if (range === "6000-plus") return max >= 6000;
+  if (range === "150-300") return max >= 150 && min <= 300;
+  if (range === "300-500") return max >= 300 && min <= 500;
+  if (range === "500-800") return max >= 500 && min <= 800;
+  if (range === "800-1200") return max >= 800 && min <= 1200;
+  if (range === "1200-plus") return max >= 1200;
   return true;
 }
 
@@ -1046,10 +1049,11 @@ function Jobs({ t, lang, jobs, applications, interviews = [], search = "", mode 
       <label>{t("salaryRange")}
         <select value={salaryRange} onChange={(event) => { setSalaryRange(event.target.value); setPage(1); }}>
           <option value="">{t("allSalaries")}</option>
-          <option value="under-2000">{t("salaryUnder2k")}</option>
-          <option value="2000-4000">{t("salary2to4k")}</option>
-          <option value="4000-6000">{t("salary4to6k")}</option>
-          <option value="6000-plus">{t("salary6kPlus")}</option>
+          <option value="150-300">{t("salary150to300")}</option>
+          <option value="300-500">{t("salary300to500")}</option>
+          <option value="500-800">{t("salary500to800")}</option>
+          <option value="800-1200">{t("salary800to1200")}</option>
+          <option value="1200-plus">{t("salary1200Plus")}</option>
         </select>
       </label>
     </div>
