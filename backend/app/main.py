@@ -39,6 +39,54 @@ app.add_middleware(
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 
+def ensure_runtime_schema():
+    for sql in (
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS dob DATE",
+        "ALTER TABLE pending_registrations ADD COLUMN IF NOT EXISTS phone TEXT",
+        "ALTER TABLE pending_registrations ADD COLUMN IF NOT EXISTS dob DATE",
+    ):
+        try:
+            execute(sql)
+        except Exception:
+            pass
+
+
+ensure_runtime_schema()
+
+
+PENDING_META_SEPARATOR = "\nRAWABET_PENDING_META:"
+
+
+def has_table_column(table_name: str, column_name: str) -> bool:
+    row = fetch_one(
+        """
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = %s AND column_name = %s
+        """,
+        (table_name, column_name),
+    )
+    return bool(row)
+
+
+def pack_pending_otp_hash(otp_hash: str, phone: str, dob: str | None) -> str:
+    metadata = json.dumps({"phone": phone, "dob": dob}, separators=(",", ":"))
+    return f"{otp_hash}{PENDING_META_SEPARATOR}{metadata}"
+
+
+def unpack_pending_otp_hash(value: str | None) -> tuple[str, dict]:
+    if not value:
+        return "", {}
+    otp_hash, separator, metadata = value.partition(PENDING_META_SEPARATOR)
+    if not separator:
+        return value, {}
+    try:
+        return otp_hash, json.loads(metadata)
+    except json.JSONDecodeError:
+        return otp_hash, {}
+
+
 class RegisterBody(BaseModel):
     fullName: str
     email: EmailStr
@@ -490,22 +538,40 @@ def register(body: RegisterBody):
     if existing:
         raise HTTPException(status_code=409, detail="Email already registered")
     otp = f"{secrets.randbelow(1000000):06d}"
-    execute(
-        """
-        INSERT INTO pending_registrations (full_name, email, phone, dob, password_hash, role, otp_hash, expires_at)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,NOW() + interval '15 minutes')
-        ON CONFLICT (email) DO UPDATE
-        SET full_name = EXCLUDED.full_name,
-            phone = EXCLUDED.phone,
-            dob = EXCLUDED.dob,
-            password_hash = EXCLUDED.password_hash,
-            role = EXCLUDED.role,
-            otp_hash = EXCLUDED.otp_hash,
-            expires_at = EXCLUDED.expires_at,
-            created_at = NOW()
-        """,
-        (body.fullName, body.email.lower(), body.phone, body.dob or None, hash_password(body.password), body.role, hash_password(otp)),
-    )
+    pending_has_contact_columns = has_table_column("pending_registrations", "phone") and has_table_column("pending_registrations", "dob")
+    otp_hash = hash_password(otp)
+    if pending_has_contact_columns:
+        execute(
+            """
+            INSERT INTO pending_registrations (full_name, email, phone, dob, password_hash, role, otp_hash, expires_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,NOW() + interval '15 minutes')
+            ON CONFLICT (email) DO UPDATE
+            SET full_name = EXCLUDED.full_name,
+                phone = EXCLUDED.phone,
+                dob = EXCLUDED.dob,
+                password_hash = EXCLUDED.password_hash,
+                role = EXCLUDED.role,
+                otp_hash = EXCLUDED.otp_hash,
+                expires_at = EXCLUDED.expires_at,
+                created_at = NOW()
+            """,
+            (body.fullName, body.email.lower(), body.phone, body.dob or None, hash_password(body.password), body.role, otp_hash),
+        )
+    else:
+        execute(
+            """
+            INSERT INTO pending_registrations (full_name, email, password_hash, role, otp_hash, expires_at)
+            VALUES (%s,%s,%s,%s,%s,NOW() + interval '15 minutes')
+            ON CONFLICT (email) DO UPDATE
+            SET full_name = EXCLUDED.full_name,
+                password_hash = EXCLUDED.password_hash,
+                role = EXCLUDED.role,
+                otp_hash = EXCLUDED.otp_hash,
+                expires_at = EXCLUDED.expires_at,
+                created_at = NOW()
+            """,
+            (body.fullName, body.email.lower(), hash_password(body.password), body.role, pack_pending_otp_hash(otp_hash, body.phone, body.dob or None)),
+        )
     email_sent, email_error = send_verification_email(body.email.lower(), otp)
     response = {"ok": True, "needsVerification": True, "emailSent": email_sent, "message": "Check your email for the verification code."}
     if not email_sent:
@@ -526,7 +592,8 @@ def verify_registration(body: VerifyRegistrationBody):
         """,
         (body.email.lower(),),
     )
-    if not pending or not verify_password(body.otp, pending["otp_hash"]):
+    otp_hash, pending_metadata = unpack_pending_otp_hash(pending["otp_hash"] if pending else None)
+    if not pending or not verify_password(body.otp, otp_hash):
         raise HTTPException(status_code=400, detail="Invalid or expired verification code")
     if fetch_one("SELECT id FROM users WHERE email = %s", (pending["email"],)):
         execute("DELETE FROM pending_registrations WHERE id = %s", (pending["id"],))
@@ -537,7 +604,14 @@ def verify_registration(body: VerifyRegistrationBody):
         VALUES (%s,%s,%s,%s,%s,%s,'active',true)
         RETURNING id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url
         """,
-        (pending["full_name"], pending["email"], pending["phone"], pending["dob"], pending["password_hash"], pending["role"]),
+        (
+            pending["full_name"],
+            pending["email"],
+            pending.get("phone") or pending_metadata.get("phone"),
+            pending.get("dob") or pending_metadata.get("dob"),
+            pending["password_hash"],
+            pending["role"],
+        ),
     )
     execute("INSERT INTO profiles (user_id, about, skills, profile_strength) VALUES (%s, '', '{}', 0)", (verified_user["id"],))
     sync_profile_strength(verified_user["id"])

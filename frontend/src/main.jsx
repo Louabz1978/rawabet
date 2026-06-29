@@ -1646,7 +1646,7 @@ function formatNumber(value = 0) {
 function assetUrl(path = "") {
   if (!path) return "";
   if (path.startsWith("http")) return path;
-  const apiBase = (import.meta.env.VITE_API_URL || "http://localhost:4000/api").replace(/\/api$/, "");
+  const apiBase = (import.meta.env.VITE_API_URL || "/api").replace(/\/api$/, "");
   return `${apiBase}${path}`;
 }
 
