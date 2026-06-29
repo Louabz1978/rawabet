@@ -109,6 +109,13 @@ button:disabled { cursor: not-allowed; opacity: 0.68; }
   outline: 0;
   background: transparent;
   color: var(--ink);
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+
+.search input::placeholder {
+  font-size: 0.8rem;
+  font-weight: 650;
 }
 
 .desktop-nav {
@@ -507,6 +514,58 @@ button.feature-card:hover {
   font-size: 0.68rem;
 }
 
+.profile-summary-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.skill-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.skill-summary span {
+  padding: 6px 9px;
+  color: var(--brand-strong);
+  background: var(--brand-soft);
+  border-radius: 999px;
+  font-size: 0.73rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.experience-summary article {
+  padding: 8px 9px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.experience-summary strong,
+.experience-summary span {
+  display: block;
+}
+
+.experience-summary strong {
+  color: var(--text);
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+.experience-summary span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.summary-divider {
+  height: 1px;
+  margin: 14px 0 10px;
+  background: var(--border);
+}
+
 .side-stat {
   display: block;
   margin-bottom: 8px;
@@ -889,6 +948,13 @@ textarea { min-height: 110px; resize: vertical; }
 
 .job-card h2 { margin: 0 0 4px; font-size: 1.1rem; }
 .job-card p { margin: 0; }
+.job-public-id {
+  display: inline-block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
 .job-actions {
   display: flex;
   gap: 9px;

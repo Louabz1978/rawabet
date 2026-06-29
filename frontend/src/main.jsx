@@ -24,8 +24,9 @@ const text = {
     profile: "Profile",
     jobs: "Jobs",
     admin: "Admin",
-    search: "Search jobs or companies",
+    search: "Search job, company, or job number",
     completeProfile: "Complete profile",
+    editProfileAction: "Edit profile",
     workspace: "Workspace",
     profileViews: "Jobs applied",
     profileStrength: "Profile strength",
@@ -89,7 +90,7 @@ const text = {
     more: "More",
     upcomingInterviews: "Upcoming interviews",
     clearChat: "Clear chat",
-    adminPosts: "Admin posts",
+    adminPosts: "Recent Added Jobs",
     noAdminPosts: "No admin posts yet",
     apply: "Apply",
     adminDashboard: "Admin dashboard",
@@ -198,8 +199,9 @@ const text = {
     profile: "الملف",
     jobs: "الوظائف",
     admin: "الإدارة",
-    search: "ابحث عن الوظيفة أو اسم الشركة",
+    search: "ابحث عن الوظيفة أو الشركة أو رقم الوظيفة",
     completeProfile: "أكمل الملف",
+    editProfileAction: "تعديل الملف",
     workspace: "مساحة العمل",
     profileViews: "عدد الوظائف المقدمة",
     profileStrength: "قوة الملف",
@@ -263,7 +265,7 @@ const text = {
     more: "المزيد",
     upcomingInterviews: "المقابلات القادمة",
     clearChat: "مسح المحادثة",
-    adminPosts: "منشورات الإدارة",
+    adminPosts: "أحدث الوظائف المضافة",
     noAdminPosts: "لا توجد منشورات من الإدارة بعد",
     apply: "تقديم",
     adminDashboard: "لوحة تحكم الإدارة",
@@ -706,6 +708,9 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
 function Home({ t, lang, me, jobs, setView, openJob, openAppliedJobs, openBuilder }) {
   const strength = Number(me.profile?.profile_strength ?? 0);
   const applications = me.applications || [];
+  const priorityApplications = applications.filter((item) => ["interview", "review"].includes(normalizeStatusValue(item.status)));
+  const skills = Array.isArray(me.profile?.skills) ? me.profile.skills.filter(Boolean) : [];
+  const experiences = me.experiences || [];
   const interviews = me.interviews || [];
   const scheduledJobIds = new Set(interviews.map((item) => item.job_id).filter(Boolean));
   const orderedJobs = [...jobs].sort((a, b) => Number(scheduledJobIds.has(b.id)) - Number(scheduledJobIds.has(a.id))).slice(0, 20);
@@ -717,7 +722,7 @@ function Home({ t, lang, me, jobs, setView, openJob, openAppliedJobs, openBuilde
           <div className="avatar-wrap"><Avatar user={me.user} /><span className="online-dot" /></div>
           <h2>{me.user.fullName}</h2>
           <p>{me.user.headline}</p>
-          <button className="secondary-button" onClick={openBuilder}>{t("editProfile")}</button>
+          <button className="secondary-button" onClick={openBuilder}>{t("editProfileAction")}</button>
         </section>
         {!!interviews.length && <section className="panel side-panel interview-panel">
           <h2>{t("upcomingInterviews")}</h2>
@@ -753,15 +758,18 @@ function Home({ t, lang, me, jobs, setView, openJob, openAppliedJobs, openBuilde
         <section className="panel side-panel">
           <h2>{t("profileViews")}</h2>
           <strong className="side-stat">{formatNumber(applications.length)}</strong>
-          <div className="job-strip side-job-strip">{applications.length ? applications.slice(0, 5).map((item) => <span className="application-chip" key={item.id}>{item.title}<b className={`status ${item.status}`}>{statusLabel(item.status, lang)}</b></span>) : <span>{t("noAppliedJobs")}</span>}</div>
+          <div className="job-strip side-job-strip">{priorityApplications.length ? priorityApplications.map((item) => <span className="application-chip" key={item.id}>{item.title}<b className={`status ${normalizeStatusValue(item.status)}`}>{statusLabel(normalizeStatusValue(item.status), lang)}</b></span>) : <span>{t("noAppliedJobs")}</span>}</div>
           {!!applications.length && <button className="panel-link more-link" type="button" onClick={openAppliedJobs}><span>↗</span>{t("more")}</button>}
         </section>
         <section className="panel side-panel">
-          <h2>{t("completeProfile")}</h2>
-          <div className="side-feature-grid">
-            <button className="feature-card" type="button" onClick={openBuilder}><strong>{t("resumeUpload")}</strong><span>{t("resumeUploadBody")}</span></button>
-            <button className="feature-card" type="button" onClick={openBuilder}><strong>{t("verifiedCerts")}</strong><span>{t("verifiedCertsBody")}</span></button>
-            <button className="feature-card" type="button" onClick={openBuilder}><strong>{t("workTimeline")}</strong><span>{t("workTimelineBody")}</span></button>
+          <h2>{t("skills")}</h2>
+          <div className="profile-summary-list skill-summary">
+            {skills.length ? skills.map((skill) => <span key={skill}>{skill}</span>) : <button className="panel-link" type="button" onClick={openBuilder}>{t("completeProfile")}</button>}
+          </div>
+          <div className="summary-divider" />
+          <h2>{t("workTimeline")}</h2>
+          <div className="profile-summary-list experience-summary">
+            {experiences.length ? experiences.map((item) => <article key={item.id}><strong>{item.title}</strong><span>{item.company}</span></article>) : <button className="panel-link" type="button" onClick={openBuilder}>{t("addExperience")}</button>}
           </div>
         </section>
       </aside>
@@ -991,7 +999,7 @@ function Jobs({ t, lang, jobs, applications, interviews = [], search = "", mode 
   const visibleJobs = sourceJobs.filter((job) => {
     const matchesSearch = mode === "applied"
       ? (!companySearch.trim() || `${job.company_name || ""}`.toLowerCase().includes(companySearch.trim().toLowerCase()))
-      : (!normalizedSearch || `${job.title || ""} ${job.company_name || ""}`.toLowerCase().includes(normalizedSearch));
+      : (!normalizedSearch || `${job.job_number || ""} #${job.job_number || ""} ${job.title || ""} ${job.company_name || ""}`.toLowerCase().includes(normalizedSearch));
     const matchesCategory = !category || (job.category || "General") === category;
     const matchesSalary = matchesSalaryRange(job, salaryRange);
     const matchesStatus = mode !== "applied" || !statusFilter || job.applicationStatus === statusFilter;
@@ -1053,6 +1061,7 @@ function Jobs({ t, lang, jobs, applications, interviews = [], search = "", mode 
     return <article id={`job-${job.id}`} className={isScheduled || openJobId === job.id ? "job-card panel highlighted-job" : "job-card panel"} key={job.id}>
       <div>
         <h2>{job.title}</h2>
+        <small className="job-public-id">{t("jobId")}: #{job.job_number || "-"}</small>
         <p>{job.company_name} · {jobCategoryLabel(job.category, lang)} · {job.location}</p>
         <span>{job.salary_range}</span>
         {isScheduled && <small className="application-status status interview">{t("upcomingInterviews")}</small>}
@@ -1064,6 +1073,7 @@ function Jobs({ t, lang, jobs, applications, interviews = [], search = "", mode 
       </div>
       {isOpen && <section className="job-details">
         <dl>
+          <div><dt>{t("jobId")}</dt><dd>#{job.job_number || "-"}</dd></div>
           <div><dt>{t("company")}</dt><dd>{job.company_name}</dd></div>
           <div><dt>{t("category")}</dt><dd>{jobCategoryLabel(job.category, lang)}</dd></div>
           <div><dt>{t("location")}</dt><dd>{job.location}</dd></div>
