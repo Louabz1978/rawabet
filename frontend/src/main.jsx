@@ -188,6 +188,7 @@ const text = {
     recipientEmail: "Recipient email",
     interviewTime: "Interview time",
     upcomingAdminInterviews: "Upcoming interviews",
+    interviewOutcome: "Interview outcome",
     channel: "Channel",
     notes: "Notes",
     language: "ع"
@@ -376,6 +377,7 @@ const text = {
     recipientEmail: "بريد المستلم",
     interviewTime: "وقت المقابلة",
     upcomingAdminInterviews: "المقابلات القادمة",
+    interviewOutcome: "نتيجة المقابلة",
     channel: "القناة",
     notes: "ملاحظات",
     language: "EN"
@@ -417,6 +419,7 @@ const STATUS_LABELS = {
 };
 
 const APPLICATION_STATUSES = ["submitted", "review", "interview", "accepted", "rejected"];
+const INTERVIEW_OUTCOME_STATUSES = ["accepted", "rejected"];
 const USER_STATUSES = ["active", "verified", "review", "suspended"];
 const JOB_STATUSES = ["active", "paused", "closed"];
 const PLAN_OPTIONS = ["free", "premium"];
@@ -1370,6 +1373,12 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
       setSchedulingInterview(false);
     }
   }
+  async function updateInterviewStatus(item, status) {
+    const nextStatus = normalizeStatusValue(status);
+    if (!nextStatus) return;
+    await api(`/admin/interviews/${item.id}`, { method: "PATCH", body: JSON.stringify({ status: nextStatus }) });
+    await reload();
+  }
   if (!admin) return null;
   return (
     <div className="admin-page">
@@ -1548,6 +1557,10 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
                   <div><strong>{item.full_name}</strong><span>{item.email}</span></div>
                   <div><strong>{item.job_title || t("job")}</strong><span>{item.company_name || "-"}</span></div>
                   <div><strong>{new Date(item.scheduled_at).toLocaleString()}</strong><span>{item.channel}</span></div>
+                  <select className="action-select" defaultValue="" onChange={(e) => { updateInterviewStatus(item, e.target.value); e.target.value = ""; }}>
+                    <option value="">{t("interviewOutcome")}</option>
+                    {INTERVIEW_OUTCOME_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}
+                  </select>
                 </article>) : <p>{t("noAppliedJobs")}</p>}
               </div>
             </section>
@@ -1798,11 +1811,14 @@ function AnalyticsList({ title, data = [] }) {
 }
 
 function Avatar({ user, size = "" }) {
+  const [failed, setFailed] = useState(false);
   const className = `avatar ${size}`.trim();
   const avatarUrl = user.avatarUrl || user.avatar_url;
   const src = avatarUrl ? assetUrl(avatarUrl) : "";
-  if (src) return <img className={className} src={src} alt={user.fullName || "Profile"} />;
-  return <div className={className}>{initials(user.fullName || user.full_name)}</div>;
+  const name = user.fullName || user.full_name || "";
+  useEffect(() => setFailed(false), [src]);
+  if (src && !failed) return <img className={className} src={src} alt={name || "Profile"} onError={() => setFailed(true)} />;
+  return <div className={className}>{initials(name)}</div>;
 }
 
 function initials(name = "") {

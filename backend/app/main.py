@@ -45,8 +45,17 @@ def ensure_runtime_schema():
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS dob DATE",
         "ALTER TABLE pending_registrations ADD COLUMN IF NOT EXISTS phone TEXT",
         "ALTER TABLE pending_registrations ADD COLUMN IF NOT EXISTS dob DATE",
+        "CREATE SEQUENCE IF NOT EXISTS jobs_job_number_seq START WITH 1001",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS job_number INTEGER",
+        "UPDATE jobs SET job_number = nextval('jobs_job_number_seq') WHERE job_number IS NULL",
+        "SELECT setval('jobs_job_number_seq', GREATEST(1000, COALESCE((SELECT MAX(job_number) FROM jobs), 1000)))",
+        "ALTER TABLE jobs ALTER COLUMN job_number SET DEFAULT nextval('jobs_job_number_seq')",
+        "ALTER SEQUENCE jobs_job_number_seq OWNED BY jobs.job_number",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_job_number ON jobs(job_number)",
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS screening_questions JSONB NOT NULL DEFAULT '[]'::jsonb",
         "ALTER TABLE applications ADD COLUMN IF NOT EXISTS screening_answers JSONB NOT NULL DEFAULT '[]'::jsonb",
+        "ALTER TABLE interviews DROP CONSTRAINT IF EXISTS interviews_status_check",
+        "ALTER TABLE interviews ADD CONSTRAINT interviews_status_check CHECK (status IN ('scheduled', 'completed', 'cancelled', 'accepted', 'rejected'))",
         """
         CREATE TABLE IF NOT EXISTS agent_profile_shares (
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -181,6 +190,10 @@ class InterviewBody(BaseModel):
 
 
 class ApplicationStatusBody(BaseModel):
+    status: str
+
+
+class InterviewStatusBody(BaseModel):
     status: str
 
 
@@ -677,10 +690,11 @@ def me(user: Annotated[dict, Depends(current_user)]):
         """,
         (user["id"],),
     )
+    job_number_select = "j.job_number" if jobs_have_job_number_column() else "NULL::integer AS job_number"
     applications = fetch_all(
-        """
+        f"""
         SELECT a.id, a.status, a.created_at, COALESCE(a.screening_answers, '[]'::jsonb) AS screening_answers,
-          j.id AS job_id, j.job_number, j.company_name, j.title, j.category, j.location, j.type, j.salary_range, j.description,
+          j.id AS job_id, {job_number_select}, j.company_name, j.title, j.category, j.location, j.type, j.salary_range, j.description,
           j.status AS job_status, COALESCE(j.screening_questions, '[]'::jsonb) AS screening_questions
         FROM applications a
         JOIN jobs j ON j.id = a.job_id
@@ -904,8 +918,9 @@ def share_application_with_agent(body: ApplicationShareBody, user: Annotated[dic
 
 @app.get("/api/agent/shares")
 def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
+    job_number_select = "j.job_number" if jobs_have_job_number_column() else "NULL::integer AS job_number"
     return fetch_all(
-        """
+        f"""
         SELECT
           s.id AS share_id,
           s.created_at AS shared_at,
@@ -922,9 +937,9 @@ def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
           u.location AS user_location,
           u.avatar_url,
           p.about,
-          COALESCE(p.skills, '{}') AS skills,
+          COALESCE(p.skills, '{{}}') AS skills,
           j.id AS job_id,
-          j.job_number,
+          {job_number_select},
           j.title AS job_title,
           j.company_name,
           j.location AS job_location,
@@ -1343,6 +1358,30 @@ def list_admin_interviews(user: Annotated[dict, Depends(admin_user)]):
         ORDER BY i.scheduled_at ASC
         """
     )
+
+
+@app.patch("/api/admin/interviews/{interview_id}")
+def update_admin_interview(interview_id: UUID, body: InterviewStatusBody, user: Annotated[dict, Depends(admin_user)]):
+    allowed = {"scheduled", "completed", "cancelled", "accepted", "rejected"}
+    if body.status not in allowed:
+        raise HTTPException(status_code=400, detail="Invalid interview status")
+    interview = execute(
+        """
+        UPDATE interviews
+        SET status = %s
+        WHERE id = %s
+        RETURNING id, user_id, job_id, status
+        """,
+        (body.status, interview_id),
+    )
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+    if body.status in {"accepted", "rejected"} and interview["job_id"]:
+        execute(
+            "UPDATE applications SET status = %s WHERE user_id = %s AND job_id = %s",
+            (body.status, interview["user_id"], interview["job_id"]),
+        )
+    return {"ok": True}
 
 
 @app.get("/api/admin/support/threads")

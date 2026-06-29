@@ -165,9 +165,14 @@ CREATE TABLE IF NOT EXISTS interviews (
   scheduled_at TIMESTAMPTZ NOT NULL,
   channel TEXT NOT NULL DEFAULT 'Video call',
   notes TEXT,
-  status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'completed', 'cancelled')),
+  status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'completed', 'cancelled', 'accepted', 'rejected')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE interviews DROP CONSTRAINT IF EXISTS interviews_status_check;
+ALTER TABLE interviews
+ADD CONSTRAINT interviews_status_check
+CHECK (status IN ('scheduled', 'completed', 'cancelled', 'accepted', 'rejected'));
 
 CREATE TABLE IF NOT EXISTS support_messages (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
