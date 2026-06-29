@@ -41,4 +41,10 @@ API docs: http://localhost:4000/docs
 ## Notes
 
 The backend reads `backend/.env`. The local database connection is configured for PostgreSQL on this Mac. Uploaded files are stored under `backend/uploads`.
+
+## EC2/Nginx deployment
+
+Deployment helpers are in `deploy/`.
+
+After pulling on EC2, copy `deploy/nginx/rawabet.conf` to `/etc/nginx/conf.d/rawabet.conf`, rebuild the frontend, reload Nginx, and restart the backend. See `deploy/EC2_DEPLOY.md`.
 # rawabet
