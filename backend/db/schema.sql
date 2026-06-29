@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
   dob DATE,
   password_hash TEXT NOT NULL,
   email_verified BOOLEAN NOT NULL DEFAULT true,
-  role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('member', 'recruiter', 'company', 'admin')),
+  role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('member', 'recruiter', 'company', 'admin', 'agent')),
   plan TEXT NOT NULL DEFAULT 'free',
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'verified', 'review', 'suspended')),
   headline TEXT,
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS pending_registrations (
   phone TEXT NOT NULL,
   dob DATE NOT NULL,
   password_hash TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('member', 'recruiter', 'company', 'admin')),
+  role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('member', 'recruiter', 'company', 'admin', 'agent')),
   otp_hash TEXT NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   type TEXT NOT NULL DEFAULT 'Full-time',
   salary_range TEXT,
   description TEXT,
+  screening_questions JSONB NOT NULL DEFAULT '[]'::jsonb,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'closed')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -114,6 +115,7 @@ SELECT setval('jobs_job_number_seq', GREATEST(1000, COALESCE((SELECT MAX(job_num
 ALTER TABLE jobs ALTER COLUMN job_number SET DEFAULT nextval('jobs_job_number_seq');
 ALTER SEQUENCE jobs_job_number_seq OWNED BY jobs.job_number;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'General';
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS screening_questions JSONB NOT NULL DEFAULT '[]'::jsonb;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_job_number ON jobs(job_number);
 
 CREATE TABLE IF NOT EXISTS applications (
@@ -121,8 +123,20 @@ CREATE TABLE IF NOT EXISTS applications (
   job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   status TEXT NOT NULL DEFAULT 'submitted',
+  screening_answers JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(job_id, user_id)
+);
+
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS screening_answers JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+CREATE TABLE IF NOT EXISTS agent_profile_shares (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  agent_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  application_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+  shared_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(agent_id, application_id)
 );
 
 CREATE TABLE IF NOT EXISTS profile_views (

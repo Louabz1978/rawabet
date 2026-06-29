@@ -1002,6 +1002,83 @@ textarea { min-height: 110px; resize: vertical; }
   white-space: pre-wrap;
 }
 
+.job-question-preview {
+  display: grid;
+  gap: 6px;
+}
+
+.job-question-preview span {
+  display: block;
+  padding: 7px 9px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.job-apply-questions {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.job-apply-questions h3 {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.job-apply-questions label {
+  display: grid;
+  gap: 5px;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.job-apply-questions textarea {
+  min-height: 74px;
+  resize: vertical;
+}
+
+.answer-details {
+  min-width: 150px;
+}
+
+.answer-details summary {
+  color: var(--brand);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.answer-details div {
+  display: grid;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.answer-details article {
+  display: grid;
+  gap: 3px;
+  padding: 7px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.answer-details strong {
+  font-size: 0.74rem;
+}
+
+.answer-details span,
+.muted-text {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
 .admin-heading {
   display: flex;
   align-items: end;
@@ -1989,6 +2066,98 @@ td span {
   margin-bottom: 0;
 }
 
+.agent-page {
+  display: grid;
+  gap: 14px;
+}
+
+.agent-page > .section-head {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.agent-share-card {
+  display: grid;
+  gap: 16px;
+}
+
+.agent-profile-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(260px, 0.8fr);
+  gap: 16px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 14px;
+}
+
+.agent-profile-head h2 {
+  margin: 0 0 4px;
+  font-size: 1.08rem;
+}
+
+.agent-profile-head p,
+.agent-profile-head span {
+  display: block;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.agent-job-summary {
+  justify-self: end;
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  text-align: end;
+}
+
+.agent-job-summary strong {
+  font-size: 0.94rem;
+}
+
+.agent-share-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.agent-share-grid section {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfdff;
+}
+
+.agent-share-grid h3 {
+  margin: 0 0 10px;
+  font-size: 0.88rem;
+}
+
+.profile-facts {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.profile-facts div {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.profile-facts dt,
+.profile-facts dd {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.profile-facts dt {
+  color: var(--muted);
+  font-weight: 800;
+}
+
 .row-actions {
   gap: 6px;
 }
@@ -2003,6 +2172,44 @@ td span {
   .analytics-grid { grid-template-columns: 1fr; }
 }
 
+@media (max-width: 900px) {
+  .topbar {
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    padding: 8px 12px;
+  }
+
+  .desktop-nav,
+  .top-actions .primary-button {
+    display: none;
+  }
+
+  .brand-mark {
+    width: 46px;
+    height: 46px;
+  }
+
+  .brand-wordmark {
+    width: 122px;
+  }
+
+  .top-actions {
+    gap: 7px;
+  }
+
+  .top-actions .compact {
+    min-height: 34px;
+    padding: 0 12px;
+    font-size: 0.78rem;
+  }
+
+  .icon-button {
+    width: 36px;
+    height: 36px;
+    font-size: 0.78rem;
+  }
+}
+
 @media (max-width: 760px) {
   .app-shell { padding-bottom: 76px; }
   .topbar { grid-template-columns: 1fr auto; gap: 10px; padding: 8px 12px; }
@@ -2010,6 +2217,15 @@ td span {
   main { margin: 14px auto; padding: 0 12px; }
   .layout-grid, .admin-console, .admin-layout, .admin-profile-grid, .job-admin-grid, .form-grid, .upload-grid, .metric-grid, .login-stage, .profile-hero {
     grid-template-columns: 1fr;
+  }
+  .agent-profile-head,
+  .agent-share-grid,
+  .profile-facts div {
+    grid-template-columns: 1fr;
+  }
+  .agent-job-summary {
+    justify-items: start;
+    text-align: start;
   }
   .login-page { width: min(100%, calc(100vw - 24px)); padding: 18px 18px 28px; }
   .login-top { margin-bottom: 24px; }

@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr
 
-from .auth import admin_user, create_token, current_user, hash_password, public_user, verify_password
+from .auth import admin_user, agent_user, create_token, current_user, hash_password, public_user, verify_password
 from .config import OPENAI_API_KEY, SMTP_FROM, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USER, UPLOAD_DIR
 from .db import execute, fetch_all, fetch_one
 
@@ -45,6 +45,18 @@ def ensure_runtime_schema():
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS dob DATE",
         "ALTER TABLE pending_registrations ADD COLUMN IF NOT EXISTS phone TEXT",
         "ALTER TABLE pending_registrations ADD COLUMN IF NOT EXISTS dob DATE",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS screening_questions JSONB NOT NULL DEFAULT '[]'::jsonb",
+        "ALTER TABLE applications ADD COLUMN IF NOT EXISTS screening_answers JSONB NOT NULL DEFAULT '[]'::jsonb",
+        """
+        CREATE TABLE IF NOT EXISTS agent_profile_shares (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          agent_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          application_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+          shared_by UUID REFERENCES users(id) ON DELETE SET NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE(agent_id, application_id)
+        )
+        """,
     ):
         try:
             execute(sql)
@@ -153,6 +165,11 @@ class JobBody(BaseModel):
     salaryRange: str | None = None
     description: str | None = None
     status: str = "active"
+    screeningQuestions: list[str] = []
+
+
+class ApplyBody(BaseModel):
+    answers: list[dict[str, str]] = []
 
 
 class InterviewBody(BaseModel):
@@ -165,6 +182,11 @@ class InterviewBody(BaseModel):
 
 class ApplicationStatusBody(BaseModel):
     status: str
+
+
+class ApplicationShareBody(BaseModel):
+    applicationId: UUID
+    agentId: UUID
 
 
 class SupportMessageBody(BaseModel):
@@ -464,7 +486,8 @@ def list_jobs_with_number(active_only: bool = False):
     if jobs_have_job_number_column():
         return fetch_all(
             f"""
-            SELECT id, job_number, company_name, title, category, location, type, salary_range, description, status, created_at
+            SELECT id, job_number, company_name, title, category, location, type, salary_range, description, status, created_at,
+                   COALESCE(screening_questions, '[]'::jsonb) AS screening_questions
             FROM jobs
             {outer_where}
             ORDER BY created_at DESC
@@ -476,7 +499,8 @@ def list_jobs_with_number(active_only: bool = False):
         FROM (
           SELECT id,
             (1000 + ROW_NUMBER() OVER (ORDER BY created_at ASC))::int AS job_number,
-            company_name, title, category, location, type, salary_range, description, status, created_at
+            company_name, title, category, location, type, salary_range, description, status, created_at,
+            COALESCE(screening_questions, '[]'::jsonb) AS screening_questions
           FROM jobs
         ) numbered_jobs
         {outer_where}
@@ -655,7 +679,9 @@ def me(user: Annotated[dict, Depends(current_user)]):
     )
     applications = fetch_all(
         """
-        SELECT a.id, a.status, a.created_at, j.id AS job_id, j.company_name, j.title, j.category, j.location, j.type, j.salary_range, j.description, j.status AS job_status
+        SELECT a.id, a.status, a.created_at, COALESCE(a.screening_answers, '[]'::jsonb) AS screening_answers,
+          j.id AS job_id, j.job_number, j.company_name, j.title, j.category, j.location, j.type, j.salary_range, j.description,
+          j.status AS job_status, COALESCE(j.screening_questions, '[]'::jsonb) AS screening_questions
         FROM applications a
         JOIN jobs j ON j.id = a.job_id
         WHERE a.user_id = %s
@@ -797,8 +823,25 @@ def list_admin_jobs(user: Annotated[dict, Depends(admin_user)]):
 
 
 @app.post("/api/jobs/{job_id}/apply", status_code=201)
-def apply_to_job(job_id: UUID, user: Annotated[dict, Depends(current_user)]):
-    execute("INSERT INTO applications (job_id, user_id) VALUES (%s,%s) ON CONFLICT (job_id, user_id) DO NOTHING", (job_id, user["id"]))
+def apply_to_job(job_id: UUID, body: ApplyBody, user: Annotated[dict, Depends(current_user)]):
+    job = fetch_one("SELECT id, COALESCE(screening_questions, '[]'::jsonb) AS screening_questions FROM jobs WHERE id = %s AND status = 'active'", (job_id,))
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    questions = job.get("screening_questions") or []
+    answers_by_question = {str(item.get("question", "")).strip(): str(item.get("answer", "")).strip() for item in body.answers}
+    missing = [question for question in questions if not answers_by_question.get(str(question).strip())]
+    if missing:
+        raise HTTPException(status_code=400, detail="Please answer all application questions")
+    answers = [{"question": str(question), "answer": answers_by_question.get(str(question).strip(), "")} for question in questions]
+    execute(
+        """
+        INSERT INTO applications (job_id, user_id, screening_answers)
+        VALUES (%s,%s,%s::jsonb)
+        ON CONFLICT (job_id, user_id) DO UPDATE
+        SET screening_answers = EXCLUDED.screening_answers
+        """,
+        (job_id, user["id"], json.dumps(answers)),
+    )
     return {"ok": True}
 
 
@@ -807,9 +850,10 @@ def list_admin_applications(user: Annotated[dict, Depends(admin_user)]):
     return fetch_all(
         """
         SELECT
-          a.id, a.status, a.created_at,
+          a.id, a.status, a.created_at, COALESCE(a.screening_answers, '[]'::jsonb) AS screening_answers,
           u.id AS user_id, u.full_name, u.email, u.headline, u.avatar_url,
-          j.id AS job_id, j.title AS job_title, j.company_name, j.location
+          j.id AS job_id, j.title AS job_title, j.company_name, j.location,
+          COALESCE(j.screening_questions, '[]'::jsonb) AS screening_questions
         FROM applications a
         JOIN users u ON u.id = a.user_id
         JOIN jobs j ON j.id = a.job_id
@@ -836,6 +880,94 @@ def update_admin_application(application_id: UUID, body: ApplicationStatusBody, 
             (updated["user_id"], updated["job_id"]),
         )
     return {"ok": True}
+
+
+@app.post("/api/admin/application-shares", status_code=201)
+def share_application_with_agent(body: ApplicationShareBody, user: Annotated[dict, Depends(admin_user)]):
+    agent = fetch_one("SELECT id FROM users WHERE id = %s AND role = 'agent'", (body.agentId,))
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    application = fetch_one("SELECT id FROM applications WHERE id = %s", (body.applicationId,))
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    return execute(
+        """
+        INSERT INTO agent_profile_shares (agent_id, application_id, shared_by)
+        VALUES (%s,%s,%s)
+        ON CONFLICT (agent_id, application_id) DO UPDATE
+        SET shared_by = EXCLUDED.shared_by, created_at = NOW()
+        RETURNING *
+        """,
+        (body.agentId, body.applicationId, user["id"]),
+    )
+
+
+@app.get("/api/agent/shares")
+def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
+    return fetch_all(
+        """
+        SELECT
+          s.id AS share_id,
+          s.created_at AS shared_at,
+          a.id AS application_id,
+          a.status AS application_status,
+          a.created_at AS applied_at,
+          COALESCE(a.screening_answers, '[]'::jsonb) AS screening_answers,
+          u.id AS user_id,
+          u.full_name,
+          u.email,
+          u.phone,
+          u.dob,
+          u.headline,
+          u.location AS user_location,
+          u.avatar_url,
+          p.about,
+          COALESCE(p.skills, '{}') AS skills,
+          j.id AS job_id,
+          j.job_number,
+          j.title AS job_title,
+          j.company_name,
+          j.location AS job_location,
+          j.salary_range,
+          COALESCE(j.screening_questions, '[]'::jsonb) AS screening_questions,
+          COALESCE(docs.documents, '[]'::jsonb) AS documents,
+          COALESCE(exps.experiences, '[]'::jsonb) AS experiences
+        FROM agent_profile_shares s
+        JOIN applications a ON a.id = s.application_id
+        JOIN users u ON u.id = a.user_id
+        LEFT JOIN profiles p ON p.user_id = u.id
+        JOIN jobs j ON j.id = a.job_id
+        LEFT JOIN LATERAL (
+          SELECT jsonb_agg(jsonb_build_object(
+            'id', d.id,
+            'kind', d.kind,
+            'file_name', d.file_name,
+            'verification_status', d.verification_status,
+            'created_at', d.created_at,
+            'file_url', '/uploads/' || split_part(d.file_path, '/', array_length(string_to_array(d.file_path, '/'), 1))
+          ) ORDER BY d.created_at DESC) AS documents
+          FROM documents d
+          WHERE d.user_id = u.id
+        ) docs ON true
+        LEFT JOIN LATERAL (
+          SELECT jsonb_agg(jsonb_build_object(
+            'id', e.id,
+            'title', e.title,
+            'company', e.company,
+            'location', e.location,
+            'start_date', e.start_date,
+            'end_date', e.end_date,
+            'is_current', e.is_current,
+            'description', e.description
+          ) ORDER BY e.start_date DESC NULLS LAST) AS experiences
+          FROM experiences e
+          WHERE e.user_id = u.id
+        ) exps ON true
+        WHERE s.agent_id = %s
+        ORDER BY s.created_at DESC
+        """,
+        (user["id"],),
+    )
 
 
 @app.get("/api/admin/overview")
@@ -1155,18 +1287,20 @@ def delete_admin_user(user_id: UUID, user: Annotated[dict, Depends(admin_user)])
 
 @app.post("/api/admin/jobs", status_code=201)
 def create_admin_job(body: JobBody, user: Annotated[dict, Depends(admin_user)]):
+    questions = [question.strip() for question in body.screeningQuestions if question.strip()]
     return execute(
         """
-        INSERT INTO jobs (company_name, title, category, location, type, salary_range, description, status)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+        INSERT INTO jobs (company_name, title, category, location, type, salary_range, description, status, screening_questions)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb)
         RETURNING *
         """,
-        (body.companyName, body.title, body.category, body.location, body.type, body.salaryRange, body.description, body.status),
+        (body.companyName, body.title, body.category, body.location, body.type, body.salaryRange, body.description, body.status, json.dumps(questions)),
     )
 
 
 @app.patch("/api/admin/jobs/{job_id}")
 def update_admin_job(job_id: UUID, body: JobBody, user: Annotated[dict, Depends(admin_user)]):
+    questions = [question.strip() for question in body.screeningQuestions if question.strip()]
     updated = execute(
         """
         UPDATE jobs
@@ -1177,11 +1311,12 @@ def update_admin_job(job_id: UUID, body: JobBody, user: Annotated[dict, Depends(
             type = %s,
             salary_range = %s,
             description = %s,
-            status = %s
+            status = %s,
+            screening_questions = %s::jsonb
         WHERE id = %s
         RETURNING *
         """,
-        (body.companyName, body.title, body.category, body.location, body.type, body.salaryRange, body.description, body.status, job_id),
+        (body.companyName, body.title, body.category, body.location, body.type, body.salaryRange, body.description, body.status, json.dumps(questions), job_id),
     )
     if not updated:
         raise HTTPException(status_code=404, detail="Job not found")

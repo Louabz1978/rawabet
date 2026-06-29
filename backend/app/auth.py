@@ -63,3 +63,9 @@ def admin_user(user: Annotated[dict, Depends(current_user)]) -> dict:
     if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
+
+
+def agent_user(user: Annotated[dict, Depends(current_user)]) -> dict:
+    if user["role"] != "agent":
+        raise HTTPException(status_code=403, detail="Agent access required")
+    return user
