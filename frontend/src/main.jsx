@@ -1234,6 +1234,7 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
       body: JSON.stringify({
         fullName: selectedProfile.user.full_name,
         email: selectedProfile.user.email,
+        newPassword: selectedProfile.user.newPassword || undefined,
         phone: selectedProfile.user.phone,
         dob: selectedProfile.user.dob,
         headline: selectedProfile.user.headline,
@@ -1245,6 +1246,7 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
         skills: typeof selectedProfile.profile?.skills === "string" ? selectedProfile.profile.skills.split(",").map((item) => item.trim()).filter(Boolean) : selectedProfile.profile?.skills || []
       })
     });
+    setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, newPassword: "" } });
     await refreshSelectedProfile();
   }
   async function uploadSelectedAttachment(kind, file) {
@@ -1277,6 +1279,7 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
       body: JSON.stringify({
         fullName: editing.full_name,
         email: editing.email,
+        newPassword: editing.newPassword || undefined,
         phone: editing.phone,
         dob: editing.dob,
         headline: editing.headline,
@@ -1433,6 +1436,7 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
               <h2>{t("editUser")}</h2>
               <input value={editing.full_name || ""} onChange={(e) => setEditing({ ...editing, full_name: e.target.value })} />
               <input value={editing.email || ""} onChange={(e) => setEditing({ ...editing, email: e.target.value })} />
+              <input type="password" value={editing.newPassword || ""} onChange={(e) => setEditing({ ...editing, newPassword: e.target.value })} placeholder={t("password")} autoComplete="new-password" />
               <input value={editing.phone || ""} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} placeholder={t("phone")} />
               <input type="date" value={editing.dob || ""} onChange={(e) => setEditing({ ...editing, dob: e.target.value })} />
               <input value={editing.headline || ""} onChange={(e) => setEditing({ ...editing, headline: e.target.value })} placeholder={t("headline")} />
@@ -1460,6 +1464,7 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
                 <h2>{t("editUser")}</h2>
                 <input value={selectedProfile.user.full_name || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, full_name: e.target.value } })} />
                 <input value={selectedProfile.user.email || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, email: e.target.value } })} />
+                <input type="password" value={selectedProfile.user.newPassword || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, newPassword: e.target.value } })} placeholder={t("password")} autoComplete="new-password" />
                 <input value={selectedProfile.user.phone || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, phone: e.target.value } })} placeholder={t("phone")} />
                 <input type="date" value={selectedProfile.user.dob || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, dob: e.target.value } })} />
                 <input value={selectedProfile.user.headline || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, headline: e.target.value } })} placeholder={t("headline")} />

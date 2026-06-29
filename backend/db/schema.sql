@@ -141,9 +141,9 @@ CREATE TABLE IF NOT EXISTS agent_profile_shares (
 
 CREATE TABLE IF NOT EXISTS agent_user_shares (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  agent_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  shared_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  agent_id UUID NOT NULL,
+  user_id UUID NOT NULL,
+  shared_by UUID,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(agent_id, user_id)
 );
