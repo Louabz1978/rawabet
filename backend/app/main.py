@@ -689,7 +689,7 @@ def login_get_hint():
     return {"detail": "Login requires the Rawabet frontend form. Open http://35.174.9.208:5173 and sign in there."}
 
 
-@app.get("/api/me")
+@app.get("/api/account")
 def me(user: Annotated[dict, Depends(current_user)]):
     sync_profile_strength(user["id"])
     profile = fetch_one("SELECT about, skills, languages, profile_strength FROM profiles WHERE user_id = %s", (user["id"],))
@@ -746,7 +746,7 @@ def me(user: Annotated[dict, Depends(current_user)]):
     return {"user": public_user(user), "profile": profile, "experiences": experiences, "education": education, "documents": documents, "applications": applications, "interviews": interviews, "stats": stats}
 
 
-@app.put("/api/me/profile")
+@app.put("/api/account/profile")
 def update_profile(body: ProfileBody, user: Annotated[dict, Depends(current_user)]):
     execute(
         "UPDATE users SET full_name = %s, phone = %s, dob = %s, headline = %s, location = %s WHERE id = %s",
@@ -766,7 +766,7 @@ def update_profile(body: ProfileBody, user: Annotated[dict, Depends(current_user
     return {"ok": True}
 
 
-@app.post("/api/me/experience", status_code=201)
+@app.post("/api/account/experience", status_code=201)
 def add_experience(body: ExperienceBody, user: Annotated[dict, Depends(current_user)]):
     experience = execute(
         """
@@ -780,7 +780,7 @@ def add_experience(body: ExperienceBody, user: Annotated[dict, Depends(current_u
     return experience
 
 
-@app.post("/api/me/documents", status_code=201)
+@app.post("/api/account/documents", status_code=201)
 async def upload_document(
     user: Annotated[dict, Depends(current_user)],
     kind: Annotated[str, Form()] = "resume",
@@ -816,7 +816,7 @@ async def upload_document(
     return document
 
 
-@app.post("/api/me/avatar")
+@app.post("/api/account/avatar")
 async def upload_avatar(user: Annotated[dict, Depends(current_user)], file: UploadFile = File(...)):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Profile picture must be an image")

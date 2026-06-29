@@ -501,7 +501,7 @@ function App() {
   }, [lang]);
 
   async function loadApp() {
-    const data = await api("/me");
+    const data = await api("/account");
     setMe(data);
     setSession(data.user);
     if (data.user.role === "admin") {
@@ -838,7 +838,7 @@ function ProfileBuilder({ t, me, reload, close }) {
   async function saveProfile(event) {
     event.preventDefault();
     setSaving(true);
-    await api("/me/profile", {
+    await api("/account/profile", {
       method: "PUT",
       body: JSON.stringify({
         ...form,
@@ -856,7 +856,7 @@ function ProfileBuilder({ t, me, reload, close }) {
     body.append("kind", kind);
     body.append("file", file);
     try {
-      await api("/me/documents", { method: "POST", body });
+      await api("/account/documents", { method: "POST", body });
       await reload();
     } catch (err) {
       alert(err.message);
@@ -867,13 +867,13 @@ function ProfileBuilder({ t, me, reload, close }) {
     if (!file) return;
     const body = new FormData();
     body.append("file", file);
-    await api("/me/avatar", { method: "POST", body });
+    await api("/account/avatar", { method: "POST", body });
     await reload();
   }
 
   async function addExperience() {
     if (!experience.title || !experience.company) return;
-    await api("/me/experience", { method: "POST", body: JSON.stringify(experience) });
+    await api("/account/experience", { method: "POST", body: JSON.stringify(experience) });
     setExperience({ title: "", company: "" });
     await reload();
   }
@@ -950,7 +950,7 @@ function Profile({ t, me, reload }) {
 
   async function saveProfile(event) {
     event.preventDefault();
-    await api("/me/profile", {
+    await api("/account/profile", {
       method: "PUT",
       body: JSON.stringify({ ...form, skills: form.skills.split(",").map((item) => item.trim()).filter(Boolean) })
     });
@@ -963,7 +963,7 @@ function Profile({ t, me, reload }) {
     body.append("kind", kind);
     body.append("file", file);
     try {
-      await api("/me/documents", { method: "POST", body });
+      await api("/account/documents", { method: "POST", body });
       await reload();
     } catch (err) {
       alert(err.message);
@@ -974,13 +974,13 @@ function Profile({ t, me, reload }) {
     if (!file) return;
     const body = new FormData();
     body.append("file", file);
-    await api("/me/avatar", { method: "POST", body });
+    await api("/account/avatar", { method: "POST", body });
     await reload();
   }
 
   async function addExperience(event) {
     event.preventDefault();
-    await api("/me/experience", { method: "POST", body: JSON.stringify(experience) });
+    await api("/account/experience", { method: "POST", body: JSON.stringify(experience) });
     setExperience({ title: "", company: "" });
     await reload();
   }
