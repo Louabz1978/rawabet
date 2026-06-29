@@ -66,6 +66,16 @@ def ensure_runtime_schema():
           UNIQUE(agent_id, application_id)
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS agent_user_shares (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          agent_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          shared_by UUID REFERENCES users(id) ON DELETE SET NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE(agent_id, user_id)
+        )
+        """,
     ):
         try:
             execute(sql)
@@ -199,6 +209,11 @@ class InterviewStatusBody(BaseModel):
 
 class ApplicationShareBody(BaseModel):
     applicationId: UUID
+    agentId: UUID
+
+
+class UserShareBody(BaseModel):
+    userId: UUID
     agentId: UUID
 
 
@@ -916,12 +931,33 @@ def share_application_with_agent(body: ApplicationShareBody, user: Annotated[dic
     )
 
 
+@app.post("/api/admin/user-shares", status_code=201)
+def share_user_with_agent(body: UserShareBody, user: Annotated[dict, Depends(admin_user)]):
+    agent = fetch_one("SELECT id FROM users WHERE id = %s AND role = 'agent'", (body.agentId,))
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    target_user = fetch_one("SELECT id FROM users WHERE id = %s", (body.userId,))
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return execute(
+        """
+        INSERT INTO agent_user_shares (agent_id, user_id, shared_by)
+        VALUES (%s,%s,%s)
+        ON CONFLICT (agent_id, user_id) DO UPDATE
+        SET shared_by = EXCLUDED.shared_by, created_at = NOW()
+        RETURNING *
+        """,
+        (body.agentId, body.userId, user["id"]),
+    )
+
+
 @app.get("/api/agent/shares")
 def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
     job_number_select = "j.job_number" if jobs_have_job_number_column() else "NULL::integer AS job_number"
-    return fetch_all(
+    application_shares = fetch_all(
         f"""
         SELECT
+          'application' AS share_type,
           s.id AS share_id,
           s.created_at AS shared_at,
           a.id AS application_id,
@@ -983,6 +1019,70 @@ def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
         """,
         (user["id"],),
     )
+    user_shares = fetch_all(
+        """
+        SELECT
+          'user' AS share_type,
+          s.id AS share_id,
+          s.created_at AS shared_at,
+          NULL::uuid AS application_id,
+          NULL::text AS application_status,
+          NULL::timestamptz AS applied_at,
+          '[]'::jsonb AS screening_answers,
+          u.id AS user_id,
+          u.full_name,
+          u.email,
+          u.phone,
+          u.dob,
+          u.headline,
+          u.location AS user_location,
+          u.avatar_url,
+          p.about,
+          COALESCE(p.skills, '{}') AS skills,
+          NULL::uuid AS job_id,
+          NULL::integer AS job_number,
+          NULL::text AS job_title,
+          NULL::text AS company_name,
+          NULL::text AS job_location,
+          NULL::text AS salary_range,
+          '[]'::jsonb AS screening_questions,
+          COALESCE(docs.documents, '[]'::jsonb) AS documents,
+          COALESCE(exps.experiences, '[]'::jsonb) AS experiences
+        FROM agent_user_shares s
+        JOIN users u ON u.id = s.user_id
+        LEFT JOIN profiles p ON p.user_id = u.id
+        LEFT JOIN LATERAL (
+          SELECT jsonb_agg(jsonb_build_object(
+            'id', d.id,
+            'kind', d.kind,
+            'file_name', d.file_name,
+            'verification_status', d.verification_status,
+            'created_at', d.created_at,
+            'file_url', '/uploads/' || split_part(d.file_path, '/', array_length(string_to_array(d.file_path, '/'), 1))
+          ) ORDER BY d.created_at DESC) AS documents
+          FROM documents d
+          WHERE d.user_id = u.id
+        ) docs ON true
+        LEFT JOIN LATERAL (
+          SELECT jsonb_agg(jsonb_build_object(
+            'id', e.id,
+            'title', e.title,
+            'company', e.company,
+            'location', e.location,
+            'start_date', e.start_date,
+            'end_date', e.end_date,
+            'is_current', e.is_current,
+            'description', e.description
+          ) ORDER BY e.start_date DESC NULLS LAST) AS experiences
+          FROM experiences e
+          WHERE e.user_id = u.id
+        ) exps ON true
+        WHERE s.agent_id = %s
+        ORDER BY s.created_at DESC
+        """,
+        (user["id"],),
+    )
+    return sorted([*application_shares, *user_shares], key=lambda item: item["shared_at"], reverse=True)
 
 
 @app.get("/api/admin/overview")

@@ -1353,6 +1353,13 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
       body: JSON.stringify({ applicationId: application.id, agentId })
     });
   }
+  async function shareUser(targetUser, agentId) {
+    if (!agentId) return;
+    await api("/admin/user-shares", {
+      method: "POST",
+      body: JSON.stringify({ userId: targetUser.id, agentId })
+    });
+  }
   async function scheduleInterview(event) {
     event.preventDefault();
     if (!interview.userId || !interview.scheduledAt) return;
@@ -1417,8 +1424,8 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
               <div className="section-head"><h2>{t("users")}</h2><input placeholder={t("searchUsers")} value={search} onChange={(e) => searchUsers(e.target.value)} /></div>
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>{t("users")}</th><th>{t("role")}</th><th>{t("plan")}</th><th>{t("status")}</th><th>{t("attachments")}</th><th>{t("lastActive")}</th><th>{t("actions")}</th></tr></thead>
-                  <tbody>{users.map((user) => <tr key={user.id}><td><div className="table-user"><Avatar user={user} size="small" /><div><strong>{user.full_name}</strong><span>{user.email}</span></div></div></td><td>{user.role}</td><td><select className="plan-select" value={user.plan || "free"} onChange={(e) => patchUser(user, { plan: e.target.value })}>{PLAN_OPTIONS.map((plan) => <option value={plan} key={plan}>{planLabel(plan, lang)}</option>)}</select></td><td><span className={`status ${user.status}`}>{statusLabel(user.status, lang)}</span></td><td><DocumentLinks t={t} documents={user.documents} avatarUrl={user.avatar_url} compact /></td><td>{new Date(user.last_active_at).toLocaleDateString()}</td><td><select className="action-select" defaultValue="" onChange={(e) => { runUserAction(user, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option><option value="edit">{t("editUser")}</option><option value="verify">{t("verify")}</option><option value="activate">{t("activate")}</option><option value="deactivate">{t("deactivate")}</option><option value="delete">{t("delete")}</option></select></td></tr>)}</tbody>
+                  <thead><tr><th>{t("users")}</th><th>{t("role")}</th><th>{t("plan")}</th><th>{t("status")}</th><th>{t("attachments")}</th><th>{t("lastActive")}</th><th>{t("shareWithAgent")}</th><th>{t("actions")}</th></tr></thead>
+                  <tbody>{users.map((user) => <tr key={user.id}><td><div className="table-user"><Avatar user={user} size="small" /><div><strong>{user.full_name}</strong><span>{user.email}</span></div></div></td><td>{user.role}</td><td><select className="plan-select" value={user.plan || "free"} onChange={(e) => patchUser(user, { plan: e.target.value })}>{PLAN_OPTIONS.map((plan) => <option value={plan} key={plan}>{planLabel(plan, lang)}</option>)}</select></td><td><span className={`status ${user.status}`}>{statusLabel(user.status, lang)}</span></td><td><DocumentLinks t={t} documents={user.documents} avatarUrl={user.avatar_url} compact /></td><td>{new Date(user.last_active_at).toLocaleDateString()}</td><td><select className="action-select" defaultValue="" disabled={!agents.length} onChange={async (e) => { await shareUser(user, e.target.value); e.target.value = ""; }}><option value="">{agents.length ? t("shareWithAgent") : t("agent")}</option>{agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}</select></td><td><select className="action-select" defaultValue="" onChange={(e) => { runUserAction(user, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option><option value="edit">{t("editUser")}</option><option value="verify">{t("verify")}</option><option value="activate">{t("activate")}</option><option value="deactivate">{t("deactivate")}</option><option value="delete">{t("delete")}</option></select></td></tr>)}</tbody>
                 </table>
               </div>
             </section>
@@ -1595,6 +1602,7 @@ function AgentWorkspace({ t, lang, shares = [] }) {
       {shares.length ? shares.map((share) => {
         const skills = Array.isArray(share.skills) ? share.skills : [];
         const experiences = Array.isArray(share.experiences) ? share.experiences : [];
+        const isApplicationShare = share.share_type === "application";
         return (
           <article className="panel agent-share-card" key={share.share_id}>
             <header className="agent-profile-head">
@@ -1605,10 +1613,15 @@ function AgentWorkspace({ t, lang, shares = [] }) {
                 <span>{share.email}</span>
               </div>
               <div className="agent-job-summary">
-                <strong>{share.job_title}</strong>
-                <span>{t("jobId")}: #{share.job_number || "-"}</span>
-                <span>{share.company_name} · {share.salary_range || "-"}</span>
-                <b className={`status ${share.application_status}`}>{statusLabel(share.application_status, lang)}</b>
+                {isApplicationShare ? <>
+                  <strong>{share.job_title}</strong>
+                  <span>{t("jobId")}: #{share.job_number || "-"}</span>
+                  <span>{share.company_name} · {share.salary_range || "-"}</span>
+                  <b className={`status ${share.application_status}`}>{statusLabel(share.application_status, lang)}</b>
+                </> : <>
+                  <strong>{t("profileDetails")}</strong>
+                  <span>{t("sharedProfiles")}</span>
+                </>}
               </div>
             </header>
 
@@ -1637,10 +1650,10 @@ function AgentWorkspace({ t, lang, shares = [] }) {
                   </div>
                 )) : <p className="muted-text">{t("workTimeline")}</p>}
               </section>
-              <section>
+              {isApplicationShare && <section>
                 <h3>{t("submittedAnswers")}</h3>
                 <ApplicationAnswers t={t} answers={share.screening_answers} />
-              </section>
+              </section>}
             </div>
           </article>
         );
