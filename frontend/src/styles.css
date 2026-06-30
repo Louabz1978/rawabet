@@ -1666,11 +1666,14 @@ html[dir="rtl"] .support-window {
 
 .login-page {
   direction: ltr;
-  display: block;
-  width: min(1120px, calc(100vw - 56px));
-  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(1220px, calc(100vw - 40px));
+  height: 100dvh;
+  min-height: 680px;
   margin: 0 auto;
-  padding: 34px clamp(28px, 6vw, 104px) 48px;
+  padding: 16px clamp(30px, 4.5vw, 74px) 16px;
+  overflow: hidden;
   background: #fff;
 }
 
@@ -1679,27 +1682,46 @@ html[dir="rtl"] .support-window {
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  margin-bottom: 58px;
+  margin-bottom: 0;
+  position: relative;
+  z-index: 5;
 }
 
 .login-top-logo {
   display: block;
-  width: 190px;
+  width: 168px;
+  max-height: 146px;
   height: auto;
   object-fit: contain;
+  object-position: left center;
+}
+
+.login-language-button {
+  position: relative;
+  z-index: 10;
+  cursor: pointer;
+  margin-inline-end: 28px;
 }
 
 .login-stage {
   display: grid;
-  grid-template-columns: minmax(340px, 430px) minmax(390px, 1fr);
-  gap: clamp(54px, 8vw, 118px);
-  align-items: center;
+  grid-template-columns: minmax(300px, 370px) minmax(720px, 1fr);
+  gap: clamp(50px, 7vw, 120px);
+  align-items: start;
+  min-height: calc(100dvh - 88px);
+  margin-top: -98px;
+}
+
+.login-page-rtl .login-stage {
+  grid-template-columns: minmax(720px, 1fr) minmax(300px, 370px);
 }
 
 .login-copy {
   display: grid;
-  gap: 28px;
+  gap: 12px;
   align-content: start;
+  width: min(100%, 370px);
+  padding-top: 182px;
 }
 
 .login-page-rtl .login-copy {
@@ -1708,42 +1730,102 @@ html[dir="rtl"] .support-window {
   direction: rtl;
   text-align: right;
   justify-items: stretch;
+  transform: translateX(-58px);
+}
+
+.login-heading {
+  display: grid;
+  gap: 8px;
+}
+
+.login-heading p {
+  display: none;
 }
 
 .login-copy h1 {
-  max-width: 430px;
+  max-width: 370px;
   margin: 0;
   color: var(--brand);
-  font-size: clamp(2rem, 3.3vw, 2.75rem);
-  font-weight: 400;
+  font-size: clamp(1.5rem, 2.05vw, 2rem);
+  font-weight: 500;
   line-height: 1.16;
+  white-space: nowrap;
+}
+
+.login-heading span {
+  display: none;
+  max-width: 420px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.55;
 }
 
 .login-card {
   display: grid;
-  gap: 14px;
+  gap: 10px;
   width: 100%;
-  max-width: 430px;
+  max-width: 360px;
   padding: 0;
   border: 0;
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
 
+.login-card label {
+  gap: 4px;
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.login-card-head {
+  display: none;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.login-card-head strong {
+  color: var(--ink);
+  font-size: 1.12rem;
+  line-height: 1.2;
+}
+
+.login-card-head span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
 .login-card input {
-  min-height: 52px;
+  min-height: 38px;
+  padding: 8px 10px;
+  font-size: 0.82rem;
   border-radius: 4px;
+  background: #fff;
 }
 
 .login-card .primary-button {
-  min-height: 52px;
+  min-height: 42px;
+  margin-top: 2px;
+  font-size: 0.86rem;
+  font-weight: 750;
+  border-radius: 999px;
+}
+
+.login-page-rtl .login-copy h1 {
+  max-width: 370px;
+  font-size: clamp(1.45rem, 1.9vw, 1.85rem);
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .login-visual {
   display: flex;
   justify-content: flex-end;
-  align-items: center;
-  min-height: 500px;
+  align-items: flex-start;
+  min-height: 0;
+  padding-top: 30px;
   overflow: visible;
 }
 
@@ -1753,10 +1835,48 @@ html[dir="rtl"] .support-window {
   justify-content: flex-start;
 }
 
+.login-visual-card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  width: min(1120px, 100%);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.login-visual-card::before {
+  display: none;
+}
+
 .login-visual img {
-  width: min(520px, 100%);
+  position: relative;
+  z-index: 1;
+  width: min(1050px, 100%);
+  max-height: calc(100dvh - 152px);
   height: auto;
   object-fit: contain;
+  border-radius: 0;
+}
+
+.login-trust-strip {
+  display: none;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.login-trust-strip span {
+  padding: 7px 10px;
+  border: 1px solid rgba(18, 184, 166, 0.25);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--brand);
+  font-size: 0.72rem;
+  font-weight: 900;
 }
 .error { margin: 0; color: #b42318; font-weight: 700; }
 .notice { margin: 0; color: var(--brand); font-weight: 800; }
@@ -2303,17 +2423,35 @@ td span {
   }
   .agent-profile-grid-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .agent-tool-list { grid-template-columns: 1fr; }
-  .login-page { width: min(100%, calc(100vw - 24px)); padding: 18px 18px 28px; }
-  .login-top { margin-bottom: 24px; }
-  .login-top-logo { width: 160px; }
-  .login-stage { gap: 18px; }
+  .login-page { width: min(100%, calc(100vw - 24px)); height: auto; min-height: 100dvh; padding: 12px 14px 18px; overflow: auto; }
+  .login-top { margin-bottom: 8px; }
+  .login-top-logo { width: 118px; max-height: 92px; }
+  .login-stage { gap: 12px; min-height: auto; margin-top: -10px; align-items: start; }
   .login-page-rtl .login-copy,
   .login-page-rtl .login-visual {
     grid-column: auto;
     grid-row: auto;
   }
-  .login-visual { min-height: auto; }
-  .login-visual img { width: min(360px, 92vw); }
+  .login-page-rtl .login-copy { transform: none; }
+  .login-heading { gap: 7px; }
+  .login-copy { width: min(100%, 340px); padding-top: 0; }
+  .login-copy h1,
+  .login-page-rtl .login-copy h1 {
+    max-width: 340px;
+    font-size: clamp(1.2rem, 6vw, 1.55rem);
+    font-weight: 500;
+    line-height: 1.12;
+    white-space: nowrap;
+  }
+  .login-heading span { font-size: 0.84rem; line-height: 1.5; }
+  .login-card { padding: 0; }
+  .login-card label { font-size: 0.72rem; }
+  .login-card input,
+  .login-card .primary-button { min-height: 38px; }
+  .login-visual { min-height: auto; padding-top: 0; }
+  .login-visual-card { padding: 0; }
+  .login-visual img { width: min(470px, 104vw); max-height: none; }
+  .login-trust-strip { margin-top: 14px; }
   .admin-menu {
     position: static;
     display: flex;

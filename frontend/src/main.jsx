@@ -10,6 +10,10 @@ const text = {
     email: "Email",
     password: "Password",
     login: "Sign in",
+    loginSubtitle: "Find jobs, build a verified professional profile, share resumes and skills, and manage your career opportunities in one place.",
+    loginTrustOne: "Verified profiles",
+    loginTrustTwo: "Job opportunities",
+    loginTrustThree: "Resumes and skills",
     register: "Register",
     createAccount: "Create account",
     verifyEmail: "Verify email",
@@ -46,7 +50,7 @@ const text = {
     portfolio: "Portfolio",
     event: "Event",
     welcomeTitle: "Welcome to Rawabet",
-    welcome: "Build your verified professional identity",
+    welcome: "Find Your Future Job",
     welcomeBody: "Rawabet helps professionals create bilingual profiles, upload resumes and certificates, apply to jobs, and connect with opportunity.",
     editProfile: "Save profile",
     fullName: "Full name",
@@ -209,6 +213,10 @@ const text = {
     email: "البريد الإلكتروني",
     password: "كلمة المرور",
     login: "تسجيل الدخول",
+    loginSubtitle: "ابحث عن الوظائف، وابن ملفا مهنيا موثقا، وشارك سيرتك الذاتية ومهاراتك، وأدر فرصك المهنية في مكان واحد.",
+    loginTrustOne: "ملفات موثقة",
+    loginTrustTwo: "فرص عمل",
+    loginTrustThree: "سير ومهارات",
     register: "تسجيل",
     createAccount: "إنشاء حساب",
     verifyEmail: "تأكيد البريد",
@@ -245,7 +253,7 @@ const text = {
     portfolio: "أعمال",
     event: "فعالية",
     welcomeTitle: "مرحبا بك في روابط",
-    welcome: "ابن هويتك المهنية الموثقة",
+    welcome: "اعثر على وظيفة المستقبل",
     welcomeBody: "روابط تساعد المهنيين على إنشاء ملفات ثنائية اللغة ورفع السير الذاتية والشهادات والتقديم للوظائف والتواصل مع الفرص.",
     editProfile: "حفظ الملف",
     fullName: "الاسم الكامل",
@@ -772,13 +780,21 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
   return (
     <main className={`login-page ${lang === "ar" ? "login-page-rtl" : ""}`}>
       <header className="login-top">
-        <img className="login-top-logo" src="/brand/rawabet-wordmark.png" alt="Rawabet - روابط تجمعنا" />
-        <button type="button" className="icon-button" onClick={() => setLang(lang === "en" ? "ar" : "en")}>{t("language")}</button>
+        <img className="login-top-logo" src="/brand/rawabet-logo-lockup-cropped.png" alt="Rawabet - روابط تجمعنا" />
+        <button type="button" className="icon-button login-language-button" onClick={() => setLang((current) => current === "en" ? "ar" : "en")}>{t("language")}</button>
       </header>
       <section className="login-stage">
         <div className="login-copy">
-          <h1>{t("welcome")}</h1>
+          <div className="login-heading">
+            <p>{t("welcomeTitle")}</p>
+            <h1>{t("welcome")}</h1>
+            <span>{t("loginSubtitle")}</span>
+          </div>
           {mode === "login" && <form className="login-card" onSubmit={submitLogin} autoComplete="off">
+            <div className="login-card-head">
+              <strong>{t("login")}</strong>
+              <span>{t("needAccount")}</span>
+            </div>
             <label>{t("email")}<input name="rawabet-login-email" autoComplete="new-password" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
             <label>{t("password")}<input name="rawabet-login-password" autoComplete="new-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
             {error && <p className="error">{error}</p>}
@@ -787,6 +803,10 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
           </form>}
 
           {mode === "register" && <form className="login-card" onSubmit={register}>
+            <div className="login-card-head">
+              <strong>{t("createAccount")}</strong>
+              <span>{t("checkEmail")}</span>
+            </div>
             <label>{t("fullName")}<input value={fullName} onChange={(event) => setFullName(event.target.value)} required /></label>
             <label>{t("email")}<input value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
             <label>{t("phone")}<input value={phone} onChange={(event) => setPhone(event.target.value)} required /></label>
@@ -798,6 +818,10 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
           </form>}
 
           {mode === "verify" && <form className="login-card" onSubmit={verify}>
+            <div className="login-card-head">
+              <strong>{t("verifyEmail")}</strong>
+              <span>{t("checkEmail")}</span>
+            </div>
             <label>{t("email")}<input value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
             <label>{t("verificationCode")}<input value={otp} onChange={(event) => setOtp(event.target.value)} required /></label>
             {notice && <p className="notice">{notice}</p>}
@@ -807,6 +831,10 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
           </form>}
 
           {mode === "mfa" && <form className="login-card" onSubmit={verifyMfa}>
+            <div className="login-card-head">
+              <strong>{t("verifyEmail")}</strong>
+              <span>{t("checkEmail")}</span>
+            </div>
             <label>{t("email")}<input value={email} readOnly /></label>
             <label>{t("verificationCode")}<input value={otp} onChange={(event) => setOtp(event.target.value)} required /></label>
             {notice && <p className="notice">{notice}</p>}
@@ -816,7 +844,14 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
           </form>}
         </div>
         <div className="login-visual">
-          <img src="/brand/login-hero.svg" alt="" />
+          <div className="login-visual-card">
+            <img src="/brand/login-hero.svg" alt="" />
+            <div className="login-trust-strip">
+              <span>{t("loginTrustOne")}</span>
+              <span>{t("loginTrustTwo")}</span>
+              <span>{t("loginTrustThree")}</span>
+            </div>
+          </div>
         </div>
       </section>
     </main>
