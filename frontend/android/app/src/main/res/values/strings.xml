@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Rawabet</string>
+    <string name="title_activity_main">Rawabet</string>
+    <string name="package_name">com.rawabet.sy</string>
+    <string name="custom_url_scheme">com.rawabet.sy</string>
+</resources>

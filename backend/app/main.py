@@ -8,20 +8,31 @@ import os
 import re
 import secrets
 import smtplib
+import time
 import urllib.error
 import urllib.request
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, EmailStr
 
 from .auth import admin_user, agent_user, create_token, current_user, hash_password, public_user, verify_password
-from .config import OPENAI_API_KEY, SMTP_FROM, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USER, UPLOAD_DIR
+from .config import APP_ENV, OPENAI_API_KEY, SMTP_FROM, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USER, UPLOAD_DIR
 from .db import execute, fetch_all, fetch_one
 
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+RATE_LIMITS: dict[str, list[float]] = {}
+RATE_LIMIT_RULES = (
+    ("/api/auth/login", 8, 300),
+    ("/api/auth/verify-mfa", 8, 300),
+    ("/api/auth/register", 5, 300),
+    ("/api/auth/verify-registration", 8, 300),
+    ("/api/account/avatar", 20, 3600),
+    ("/api/account/documents", 20, 3600),
+    ("/api/support/messages", 60, 300),
+)
 
 app = FastAPI(title="Rawabet API", version="1.0.0")
 app.add_middleware(
@@ -38,6 +49,40 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "")
+    return forwarded.split(",", 1)[0].strip() or request.client.host if request.client else "unknown"
+
+
+def matched_rate_limit(path: str):
+    for prefix, limit, window in RATE_LIMIT_RULES:
+        if path.startswith(prefix):
+            return limit, window
+    return None
+
+
+@app.middleware("http")
+async def security_middleware(request: Request, call_next):
+    rule = matched_rate_limit(request.url.path)
+    if rule:
+        limit, window = rule
+        now = time.time()
+        key = f"{client_ip(request)}:{request.url.path}"
+        recent = [item for item in RATE_LIMITS.get(key, []) if now - item < window]
+        if len(recent) >= limit:
+            return JSONResponse(status_code=429, content={"detail": "Too many requests. Please try again later."})
+        recent.append(now)
+        RATE_LIMITS[key] = recent
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if APP_ENV in {"production", "prod"}:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 
 def upload_search_dirs() -> list[Path]:
@@ -104,6 +149,17 @@ def ensure_runtime_schema():
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS dob DATE",
         "ALTER TABLE pending_registrations ADD COLUMN IF NOT EXISTS phone TEXT",
         "ALTER TABLE pending_registrations ADD COLUMN IF NOT EXISTS dob DATE",
+        """
+        CREATE TABLE IF NOT EXISTS mfa_challenges (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          otp_hash TEXT NOT NULL,
+          expires_at TIMESTAMPTZ NOT NULL,
+          used_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_mfa_challenges_user ON mfa_challenges(user_id)",
         "CREATE SEQUENCE IF NOT EXISTS jobs_job_number_seq START WITH 1001",
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS job_number INTEGER",
         "UPDATE jobs SET job_number = nextval('jobs_job_number_seq') WHERE job_number IS NULL",
@@ -198,6 +254,11 @@ class LoginBody(BaseModel):
 
 class VerifyRegistrationBody(BaseModel):
     email: EmailStr
+    otp: str
+
+
+class VerifyMfaBody(BaseModel):
+    challengeId: UUID
     otp: str
 
 
@@ -337,6 +398,10 @@ def send_plain_email(email: str, subject: str, body: str) -> tuple[bool, str | N
 
 def send_verification_email(email: str, otp: str) -> tuple[bool, str | None]:
     return send_plain_email(email, "Rawabet verification code", f"Your Rawabet verification code is: {otp}\n\nThis code expires in 15 minutes.")
+
+
+def send_mfa_email(email: str, otp: str) -> tuple[bool, str | None]:
+    return send_plain_email(email, "Rawabet secure sign-in code", f"Your Rawabet secure sign-in code is: {otp}\n\nThis code expires in 10 minutes. If you did not try to sign in, contact the platform administrator immediately.")
 
 
 def send_interview_email(email: str, full_name: str, job: dict | None, scheduled_at: str, channel: str, notes: str | None) -> tuple[bool, str | None]:
@@ -753,8 +818,51 @@ def login(body: LoginBody):
         raise HTTPException(status_code=403, detail="Please verify your email before signing in")
     if user.get("status") == "suspended":
         raise HTTPException(status_code=403, detail="This account is suspended")
+    if user["role"] in {"admin", "agent"}:
+        otp = f"{secrets.randbelow(1000000):06d}"
+        challenge = execute(
+            """
+            INSERT INTO mfa_challenges (user_id, otp_hash, expires_at)
+            VALUES (%s,%s,NOW() + interval '10 minutes')
+            RETURNING id
+            """,
+            (user["id"], hash_password(otp)),
+        )
+        email_sent, email_error = send_mfa_email(user["email"], otp)
+        response = {
+            "mfaRequired": True,
+            "challengeId": str(challenge["id"]),
+            "emailSent": email_sent,
+            "message": "Enter the verification code sent to your email.",
+        }
+        if not email_sent and APP_ENV not in {"production", "prod"}:
+            response["devOtp"] = otp
+            response["message"] = f"{email_error} Use the displayed development OTP to complete sign-in."
+        elif not email_sent:
+            raise HTTPException(status_code=503, detail="Could not send sign-in verification code. Contact administrator.")
+        return response
     execute("UPDATE users SET last_active_at = NOW() WHERE id = %s", (user["id"],))
     return {"user": public_user(user), "token": create_token(user)}
+
+
+@app.post("/api/auth/verify-mfa")
+def verify_mfa(body: VerifyMfaBody):
+    challenge = fetch_one(
+        """
+        SELECT m.*, u.id AS user_id, u.full_name, u.email, u.phone, u.dob, u.role, u.plan, u.status, u.headline, u.location, u.avatar_url
+        FROM mfa_challenges m
+        JOIN users u ON u.id = m.user_id
+        WHERE m.id = %s AND m.used_at IS NULL AND m.expires_at > NOW()
+        """,
+        (body.challengeId,),
+    )
+    if not challenge or not verify_password(body.otp, challenge["otp_hash"]):
+        raise HTTPException(status_code=400, detail="Invalid or expired verification code")
+    if challenge.get("status") == "suspended":
+        raise HTTPException(status_code=403, detail="This account is suspended")
+    execute("UPDATE mfa_challenges SET used_at = NOW() WHERE id = %s", (body.challengeId,))
+    execute("UPDATE users SET last_active_at = NOW() WHERE id = %s", (challenge["user_id"],))
+    return {"user": public_user(challenge), "token": create_token(challenge)}
 
 
 @app.get("/api/auth/login")
