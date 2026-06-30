@@ -4,6 +4,8 @@ from typing import Annotated
 from uuid import UUID
 from email.message import EmailMessage
 import json
+import os
+import re
 import secrets
 import smtplib
 import urllib.error
@@ -11,7 +13,7 @@ import urllib.request
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, EmailStr
 
 from .auth import admin_user, agent_user, create_token, current_user, hash_password, public_user, verify_password
@@ -36,7 +38,64 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+
+
+def upload_search_dirs() -> list[Path]:
+    configured = [Path(item).expanduser() for item in os.getenv("UPLOAD_FALLBACK_DIRS", "").split(":") if item.strip()]
+    sibling_uploads = sorted(UPLOAD_DIR.parent.glob("uploads*"), key=lambda path: path.stat().st_mtime if path.exists() else 0, reverse=True)
+    dirs = [UPLOAD_DIR, *configured, *sibling_uploads]
+    unique_dirs = []
+    seen = set()
+    for directory in dirs:
+        resolved = directory.resolve()
+        if resolved in seen or not directory.exists() or not directory.is_dir():
+            continue
+        seen.add(resolved)
+        unique_dirs.append(directory)
+    return unique_dirs
+
+
+def newest_matching_upload(filename: str) -> Path | None:
+    match = re.match(r"^([0-9a-fA-F-]{36})_(avatar|resume|certificate)_", Path(filename).name)
+    if not match:
+        return None
+    user_id, kind = match.groups()
+    candidates = []
+    for directory in upload_search_dirs():
+        candidates.extend(path for path in directory.glob(f"{user_id}_{kind}_*") if path.is_file())
+    return max(candidates, key=lambda path: path.stat().st_mtime, default=None)
+
+
+def delete_upload_file(path_or_url: str | None):
+    if not path_or_url:
+        return
+    name = Path(path_or_url).name
+    for directory in upload_search_dirs():
+        (directory / name).unlink(missing_ok=True)
+
+
+def delete_user_uploads(user_id: UUID | str, kind: str):
+    if kind not in {"avatar", "resume", "certificate"}:
+        return
+    for directory in upload_search_dirs():
+        for path in directory.glob(f"{user_id}_{kind}_*"):
+            if path.is_file():
+                path.unlink(missing_ok=True)
+
+
+@app.get("/uploads/{filename:path}")
+def serve_upload(filename: str):
+    safe_name = Path(filename).name
+    if not safe_name or safe_name in {".", ".."}:
+        raise HTTPException(status_code=404, detail="File not found")
+    for directory in upload_search_dirs():
+        candidate = directory / safe_name
+        if candidate.is_file():
+            return FileResponse(candidate)
+    fallback = newest_matching_upload(safe_name)
+    if fallback:
+        return FileResponse(fallback)
+    raise HTTPException(status_code=404, detail="File not found")
 
 
 def ensure_runtime_schema():
@@ -221,6 +280,14 @@ class ApplicationShareBody(BaseModel):
 class UserShareBody(BaseModel):
     userId: UUID
     agentId: UUID
+
+
+class AgentInterviewBody(BaseModel):
+    userId: UUID
+    jobId: UUID | None = None
+    scheduledAt: str
+    channel: str = "Video call"
+    notes: str | None = None
 
 
 class SupportMessageBody(BaseModel):
@@ -796,9 +863,9 @@ async def upload_document(
     if safe_kind == "resume":
         old_documents = fetch_all("SELECT id, file_path FROM documents WHERE user_id = %s AND kind = 'resume'", (user["id"],))
         for old_document in old_documents:
-            if old_document.get("file_path"):
-                Path(old_document["file_path"]).unlink(missing_ok=True)
+            delete_upload_file(old_document.get("file_path"))
         execute("DELETE FROM documents WHERE user_id = %s AND kind = 'resume'", (user["id"],))
+        delete_user_uploads(user["id"], "resume")
     else:
         certificate_count = fetch_one("SELECT COUNT(*)::int AS count FROM documents WHERE user_id = %s AND kind = 'certificate'", (user["id"],))["count"]
         if certificate_count >= 5:
@@ -826,9 +893,8 @@ async def upload_document(
 async def upload_avatar(user: Annotated[dict, Depends(current_user)], file: UploadFile = File(...)):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Profile picture must be an image")
-    if user.get("avatar_url"):
-        old_avatar = UPLOAD_DIR / Path(user["avatar_url"]).name
-        old_avatar.unlink(missing_ok=True)
+    delete_upload_file(user.get("avatar_url"))
+    delete_user_uploads(user["id"], "avatar")
     suffix = Path(file.filename or "avatar").suffix.lower() or ".jpg"
     target = UPLOAD_DIR / f"{user['id']}_avatar_{uuid4().hex}{suffix}"
     content = await file.read()
@@ -986,6 +1052,7 @@ def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
           {job_number_select},
           j.title AS job_title,
           j.company_name,
+          j.category,
           j.location AS job_location,
           j.salary_range,
           COALESCE(j.screening_questions, '[]'::jsonb) AS screening_questions,
@@ -1053,6 +1120,7 @@ def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
               NULL::integer AS job_number,
               NULL::text AS job_title,
               NULL::text AS company_name,
+              NULL::text AS category,
               NULL::text AS job_location,
               NULL::text AS salary_range,
               '[]'::jsonb AS screening_questions,
@@ -1093,6 +1161,153 @@ def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
             (user["id"],),
         )
     return sorted([*application_shares, *user_shares], key=lambda item: item["shared_at"], reverse=True)
+
+
+def agent_can_access_application(agent_id: UUID, application_id: UUID):
+    return fetch_one(
+        """
+        SELECT a.id, a.user_id, a.job_id
+        FROM applications a
+        JOIN agent_profile_shares s ON s.application_id = a.id
+        WHERE s.agent_id = %s AND a.id = %s
+        """,
+        (agent_id, application_id),
+    )
+
+
+def agent_can_access_user_job(agent_id: UUID, user_id: UUID, job_id: UUID | None = None):
+    application_match = fetch_one(
+        """
+        SELECT a.id
+        FROM agent_profile_shares s
+        JOIN applications a ON a.id = s.application_id
+        WHERE s.agent_id = %s
+          AND a.user_id = %s
+          AND (%s::uuid IS NULL OR a.job_id = %s)
+        LIMIT 1
+        """,
+        (agent_id, user_id, job_id, job_id),
+    )
+    if application_match:
+        return True
+    if not has_table("agent_user_shares"):
+        return False
+    user_match = fetch_one(
+        """
+        SELECT id
+        FROM agent_user_shares
+        WHERE agent_id = %s AND user_id = %s
+        LIMIT 1
+        """,
+        (agent_id, user_id),
+    )
+    return bool(user_match)
+
+
+@app.patch("/api/agent/applications/{application_id}")
+def update_agent_application(application_id: UUID, body: ApplicationStatusBody, user: Annotated[dict, Depends(agent_user)]):
+    allowed = {"submitted", "review", "interview", "accepted", "rejected"}
+    if body.status not in allowed:
+        raise HTTPException(status_code=400, detail="Invalid application status")
+    application = agent_can_access_application(user["id"], application_id)
+    if not application:
+        raise HTTPException(status_code=404, detail="Shared application not found")
+    execute("UPDATE applications SET status = %s WHERE id = %s", (body.status, application_id))
+    if body.status != "interview":
+        execute(
+            """
+            UPDATE interviews
+            SET status = 'cancelled'
+            WHERE user_id = %s AND job_id = %s AND status = 'scheduled'
+            """,
+            (application["user_id"], application["job_id"]),
+        )
+    return {"ok": True}
+
+
+@app.get("/api/agent/interviews")
+def list_agent_interviews(user: Annotated[dict, Depends(agent_user)]):
+    return fetch_all(
+        """
+        SELECT i.*, u.full_name, u.email, u.headline, u.avatar_url,
+          j.title AS job_title, j.company_name, j.location AS job_location
+        FROM interviews i
+        JOIN users u ON u.id = i.user_id
+        LEFT JOIN jobs j ON j.id = i.job_id
+        WHERE i.status = 'scheduled'
+          AND i.scheduled_at >= NOW()
+          AND (
+            EXISTS (
+              SELECT 1
+              FROM agent_profile_shares s
+              JOIN applications a ON a.id = s.application_id
+              WHERE s.agent_id = %s
+                AND a.user_id = i.user_id
+                AND (i.job_id IS NULL OR a.job_id = i.job_id)
+            )
+            OR (
+              %s
+              AND EXISTS (
+                SELECT 1
+                FROM agent_user_shares us
+                WHERE us.agent_id = %s AND us.user_id = i.user_id
+              )
+            )
+          )
+        ORDER BY i.scheduled_at ASC
+        """,
+        (user["id"], has_table("agent_user_shares"), user["id"]),
+    )
+
+
+@app.patch("/api/agent/interviews/{interview_id}")
+def update_agent_interview(interview_id: UUID, body: InterviewStatusBody, user: Annotated[dict, Depends(agent_user)]):
+    allowed = {"scheduled", "completed", "cancelled", "accepted", "rejected"}
+    if body.status not in allowed:
+        raise HTTPException(status_code=400, detail="Invalid interview status")
+    existing = fetch_one("SELECT * FROM interviews WHERE id = %s", (interview_id,))
+    if not existing or not agent_can_access_user_job(user["id"], existing["user_id"], existing["job_id"]):
+        raise HTTPException(status_code=404, detail="Shared interview not found")
+    interview = execute(
+        """
+        UPDATE interviews
+        SET status = %s
+        WHERE id = %s
+        RETURNING id, user_id, job_id, status
+        """,
+        (body.status, interview_id),
+    )
+    if body.status in {"accepted", "rejected"} and interview["job_id"]:
+        execute(
+            "UPDATE applications SET status = %s WHERE user_id = %s AND job_id = %s",
+            (body.status, interview["user_id"], interview["job_id"]),
+        )
+    return {"ok": True}
+
+
+@app.post("/api/agent/interviews", status_code=201)
+def create_agent_interview(body: AgentInterviewBody, user: Annotated[dict, Depends(agent_user)]):
+    if not agent_can_access_user_job(user["id"], body.userId, body.jobId):
+        raise HTTPException(status_code=404, detail="Shared candidate not found")
+    interview = execute(
+        """
+        INSERT INTO interviews (user_id, admin_id, job_id, scheduled_at, channel, notes)
+        VALUES (%s,%s,%s,%s,%s,%s)
+        RETURNING *
+        """,
+        (body.userId, user["id"], body.jobId, body.scheduledAt, body.channel, body.notes),
+    )
+    if body.jobId:
+        execute("UPDATE applications SET status = 'interview' WHERE user_id = %s AND job_id = %s", (body.userId, body.jobId))
+    recipient = fetch_one("SELECT full_name, email FROM users WHERE id = %s", (body.userId,))
+    job = fetch_one("SELECT title, company_name, location FROM jobs WHERE id = %s", (body.jobId,)) if body.jobId else None
+    email_sent = False
+    email_error = "Recipient not found."
+    recipient_email = None
+    if recipient:
+        recipient_email = recipient["email"]
+        email_sent, email_error = send_interview_email(recipient["email"], recipient["full_name"], job, body.scheduledAt, body.channel, body.notes)
+    return {**interview, "emailSent": email_sent, "emailError": email_error, "recipientEmail": recipient_email}
 
 
 @app.get("/api/admin/overview")
@@ -1317,9 +1532,9 @@ async def upload_admin_document(
     if safe_kind == "resume":
         old_documents = fetch_all("SELECT file_path FROM documents WHERE user_id = %s AND kind = 'resume'", (user_id,))
         for old_document in old_documents:
-            if old_document.get("file_path"):
-                Path(old_document["file_path"]).unlink(missing_ok=True)
+            delete_upload_file(old_document.get("file_path"))
         execute("DELETE FROM documents WHERE user_id = %s AND kind = 'resume'", (user_id,))
+        delete_user_uploads(user_id, "resume")
     else:
         certificate_count = fetch_one("SELECT COUNT(*)::int AS count FROM documents WHERE user_id = %s AND kind = 'certificate'", (user_id,))["count"]
         if certificate_count >= 5:
@@ -1349,8 +1564,8 @@ async def upload_admin_avatar(user_id: UUID, user: Annotated[dict, Depends(admin
         raise HTTPException(status_code=404, detail="User not found")
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Profile picture must be an image")
-    if target_user.get("avatar_url"):
-        (UPLOAD_DIR / Path(target_user["avatar_url"]).name).unlink(missing_ok=True)
+    delete_upload_file(target_user.get("avatar_url"))
+    delete_user_uploads(user_id, "avatar")
     suffix = Path(file.filename or "avatar").suffix.lower() or ".jpg"
     target = UPLOAD_DIR / f"{user_id}_avatar_{uuid4().hex}{suffix}"
     content = await file.read()
@@ -1366,8 +1581,7 @@ def delete_admin_document(document_id: UUID, user: Annotated[dict, Depends(admin
     document = execute("DELETE FROM documents WHERE id = %s RETURNING user_id, file_path", (document_id,))
     if not document:
         raise HTTPException(status_code=404, detail="Attachment not found")
-    if document.get("file_path"):
-        Path(document["file_path"]).unlink(missing_ok=True)
+    delete_upload_file(document.get("file_path"))
     sync_profile_strength(document["user_id"])
     return {"ok": True}
 
@@ -1411,10 +1625,10 @@ def delete_admin_user(user_id: UUID, user: Annotated[dict, Depends(admin_user)])
         raise HTTPException(status_code=404, detail="User not found")
     documents = fetch_all("SELECT file_path FROM documents WHERE user_id = %s", (user_id,))
     for document in documents:
-        if document.get("file_path"):
-            Path(document["file_path"]).unlink(missing_ok=True)
-    if target_user.get("avatar_url"):
-        (UPLOAD_DIR / Path(target_user["avatar_url"]).name).unlink(missing_ok=True)
+        delete_upload_file(document.get("file_path"))
+    delete_upload_file(target_user.get("avatar_url"))
+    for kind in ("avatar", "resume", "certificate"):
+        delete_user_uploads(user_id, kind)
     deleted = execute("DELETE FROM users WHERE id = %s RETURNING id, email", (user_id,))
     if not deleted:
         raise HTTPException(status_code=404, detail="User not found")

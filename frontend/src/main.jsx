@@ -100,6 +100,14 @@ const text = {
     agent: "Agent",
     agentWorkspace: "Agent workspace",
     sharedProfiles: "Shared profiles",
+    candidates: "Candidates",
+    scheduledInterviews: "Scheduled interviews",
+    agentReports: "Agent reports",
+    agentTools: "Agent tools",
+    managedApplications: "Managed applications",
+    sharedCandidates: "Shared candidates",
+    agentActivity: "Agent activity",
+    openProfile: "Open profile",
     shareWithAgent: "Share with agent",
     noSharedProfiles: "No shared profiles yet",
     sharedForJob: "Shared for job",
@@ -289,6 +297,14 @@ const text = {
     agent: "وكيل",
     agentWorkspace: "مساحة الوكيل",
     sharedProfiles: "الملفات المشاركة",
+    candidates: "المرشحون",
+    scheduledInterviews: "المقابلات المجدولة",
+    agentReports: "تقارير الوكيل",
+    agentTools: "أدوات الوكيل",
+    managedApplications: "طلبات تحت المتابعة",
+    sharedCandidates: "المرشحون المشاركون",
+    agentActivity: "نشاط الوكيل",
+    openProfile: "فتح الملف",
     shareWithAgent: "مشاركة مع وكيل",
     noSharedProfiles: "لا توجد ملفات مشاركة بعد",
     sharedForJob: "مشارك لوظيفة",
@@ -483,6 +499,7 @@ function App() {
   const [adminApplications, setAdminApplications] = useState([]);
   const [adminInterviews, setAdminInterviews] = useState([]);
   const [agentShares, setAgentShares] = useState([]);
+  const [agentInterviews, setAgentInterviews] = useState([]);
   const [supportThreads, setSupportThreads] = useState([]);
   const [supportTarget, setSupportTarget] = useState("");
   const [adminStartTab, setAdminStartTab] = useState("");
@@ -525,6 +542,7 @@ function App() {
     }
     if (data.user.role === "agent") {
       setAgentShares(await api("/agent/shares"));
+      setAgentInterviews(await api("/agent/interviews"));
     }
     return data.user;
   }
@@ -585,6 +603,8 @@ function App() {
     setMe(null);
     setAdmin(null);
     setAdminApplications([]);
+    setAgentShares([]);
+    setAgentInterviews([]);
     setSupportThreads([]);
   }
 
@@ -635,8 +655,8 @@ function App() {
         </div>
       </header>
 
-      <main className={view === "admin" ? "admin-main" : ""}>
-        {isAgent ? <AgentWorkspace t={t} lang={lang} shares={agentShares} /> : <>
+      <main className={view === "admin" || isAgent ? "admin-main" : ""}>
+        {isAgent ? <AgentWorkspace t={t} lang={lang} agent={me.user} shares={agentShares} interviews={agentInterviews} reload={loadApp} /> : <>
           {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} />}
           {view === "profile" && <Profile t={t} me={me} reload={loadApp} />}
           {view === "jobs" && <Jobs t={t} lang={lang} jobs={jobs} applications={me.applications || []} interviews={me.interviews || []} search={jobSearch} mode={jobMode} setMode={setJobMode} selectedJobId={selectedJobId} clearSelectedJob={() => setSelectedJobId("")} reload={loadApp} />}
@@ -1600,9 +1620,90 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
   );
 }
 
-function AgentWorkspace({ t, lang, shares = [] }) {
+function AgentWorkspace({ t, lang, agent, shares = [], interviews = [], reload }) {
+  const [tab, setTab] = useState("profile");
   const [selectedShareId, setSelectedShareId] = useState("");
+  const [interview, setInterview] = useState({ userId: "", jobId: "", scheduledAt: "", channel: "Video call", notes: "" });
+  const [schedulingInterview, setSchedulingInterview] = useState(false);
   const selectedShare = shares.find((share) => share.share_id === selectedShareId);
+  const applicationShares = shares.filter((share) => share.share_type === "application");
+  const directCandidates = shares.filter((share) => share.share_type === "user");
+  const uniqueCandidates = Array.from(new Map(shares.map((share) => [share.user_id, share])).values());
+  const statusCounts = APPLICATION_STATUSES.map((status) => ({
+    label: statusLabel(status, lang),
+    value: applicationShares.filter((share) => normalizeStatusValue(share.application_status) === status).length
+  })).filter((item) => item.value > 0);
+  const activityData = [
+    { label: t("sharedCandidates"), value: uniqueCandidates.length },
+    { label: t("managedApplications"), value: applicationShares.length },
+    { label: t("scheduledInterviews"), value: interviews.length }
+  ];
+  const agentTabs = [
+    ["profile", t("profile"), "◉"],
+    ["overview", t("overview"), "▦"],
+    ["candidates", t("candidates"), "◎"],
+    ["applications", t("applications"), "◈"],
+    ["schedule", t("scheduleInterview"), "◌"],
+    ["interviews", t("scheduledInterviews"), "▣"],
+    ["reports", t("agentReports"), "▥"]
+  ];
+  async function refreshAgent() {
+    await reload?.();
+  }
+  async function updateApplicationStatus(application, status) {
+    const nextStatus = normalizeStatusValue(status);
+    if (!nextStatus) return;
+    if (nextStatus === "interview") {
+      setInterview({
+        userId: application.user_id,
+        jobId: application.job_id,
+        scheduledAt: "",
+        channel: interview.channel || "Video call",
+        notes: `${application.full_name} - ${application.job_title}`
+      });
+      setTab("schedule");
+      setTimeout(() => document.getElementById("agent-schedule-interview-form")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+      return;
+    }
+    await api(`/agent/applications/${application.application_id}`, { method: "PATCH", body: JSON.stringify({ status: nextStatus }) });
+    await refreshAgent();
+  }
+  async function updateInterviewStatus(item, status) {
+    const nextStatus = normalizeStatusValue(status);
+    if (!nextStatus) return;
+    await api(`/agent/interviews/${item.id}`, { method: "PATCH", body: JSON.stringify({ status: nextStatus }) });
+    await refreshAgent();
+  }
+  async function scheduleInterview(event) {
+    event.preventDefault();
+    if (!interview.userId || !interview.scheduledAt) return;
+    setSchedulingInterview(true);
+    try {
+      const result = await api("/agent/interviews", {
+        method: "POST",
+        body: JSON.stringify({ ...interview, jobId: interview.jobId || null })
+      });
+      if (result.emailSent) {
+        alert(`${t("interviewEmailSent")} ${result.recipientEmail}`);
+      } else {
+        alert(`${t("interviewEmailFailed")}: ${result.emailError || "-"}`);
+      }
+      setInterview({ userId: "", jobId: "", scheduledAt: "", channel: "Video call", notes: "" });
+      await refreshAgent();
+    } finally {
+      setSchedulingInterview(false);
+    }
+  }
+  function startScheduleForShare(share) {
+    setInterview({
+      userId: share.user_id,
+      jobId: share.job_id || "",
+      scheduledAt: "",
+      channel: interview.channel || "Video call",
+      notes: share.job_title ? `${share.full_name} - ${share.job_title}` : share.full_name
+    });
+    setTab("schedule");
+  }
   if (selectedShare) {
     const skills = Array.isArray(selectedShare.skills) ? selectedShare.skills : [];
     const experiences = Array.isArray(selectedShare.experiences) ? selectedShare.experiences : [];
@@ -1672,33 +1773,115 @@ function AgentWorkspace({ t, lang, shares = [] }) {
   }
 
   return (
-    <section className="agent-page">
-      <div className="section-head">
-        <div>
-          <h2>{t("agentWorkspace")}</h2>
-          <p>{t("sharedProfiles")}</p>
+    <section className="agent-page admin-page">
+      <section className="admin-heading"><div><p>{t("agent")}</p><h1>{t("agentWorkspace")}</h1></div><button className="primary-button">{t("agentTools")}</button></section>
+      <section className="admin-console">
+        <aside className="admin-menu panel">
+          {agentTabs.map(([id, label, icon]) => <button className={tab === id ? "active" : ""} type="button" onClick={() => setTab(id)} key={id}><span>{icon}</span>{label}</button>)}
+        </aside>
+        <div className="admin-content">
+          {tab === "profile" && <section className="admin-profile-view">
+            <section className="profile-hero panel">
+              <Avatar user={agent} size="large" />
+              <div><h1>{agent?.full_name || t("agent")}</h1><p>{agent?.headline || t("agentWorkspace")}</p><span>{agent?.email}</span></div>
+            </section>
+            <section className="metric-grid">
+              <Metric label={t("sharedCandidates")} value={uniqueCandidates.length} />
+              <Metric label={t("managedApplications")} value={applicationShares.length} />
+              <Metric label={t("scheduledInterviews")} value={interviews.length} />
+            </section>
+          </section>}
+
+          {tab === "overview" && <>
+            <section className="metric-grid">
+              <Metric label={t("sharedCandidates")} value={uniqueCandidates.length} />
+              <Metric label={t("managedApplications")} value={applicationShares.length} />
+              <Metric label={t("scheduledInterviews")} value={interviews.length} />
+            </section>
+            <section className="analytics-grid">
+              <AnalyticsList title={t("applicationOutcomes")} data={statusCounts} />
+              <AnalyticsBars title={t("agentActivity")} data={activityData} />
+              <article className="panel">
+                <h2>{t("agentTools")}</h2>
+                <div className="agent-tool-list">
+                  <button className="secondary-button" type="button" onClick={() => setTab("candidates")}>{t("candidates")}</button>
+                  <button className="secondary-button" type="button" onClick={() => setTab("applications")}>{t("applications")}</button>
+                  <button className="secondary-button" type="button" onClick={() => setTab("schedule")}>{t("scheduleInterview")}</button>
+                </div>
+              </article>
+            </section>
+          </>}
+
+          {tab === "candidates" && <section className="panel">
+            <div className="section-head"><h2>{t("candidates")}</h2><span className="status">{uniqueCandidates.length}</span></div>
+            {uniqueCandidates.length ? <div className="agent-profile-grid-list">
+              {uniqueCandidates.map((share) => (
+                <button className="agent-profile-tile" type="button" key={share.share_id} onClick={() => setSelectedShareId(share.share_id)}>
+                  <Avatar user={{ full_name: share.full_name, avatar_url: share.avatar_url }} size="large" />
+                  <strong>{share.full_name}</strong>
+                  <span>{share.headline || share.job_title || "-"}</span>
+                  <small>{t("openProfile")}</small>
+                </button>
+              ))}
+            </div> : <p>{t("noSharedProfiles")}</p>}
+          </section>}
+
+          {tab === "applications" && <section className="panel">
+            <div className="section-head"><h2>{t("applications")}</h2><span className="status">{applicationShares.length}</span></div>
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>{t("applicant")}</th><th>{t("job")}</th><th>{t("submittedAnswers")}</th><th>{t("applicationStatus")}</th><th>{t("actions")}</th></tr></thead>
+                <tbody>{applicationShares.map((application) => (
+                  <tr key={application.share_id}>
+                    <td><div className="table-user"><Avatar user={{ full_name: application.full_name, avatar_url: application.avatar_url }} size="small" /><div><button className="link-button" type="button" onClick={() => setSelectedShareId(application.share_id)}>{application.full_name}</button><span>{application.email}</span></div></div></td>
+                    <td><strong>{application.job_title}</strong><span>#{application.job_number || "-"} · {application.company_name}</span></td>
+                    <td><ApplicationAnswers t={t} answers={application.screening_answers} /></td>
+                    <td><span className={`status ${application.application_status}`}>{statusLabel(application.application_status, lang)}</span></td>
+                    <td><select className="action-select" defaultValue="" onChange={(e) => { updateApplicationStatus(application, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option>{APPLICATION_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select></td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </section>}
+
+          {tab === "schedule" && <form id="agent-schedule-interview-form" className="panel admin-form" onSubmit={scheduleInterview}>
+            <h2>{t("scheduleInterview")}</h2>
+            <select value={interview.userId} onChange={(e) => setInterview({ ...interview, userId: e.target.value, jobId: "" })}><option value="">{t("candidates")}</option>{uniqueCandidates.map((share) => <option key={share.user_id} value={share.user_id}>{share.full_name} - {share.email}</option>)}</select>
+            <select value={interview.jobId} onChange={(e) => setInterview({ ...interview, jobId: e.target.value })}><option value="">{t("jobs")}</option>{applicationShares.filter((share) => !interview.userId || share.user_id === interview.userId).map((share) => <option key={share.application_id} value={share.job_id}>{share.job_title} - {share.company_name}</option>)}</select>
+            <input type="datetime-local" value={interview.scheduledAt} onChange={(e) => setInterview({ ...interview, scheduledAt: e.target.value })} />
+            <input placeholder={t("channel")} value={interview.channel} onChange={(e) => setInterview({ ...interview, channel: e.target.value })} />
+            <textarea placeholder={t("notes")} value={interview.notes} onChange={(e) => setInterview({ ...interview, notes: e.target.value })} />
+            <button className="primary-button loading-button" disabled={schedulingInterview}>{schedulingInterview && <span className="spinner" aria-hidden="true"></span>}{t("scheduleInterview")}</button>
+          </form>}
+
+          {tab === "interviews" && <section className="panel">
+            <div className="section-head"><h2>{t("scheduledInterviews")}</h2><span className="status">{interviews.length}</span></div>
+            <div className="interview-admin-list">
+              {interviews.length ? interviews.map((item) => <article className="interview-admin-item" key={item.id}>
+                <div><strong>{item.full_name}</strong><span>{item.email}</span></div>
+                <div><strong>{item.job_title || t("job")}</strong><span>{item.company_name || "-"}</span></div>
+                <div><strong>{new Date(item.scheduled_at).toLocaleString()}</strong><span>{item.channel}</span></div>
+                <select className="action-select" defaultValue="" onChange={(e) => { updateInterviewStatus(item, e.target.value); e.target.value = ""; }}>
+                  <option value="">{t("interviewOutcome")}</option>
+                  {INTERVIEW_OUTCOME_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}
+                </select>
+              </article>) : <p>{t("noAppliedJobs")}</p>}
+            </div>
+          </section>}
+
+          {tab === "reports" && <section className="analytics-grid">
+            <AnalyticsBars title={t("agentActivity")} data={activityData} />
+            <AnalyticsList title={t("applicationOutcomes")} data={statusCounts} />
+            <AnalyticsList title={t("jobCategories")} data={applicationShares.reduce((items, share) => {
+              const label = jobCategoryLabel(share.category, lang);
+              const existing = items.find((item) => item.label === label);
+              if (existing) existing.value += 1;
+              else items.push({ label, value: 1 });
+              return items;
+            }, [])} />
+          </section>}
         </div>
-        <span className="status">{shares.length}</span>
-      </div>
-      {shares.length ? <section className="panel">
-        <div className="table-wrap">
-          <table>
-            <thead><tr><th>{t("users")}</th><th>{t("headline")}</th><th>{t("job")}</th><th>{t("applicationStatus")}</th><th>{t("sharedProfiles")}</th></tr></thead>
-            <tbody>{shares.map((share) => {
-              const isApplicationShare = share.share_type === "application";
-              return (
-                <tr key={share.share_id}>
-                  <td><div className="table-user"><Avatar user={{ full_name: share.full_name, avatar_url: share.avatar_url }} size="small" /><div><button className="link-button" type="button" onClick={() => setSelectedShareId(share.share_id)}>{share.full_name}</button><span>{share.email}</span></div></div></td>
-                  <td>{share.headline || "-"}</td>
-                  <td>{isApplicationShare ? <><strong>{share.job_title}</strong><span>{share.company_name}</span></> : <span>{t("profileDetails")}</span>}</td>
-                  <td>{isApplicationShare ? <span className={`status ${share.application_status}`}>{statusLabel(share.application_status, lang)}</span> : <span className="status">{t("sharedProfiles")}</span>}</td>
-                  <td>{new Date(share.shared_at).toLocaleDateString()}</td>
-                </tr>
-              );
-            })}</tbody>
-          </table>
-        </div>
-      </section> : <article className="panel"><p>{t("noSharedProfiles")}</p></article>}
+      </section>
     </section>
   );
 }
