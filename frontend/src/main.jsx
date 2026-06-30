@@ -175,6 +175,8 @@ const text = {
     liveAgentRequest: "I want to speak with live support.",
     clearFailed: "Could not clear the conversation.",
     editUser: "Edit user",
+    addUser: "Add user",
+    masterAdmin: "Master admin",
     delete: "Delete",
     verify: "Verify",
     activate: "Activate",
@@ -372,6 +374,8 @@ const text = {
     liveAgentRequest: "أريد التحدث مع موظف دعم مباشر.",
     clearFailed: "تعذر مسح المحادثة.",
     editUser: "تعديل المستخدم",
+    addUser: "إضافة مستخدم",
+    masterAdmin: "المدير الرئيسي",
     delete: "حذف",
     verify: "توثيق",
     activate: "تفعيل",
@@ -439,7 +443,7 @@ const INTERVIEW_OUTCOME_STATUSES = ["accepted", "rejected"];
 const USER_STATUSES = ["active", "verified", "review", "suspended"];
 const JOB_STATUSES = ["active", "paused", "closed"];
 const PLAN_OPTIONS = ["free", "premium"];
-const USER_ROLES = ["member", "recruiter", "company", "agent", "admin"];
+const USER_ROLES = ["member", "agent", "admin", "master_admin"];
 
 function statusLabel(value, lang) {
   return STATUS_LABELS[value]?.[lang] || value || "-";
@@ -458,6 +462,16 @@ function planLabel(value, lang) {
   const labels = {
     free: { en: "Free", ar: "مجاني" },
     premium: { en: "Premium", ar: "مميز" }
+  };
+  return labels[value]?.[lang] || value || "-";
+}
+
+function roleLabel(value, lang) {
+  const labels = {
+    member: { en: "User", ar: "مستخدم" },
+    agent: { en: "Agent", ar: "وكيل" },
+    admin: { en: "Admin", ar: "مدير" },
+    master_admin: { en: "Master admin", ar: "مدير رئيسي" }
   };
   return labels[value]?.[lang] || value || "-";
 }
@@ -510,6 +524,7 @@ function App() {
   const [builderOpen, setBuilderOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const t = (key) => text[lang][key] || key;
+  const isAdminRole = (role) => ["admin", "master_admin"].includes(role);
 
   useEffect(() => {
     document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
@@ -521,7 +536,7 @@ function App() {
     const data = await api("/account");
     setMe(data);
     setSession(data.user);
-    if (data.user.role === "admin") {
+    if (isAdminRole(data.user.role)) {
       try {
         setJobs(await api("/admin/jobs"));
       } catch {
@@ -533,7 +548,7 @@ function App() {
     } else {
       setJobs(await api("/jobs"));
     }
-    if (data.user.role === "admin") {
+    if (isAdminRole(data.user.role)) {
       setAdmin(await api("/admin/overview"));
       setAdminUsers(await api("/admin/users"));
       setAdminApplications(await api("/admin/applications"));
@@ -548,7 +563,7 @@ function App() {
   }
 
   async function loadSupportThreads() {
-    if (session?.role === "admin") {
+    if (isAdminRole(session?.role)) {
       setSupportThreads(await api("/admin/support/threads"));
     }
   }
@@ -560,7 +575,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (session?.role !== "admin") return undefined;
+    if (!isAdminRole(session?.role)) return undefined;
     const timer = setInterval(() => loadSupportThreads().catch(() => {}), 12000);
     return () => clearInterval(timer);
   }, [session?.role]);
@@ -646,12 +661,12 @@ function App() {
             ["profile", "◉"],
             ["jobs", "▣"]
           ].map(([item, icon]) => <button className={`nav-link ${view === item ? "active" : ""}`} onClick={() => setView(item)} key={item}><span>{icon}</span><b>{t(item)}</b></button>)}
-          {session.role === "admin" && <button className={`nav-link ${view === "admin" ? "active" : ""}`} onClick={() => setView("admin")}><span>▥</span><b>{t("admin")}</b></button>}
+          {isAdminRole(session.role) && <button className={`nav-link ${view === "admin" ? "active" : ""}`} onClick={() => setView("admin")}><span>▥</span><b>{t("admin")}</b></button>}
           {isAgent && <button className="nav-link active" onClick={() => setView("agent")}><span>◈</span><b>{t("agentWorkspace")}</b></button>}
         </nav>
         <div className="top-actions">
           <button className="icon-button" onClick={() => setLang(lang === "en" ? "ar" : "en")}>{t("language")}</button>
-          {!isAgent && <button className="secondary-button compact notify-button" onClick={() => session.role === "admin" ? (setAdminStartTab("support"), setView("admin")) : setSupportOpen(true)}>{t("support")}{supportUnread > 0 && <span>{supportUnread}</span>}</button>}
+          {!isAgent && <button className="secondary-button compact notify-button" onClick={() => isAdminRole(session.role) ? (setAdminStartTab("support"), setView("admin")) : setSupportOpen(true)}>{t("support")}{supportUnread > 0 && <span>{supportUnread}</span>}</button>}
           {!isAgent && <button className="primary-button compact" onClick={() => setBuilderOpen(true)}>{t("completeProfile")}</button>}
           <button className="secondary-button compact" onClick={logout}>{t("logout")}</button>
         </div>
@@ -662,7 +677,7 @@ function App() {
           {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} />}
           {view === "profile" && <Profile t={t} me={me} reload={loadApp} />}
           {view === "jobs" && <Jobs t={t} lang={lang} jobs={jobs} applications={me.applications || []} interviews={me.interviews || []} search={jobSearch} mode={jobMode} setMode={setJobMode} selectedJobId={selectedJobId} clearSelectedJob={() => setSelectedJobId("")} reload={loadApp} />}
-          {view === "admin" && session.role === "admin" && <Admin t={t} lang={lang} admin={admin} users={adminUsers} setUsers={setAdminUsers} jobs={jobs} applications={adminApplications} setApplications={setAdminApplications} interviews={adminInterviews} supportThreads={supportThreads} initialTab={adminStartTab} clearInitialTab={() => setAdminStartTab("")} reload={loadApp} openSupport={(userId) => { setSupportTarget(userId || ""); setSupportOpen(true); }} />}
+          {view === "admin" && isAdminRole(session.role) && <Admin t={t} lang={lang} session={session} admin={admin} users={adminUsers} setUsers={setAdminUsers} jobs={jobs} applications={adminApplications} setApplications={setAdminApplications} interviews={adminInterviews} supportThreads={supportThreads} initialTab={adminStartTab} clearInitialTab={() => setAdminStartTab("")} reload={loadApp} openSupport={(userId) => { setSupportTarget(userId || ""); setSupportOpen(true); }} />}
         </>}
       </main>
       {!isAgent && builderOpen && <ProfileBuilder t={t} me={me} reload={loadApp} close={() => setBuilderOpen(false)} />}
@@ -835,7 +850,7 @@ function Home({ t, lang, me, jobs, setView, openJob, openAppliedJobs, openBuilde
           <h2>{t("workspace")}</h2>
           <button className="panel-link" onClick={() => setView("profile")}><span>↗</span>{t("publicProfile")}</button>
           <button className="panel-link" onClick={() => setView("jobs")}><span>▦</span>{t("savedJobs")}</button>
-          {me.user.role === "admin" && <button className="panel-link" onClick={() => setView("admin")}><span>▥</span>{t("adminDashboard")}</button>}
+          {["admin", "master_admin"].includes(me.user.role) && <button className="panel-link" onClick={() => setView("admin")}><span>▥</span>{t("adminDashboard")}</button>}
         </section>
       </aside>
       <section className="feed">
@@ -1222,10 +1237,12 @@ function Jobs({ t, lang, jobs, applications, interviews = [], search = "", mode 
   </section>;
 }
 
-function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplications, interviews = [], supportThreads, initialTab, clearInitialTab, reload, openSupport }) {
+function Admin({ t, lang, session, admin, users, setUsers, jobs, applications, setApplications, interviews = [], supportThreads, initialTab, clearInitialTab, reload, openSupport }) {
   const [tab, setTab] = useState("overview");
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState(null);
+  const emptyUserForm = { fullName: "", email: "", password: "", phone: "", dob: "", headline: "", location: "", role: "member", plan: "free", status: "active" };
+  const [newUser, setNewUser] = useState(emptyUserForm);
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [jobAdminSearch, setJobAdminSearch] = useState("");
   const emptyJobForm = { companyName: "مختبرات روابط", title: "", category: "General", location: "عن بعد", type: "دوام كامل", salaryRange: "", description: "", questionsText: "" };
@@ -1248,6 +1265,8 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
     return `${job.job_number || ""} ${job.title || ""} ${job.company_name || ""}`.toLowerCase().includes(normalizedJobAdminSearch);
   });
   const agents = users.filter((user) => user.role === "agent");
+  const isMasterAdmin = session?.role === "master_admin";
+  const editableRoles = USER_ROLES.filter((role) => isMasterAdmin || role !== "master_admin");
   useEffect(() => {
     if (initialTab) {
       setTab(initialTab);
@@ -1261,6 +1280,12 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
   async function patchUser(user, patch) {
     await api(`/admin/users/${user.id}`, { method: "PATCH", body: JSON.stringify(patch) });
     searchUsers(search);
+  }
+  async function createUser(event) {
+    event.preventDefault();
+    await api("/admin/users", { method: "POST", body: JSON.stringify(newUser) });
+    setNewUser(emptyUserForm);
+    await searchUsers(search);
   }
   async function deleteUser(user) {
     if (!confirm(`Delete ${user.full_name}?`)) return;
@@ -1481,12 +1506,28 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
           </>}
 
           {tab === "users" && <>
+            <form className="panel admin-form" onSubmit={createUser}>
+              <h2>{t("addUser")}</h2>
+              <input placeholder={t("fullName")} value={newUser.fullName} onChange={(e) => setNewUser({ ...newUser, fullName: e.target.value })} required />
+              <input placeholder={t("email")} value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} required />
+              <input type="password" placeholder={t("password")} value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} required autoComplete="new-password" />
+              <input placeholder={t("phone")} value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} />
+              <input type="date" value={newUser.dob} onChange={(e) => setNewUser({ ...newUser, dob: e.target.value })} />
+              <input placeholder={t("headline")} value={newUser.headline} onChange={(e) => setNewUser({ ...newUser, headline: e.target.value })} />
+              <input placeholder={t("location")} value={newUser.location} onChange={(e) => setNewUser({ ...newUser, location: e.target.value })} />
+              <div className="row-fields">
+                <select value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}>{editableRoles.map((role) => <option value={role} key={role}>{roleLabel(role, lang)}</option>)}</select>
+                <select value={newUser.plan} onChange={(e) => setNewUser({ ...newUser, plan: e.target.value })}>{PLAN_OPTIONS.map((plan) => <option value={plan} key={plan}>{planLabel(plan, lang)}</option>)}</select>
+                <select value={newUser.status} onChange={(e) => setNewUser({ ...newUser, status: e.target.value })}>{USER_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select>
+                <button className="primary-button">{t("addUser")}</button>
+              </div>
+            </form>
             <section className="panel">
               <div className="section-head"><h2>{t("users")}</h2><input placeholder={t("searchUsers")} value={search} onChange={(e) => searchUsers(e.target.value)} /></div>
               <div className="table-wrap">
                 <table>
                   <thead><tr><th>{t("users")}</th><th>{t("role")}</th><th>{t("plan")}</th><th>{t("status")}</th><th>{t("attachments")}</th><th>{t("lastActive")}</th><th>{t("shareWithAgent")}</th><th>{t("actions")}</th></tr></thead>
-                  <tbody>{users.map((user) => <tr key={user.id}><td><div className="table-user"><Avatar user={user} size="small" /><div><strong>{user.full_name}</strong><span>{user.email}</span></div></div></td><td>{user.role}</td><td><select className="plan-select" value={user.plan || "free"} onChange={(e) => patchUser(user, { plan: e.target.value })}>{PLAN_OPTIONS.map((plan) => <option value={plan} key={plan}>{planLabel(plan, lang)}</option>)}</select></td><td><span className={`status ${user.status}`}>{statusLabel(user.status, lang)}</span></td><td><DocumentLinks t={t} documents={user.documents} avatarUrl={user.avatar_url} compact /></td><td>{new Date(user.last_active_at).toLocaleDateString()}</td><td><select className="action-select" defaultValue="" disabled={!agents.length} onChange={async (e) => { await shareUser(user, e.target.value); e.target.value = ""; }}><option value="">{agents.length ? t("shareWithAgent") : t("agent")}</option>{agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}</select></td><td><select className="action-select" defaultValue="" onChange={(e) => { runUserAction(user, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option><option value="edit">{t("editUser")}</option><option value="verify">{t("verify")}</option><option value="activate">{t("activate")}</option><option value="deactivate">{t("deactivate")}</option><option value="delete">{t("delete")}</option></select></td></tr>)}</tbody>
+                  <tbody>{users.map((user) => <tr key={user.id}><td><div className="table-user"><Avatar user={user} size="small" /><div><strong>{user.full_name}</strong><span>{user.email}</span></div></div></td><td>{roleLabel(user.role, lang)}</td><td><select className="plan-select" value={user.plan || "free"} onChange={(e) => patchUser(user, { plan: e.target.value })}>{PLAN_OPTIONS.map((plan) => <option value={plan} key={plan}>{planLabel(plan, lang)}</option>)}</select></td><td><span className={`status ${user.status}`}>{statusLabel(user.status, lang)}</span></td><td><DocumentLinks t={t} documents={user.documents} avatarUrl={user.avatar_url} compact /></td><td>{new Date(user.last_active_at).toLocaleDateString()}</td><td><select className="action-select" defaultValue="" disabled={!agents.length} onChange={async (e) => { await shareUser(user, e.target.value); e.target.value = ""; }}><option value="">{agents.length ? t("shareWithAgent") : t("agent")}</option>{agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}</select></td><td><select className="action-select" defaultValue="" onChange={(e) => { runUserAction(user, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option><option value="edit">{t("editUser")}</option><option value="verify">{t("verify")}</option><option value="activate">{t("activate")}</option><option value="deactivate">{t("deactivate")}</option>{(isMasterAdmin || !["admin", "master_admin"].includes(user.role)) && <option value="delete">{t("delete")}</option>}</select></td></tr>)}</tbody>
                 </table>
               </div>
             </section>
@@ -1500,7 +1541,7 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
               <input value={editing.headline || ""} onChange={(e) => setEditing({ ...editing, headline: e.target.value })} placeholder={t("headline")} />
               <input value={editing.location || ""} onChange={(e) => setEditing({ ...editing, location: e.target.value })} placeholder={t("location")} />
               <div className="row-fields">
-                <select value={editing.role} onChange={(e) => setEditing({ ...editing, role: e.target.value })}>{USER_ROLES.map((role) => <option value={role} key={role}>{role}</option>)}</select>
+                <select value={editing.role} onChange={(e) => setEditing({ ...editing, role: e.target.value })}>{editableRoles.map((role) => <option value={role} key={role}>{roleLabel(role, lang)}</option>)}</select>
                 <select value={editing.plan || "free"} onChange={(e) => setEditing({ ...editing, plan: e.target.value })}>{PLAN_OPTIONS.map((plan) => <option value={plan} key={plan}>{planLabel(plan, lang)}</option>)}</select>
                 <select value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value })}>{USER_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select>
                 <button className="primary-button">{t("save")}</button>
@@ -1531,7 +1572,7 @@ function Admin({ t, lang, admin, users, setUsers, jobs, applications, setApplica
                 <textarea value={selectedProfile.profile?.about || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, profile: { ...(selectedProfile.profile || {}), about: e.target.value } })} placeholder={t("about")} />
                 <input value={Array.isArray(selectedProfile.profile?.skills) ? selectedProfile.profile.skills.join(", ") : selectedProfile.profile?.skills || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, profile: { ...(selectedProfile.profile || {}), skills: e.target.value } })} placeholder={t("skills")} />
                 <div className="row-fields">
-                  <select value={selectedProfile.user.role} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, role: e.target.value } })}>{USER_ROLES.map((role) => <option value={role} key={role}>{role}</option>)}</select>
+                  <select value={selectedProfile.user.role} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, role: e.target.value } })}>{editableRoles.map((role) => <option value={role} key={role}>{roleLabel(role, lang)}</option>)}</select>
                   <select value={selectedProfile.user.status} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, status: e.target.value } })}>{USER_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select>
                   <button className="primary-button">{t("save")}</button>
                 </div>
@@ -1919,30 +1960,31 @@ function AgentWorkspace({ t, lang, agent, shares = [], interviews = [], reload }
 }
 
 function SupportWindow({ t, me, users, initialUserId = "", onUpdate, close }) {
-  const [targetUserId, setTargetUserId] = useState(me.user.role === "admin" ? initialUserId || users[0]?.id || "" : me.user.id);
+  const isSupportAdmin = ["admin", "master_admin"].includes(me.user.role);
+  const [targetUserId, setTargetUserId] = useState(isSupportAdmin ? initialUserId || users[0]?.id || "" : me.user.id);
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [chatError, setChatError] = useState("");
   async function loadMessages(userId = targetUserId) {
-    const query = me.user.role === "admin" && userId ? `?user_id=${userId}` : "";
+    const query = isSupportAdmin && userId ? `?user_id=${userId}` : "";
     setMessages(await api(`/support/messages${query}`));
     await onUpdate?.();
   }
   useEffect(() => {
-    if (me.user.role === "admin" && !targetUserId && users[0]?.id) setTargetUserId(users[0].id);
-  }, [users.length, targetUserId, me.user.role]);
+    if (isSupportAdmin && !targetUserId && users[0]?.id) setTargetUserId(users[0].id);
+  }, [users.length, targetUserId, isSupportAdmin]);
   useEffect(() => {
-    if (me.user.role === "admin" && initialUserId && initialUserId !== targetUserId) setTargetUserId(initialUserId);
-  }, [initialUserId, me.user.role, targetUserId]);
+    if (isSupportAdmin && initialUserId && initialUserId !== targetUserId) setTargetUserId(initialUserId);
+  }, [initialUserId, isSupportAdmin, targetUserId]);
   useEffect(() => { loadMessages(); }, [targetUserId]);
   async function sendMessage(event) {
     event.preventDefault();
     if (!message.trim()) return;
     setSending(true);
     try {
-      await api("/support/messages", { method: "POST", body: JSON.stringify({ message, userId: me.user.role === "admin" ? targetUserId : undefined }) });
+      await api("/support/messages", { method: "POST", body: JSON.stringify({ message, userId: isSupportAdmin ? targetUserId : undefined }) });
       setMessage("");
       await loadMessages();
     } finally {
@@ -1955,7 +1997,7 @@ function SupportWindow({ t, me, users, initialUserId = "", onUpdate, close }) {
     try {
       await api("/support/messages/clear", {
         method: "POST",
-        body: JSON.stringify({ userId: me.user.role === "admin" ? targetUserId : undefined })
+        body: JSON.stringify({ userId: isSupportAdmin ? targetUserId : undefined })
       });
       setMessages([]);
       await onUpdate?.();
@@ -1968,7 +2010,7 @@ function SupportWindow({ t, me, users, initialUserId = "", onUpdate, close }) {
   async function requestLiveSupport() {
     setSending(true);
     try {
-      await api("/support/messages", { method: "POST", body: JSON.stringify({ message: t("liveAgentRequest"), userId: me.user.role === "admin" ? targetUserId : undefined }) });
+      await api("/support/messages", { method: "POST", body: JSON.stringify({ message: t("liveAgentRequest"), userId: isSupportAdmin ? targetUserId : undefined }) });
       await loadMessages();
     } finally {
       setSending(false);
@@ -1983,7 +2025,7 @@ function SupportWindow({ t, me, users, initialUserId = "", onUpdate, close }) {
   return (
     <div className="support-window">
       <header><strong>{t("support")}</strong><div><button type="button" onClick={clearChat} disabled={clearing}>{clearing ? t("clearingChat") : t("clearChat")}</button><button onClick={close}>×</button></div></header>
-      {me.user.role === "admin" && <select value={targetUserId} onChange={(e) => setTargetUserId(e.target.value)}>{users.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select>}
+      {isSupportAdmin && <select value={targetUserId} onChange={(e) => setTargetUserId(e.target.value)}>{users.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select>}
       <div className="support-messages">
         {messages.map((item) => <p className={`support-bubble ${item.sender_role}`} key={item.id}><strong>{item.sender_role}</strong>{item.message}</p>)}
       </div>

@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, EmailStr
 
-from .auth import admin_user, agent_user, create_token, current_user, hash_password, public_user, verify_password
+from .auth import admin_user, agent_user, create_token, current_user, hash_password, is_master_admin, public_user, verify_password
 from .config import APP_ENV, OPENAI_API_KEY, SMTP_FROM, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USER, UPLOAD_DIR
 from .db import execute, fetch_all, fetch_one
 
@@ -198,8 +198,12 @@ def ensure_runtime_schema():
     for sql in (
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS dob DATE",
+        "ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check",
+        "ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('member', 'recruiter', 'company', 'admin', 'agent', 'master_admin'))",
         "ALTER TABLE pending_registrations ADD COLUMN IF NOT EXISTS phone TEXT",
         "ALTER TABLE pending_registrations ADD COLUMN IF NOT EXISTS dob DATE",
+        "ALTER TABLE pending_registrations DROP CONSTRAINT IF EXISTS pending_registrations_role_check",
+        "ALTER TABLE pending_registrations ADD CONSTRAINT pending_registrations_role_check CHECK (role IN ('member', 'recruiter', 'company', 'admin', 'agent', 'master_admin'))",
         """
         CREATE TABLE IF NOT EXISTS mfa_challenges (
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -345,6 +349,19 @@ class AdminUserPatch(BaseModel):
     role: str | None = None
     plan: str | None = None
     status: str | None = None
+
+
+class AdminCreateUserBody(BaseModel):
+    fullName: str
+    email: EmailStr
+    password: str
+    phone: str | None = None
+    dob: str | None = None
+    headline: str | None = None
+    location: str | None = None
+    role: str = "member"
+    plan: str = "free"
+    status: str = "active"
 
 
 class AdminProfilePatch(AdminUserPatch):
@@ -775,6 +792,8 @@ def sync_profile_strength(user_id: UUID | str) -> int:
 
 @app.post("/api/auth/register")
 def register(body: RegisterBody):
+    if body.role != "member":
+        raise HTTPException(status_code=403, detail="Privileged accounts must be created by an administrator")
     existing = fetch_one("SELECT id, email_verified, status FROM users WHERE email = %s", (body.email.lower(),))
     if existing:
         raise HTTPException(status_code=409, detail="Email already registered")
@@ -869,7 +888,7 @@ def login(body: LoginBody):
         raise HTTPException(status_code=403, detail="Please verify your email before signing in")
     if user.get("status") == "suspended":
         raise HTTPException(status_code=403, detail="This account is suspended")
-    if user["role"] in {"admin", "agent"}:
+    if user["role"] in {"admin", "agent", "master_admin"} or is_master_admin(user):
         otp = f"{secrets.randbelow(1000000):06d}"
         challenge = execute(
             """
@@ -1626,6 +1645,41 @@ def admin_users(user: Annotated[dict, Depends(admin_user)], search: str = ""):
     )
 
 
+@app.post("/api/admin/users", status_code=201)
+def create_admin_user(body: AdminCreateUserBody, user: Annotated[dict, Depends(admin_user)]):
+    allowed_roles = {"member", "agent", "admin", "master_admin"}
+    if body.role not in allowed_roles:
+        raise HTTPException(status_code=400, detail="Invalid user role")
+    if body.role == "master_admin" and not is_master_admin(user):
+        raise HTTPException(status_code=403, detail="Only master admin can create master admin accounts")
+    if len(body.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    if fetch_one("SELECT id FROM users WHERE email = %s", (str(body.email).lower(),)):
+        raise HTTPException(status_code=409, detail="Email already registered")
+    created_user = execute(
+        """
+        INSERT INTO users (full_name, email, phone, dob, password_hash, role, plan, status, headline, location, email_verified)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,true)
+        RETURNING id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url, created_at, last_active_at
+        """,
+        (
+            body.fullName,
+            str(body.email).lower(),
+            body.phone,
+            body.dob or None,
+            hash_password(body.password),
+            body.role,
+            body.plan,
+            body.status,
+            body.headline,
+            body.location,
+        ),
+    )
+    execute("INSERT INTO profiles (user_id, about, skills, profile_strength) VALUES (%s, '', '{}', 0) ON CONFLICT (user_id) DO NOTHING", (created_user["id"],))
+    sync_profile_strength(created_user["id"])
+    return created_user
+
+
 @app.get("/api/admin/users/{user_id}/profile")
 def admin_user_profile(user_id: UUID, user: Annotated[dict, Depends(admin_user)]):
     sync_profile_strength(user_id)
@@ -1653,6 +1707,13 @@ def admin_user_profile(user_id: UUID, user: Annotated[dict, Depends(admin_user)]
 
 @app.patch("/api/admin/users/{user_id}/profile")
 def update_admin_profile(user_id: UUID, body: AdminProfilePatch, user: Annotated[dict, Depends(admin_user)]):
+    target_user = fetch_one("SELECT id, email, role FROM users WHERE id = %s", (user_id,))
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if body.role == "master_admin" and not is_master_admin(user):
+        raise HTTPException(status_code=403, detail="Only master admin can assign master admin role")
+    if target_user["role"] == "master_admin" and not is_master_admin(user):
+        raise HTTPException(status_code=403, detail="Only master admin can edit master admin accounts")
     password_hash = None
     if body.newPassword:
         if len(body.newPassword) < 6:
@@ -1768,6 +1829,13 @@ def delete_admin_document(document_id: UUID, user: Annotated[dict, Depends(admin
 
 @app.patch("/api/admin/users/{user_id}")
 def update_admin_user(user_id: UUID, body: AdminUserPatch, user: Annotated[dict, Depends(admin_user)]):
+    target_user = fetch_one("SELECT id, email, role FROM users WHERE id = %s", (user_id,))
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if body.role == "master_admin" and not is_master_admin(user):
+        raise HTTPException(status_code=403, detail="Only master admin can assign master admin role")
+    if target_user["role"] == "master_admin" and not is_master_admin(user):
+        raise HTTPException(status_code=403, detail="Only master admin can edit master admin accounts")
     password_hash = None
     if body.newPassword:
         if len(body.newPassword) < 6:
@@ -1800,9 +1868,11 @@ def update_admin_user(user_id: UUID, body: AdminUserPatch, user: Annotated[dict,
 def delete_admin_user(user_id: UUID, user: Annotated[dict, Depends(admin_user)]):
     if str(user_id) == str(user["id"]):
         raise HTTPException(status_code=400, detail="You cannot delete your own admin account")
-    target_user = fetch_one("SELECT id, email, avatar_url FROM users WHERE id = %s", (user_id,))
+    target_user = fetch_one("SELECT id, email, role, avatar_url FROM users WHERE id = %s", (user_id,))
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
+    if target_user["role"] in {"admin", "master_admin"} and not is_master_admin(user):
+        raise HTTPException(status_code=403, detail="Only master admin can delete admin accounts")
     documents = fetch_all("SELECT file_path FROM documents WHERE user_id = %s", (user_id,))
     for document in documents:
         delete_upload_file(document.get("file_path"))
@@ -1961,7 +2031,8 @@ def create_admin_interview(body: InterviewBody, user: Annotated[dict, Depends(ad
 
 @app.get("/api/support/messages")
 def list_support_messages(user: Annotated[dict, Depends(current_user)], user_id: UUID | None = None):
-    target_user_id = user_id if user["role"] == "admin" and user_id else user["id"]
+    is_support_admin = user["role"] in {"admin", "master_admin"} or is_master_admin(user)
+    target_user_id = user_id if is_support_admin and user_id else user["id"]
     return fetch_all(
         """
         SELECT sm.*, u.full_name, u.email
@@ -1976,8 +2047,9 @@ def list_support_messages(user: Annotated[dict, Depends(current_user)], user_id:
 
 @app.post("/api/support/messages", status_code=201)
 def create_support_message(body: SupportMessageBody, user: Annotated[dict, Depends(current_user)]):
-    target_user_id = body.userId if user["role"] == "admin" and body.userId else user["id"]
-    sender_role = "admin" if user["role"] == "admin" else "user"
+    is_support_admin = user["role"] in {"admin", "master_admin"} or is_master_admin(user)
+    target_user_id = body.userId if is_support_admin and body.userId else user["id"]
+    sender_role = "admin" if is_support_admin else "user"
     message = execute(
         """
         INSERT INTO support_messages (user_id, sender_role, message)
@@ -2000,7 +2072,8 @@ def create_support_message(body: SupportMessageBody, user: Annotated[dict, Depen
 
 
 def clear_support_thread(user: dict, user_id: UUID | None = None):
-    target_user_id = user_id if user["role"] == "admin" and user_id else user["id"]
+    is_support_admin = user["role"] in {"admin", "master_admin"} or is_master_admin(user)
+    target_user_id = user_id if is_support_admin and user_id else user["id"]
     result = fetch_one(
         """
         WITH deleted AS (

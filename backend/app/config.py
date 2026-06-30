@@ -19,3 +19,8 @@ SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "no-reply@rawabet.local")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+MASTER_ADMIN_EMAILS = {
+    email.strip().lower()
+    for email in os.getenv("MASTER_ADMIN_EMAILS", "loutfi.abouzaid@gmail.com,loutfi.abouzaid@gamil.com").split(",")
+    if email.strip()
+}

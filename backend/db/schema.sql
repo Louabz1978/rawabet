@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
   dob DATE,
   password_hash TEXT NOT NULL,
   email_verified BOOLEAN NOT NULL DEFAULT true,
-  role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('member', 'recruiter', 'company', 'admin', 'agent')),
+  role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('member', 'recruiter', 'company', 'admin', 'agent', 'master_admin')),
   plan TEXT NOT NULL DEFAULT 'free',
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'verified', 'review', 'suspended')),
   headline TEXT,
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS pending_registrations (
   phone TEXT NOT NULL,
   dob DATE NOT NULL,
   password_hash TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('member', 'recruiter', 'company', 'admin', 'agent')),
+  role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('member', 'recruiter', 'company', 'admin', 'agent', 'master_admin')),
   otp_hash TEXT NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
