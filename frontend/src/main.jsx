@@ -569,6 +569,7 @@ function App() {
     setError("");
     try {
       const data = await api("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
+      if (data.mfaRequired) return data;
       setToken(data.token);
       try {
         const loadedUser = await loadApp();
@@ -581,6 +582,7 @@ function App() {
       }
     } catch (err) {
       setError(err.message);
+      return null;
     }
   }
 
@@ -677,6 +679,7 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
   const [dob, setDob] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
+  const [mfaChallengeId, setMfaChallengeId] = useState("");
   const [notice, setNotice] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
   const [registering, setRegistering] = useState(false);
@@ -695,7 +698,13 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
     setError("");
     setLoggingIn(true);
     try {
-      await login(email, password);
+      const data = await login(email, password);
+      if (data?.mfaRequired) {
+        setMfaChallengeId(data.challengeId);
+        setNotice(data.devOtp ? `${data.message} OTP: ${data.devOtp}` : data.message || t("checkEmail"));
+        setOtp("");
+        setMode("mfa");
+      }
     } finally {
       setLoggingIn(false);
     }
@@ -723,6 +732,20 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
     setVerifying(true);
     try {
       const data = await api("/auth/verify-registration", { method: "POST", body: JSON.stringify({ email, otp }) });
+      await verifyAndLoad(data.token);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setVerifying(false);
+    }
+  }
+
+  async function verifyMfa(event) {
+    event.preventDefault();
+    setError("");
+    setVerifying(true);
+    try {
+      const data = await api("/auth/verify-mfa", { method: "POST", body: JSON.stringify({ challengeId: mfaChallengeId, otp }) });
       await verifyAndLoad(data.token);
     } catch (err) {
       setError(err.message);
@@ -766,6 +789,15 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
             {error && <p className="error">{error}</p>}
             <button className="primary-button loading-button" disabled={verifying}>{verifying && <span className="spinner" aria-hidden="true"></span>}{t("verifyEmail")}</button>
             <button className="auth-switch" type="button" disabled={verifying} onClick={() => { setMode("login"); setError(""); }}>{t("haveAccount")} {t("login")}</button>
+          </form>}
+
+          {mode === "mfa" && <form className="login-card" onSubmit={verifyMfa}>
+            <label>{t("email")}<input value={email} readOnly /></label>
+            <label>{t("verificationCode")}<input value={otp} onChange={(event) => setOtp(event.target.value)} required /></label>
+            {notice && <p className="notice">{notice}</p>}
+            {error && <p className="error">{error}</p>}
+            <button className="primary-button loading-button" disabled={verifying}>{verifying && <span className="spinner" aria-hidden="true"></span>}{t("verifyEmail")}</button>
+            <button className="auth-switch" type="button" disabled={verifying} onClick={() => { setMode("login"); setError(""); setMfaChallengeId(""); }}>{t("haveAccount")} {t("login")}</button>
           </form>}
         </div>
         <div className="login-visual">

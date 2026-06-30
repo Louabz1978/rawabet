@@ -23,6 +23,18 @@ from .db import execute, fetch_all, fetch_one
 
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+MAX_AVATAR_BYTES = 5 * 1024 * 1024
+MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
+AVATAR_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+RESUME_EXTENSIONS = {".pdf", ".doc", ".docx"}
+CERTIFICATE_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".webp"}
+AVATAR_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
+RESUME_MIME_TYPES = {
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+CERTIFICATE_MIME_TYPES = AVATAR_MIME_TYPES | {"application/pdf"}
 RATE_LIMITS: dict[str, list[float]] = {}
 RATE_LIMIT_RULES = (
     ("/api/auth/login", 8, 300),
@@ -42,8 +54,11 @@ app.add_middleware(
     "http://127.0.0.1:5173",
     "http://35.174.9.208:5173",
     "http://35.174.9.208",
+    "https://35.174.9.208",
     "http://rawabet-sy.com",
     "http://www.rawabet-sy.com",
+    "https://rawabet-sy.com",
+    "https://www.rawabet-sy.com",
 ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -53,7 +68,9 @@ app.add_middleware(
 
 def client_ip(request: Request) -> str:
     forwarded = request.headers.get("x-forwarded-for", "")
-    return forwarded.split(",", 1)[0].strip() or request.client.host if request.client else "unknown"
+    if forwarded:
+        return forwarded.split(",", 1)[0].strip()
+    return request.client.host if request.client else "unknown"
 
 
 def matched_rate_limit(path: str):
@@ -126,6 +143,40 @@ def delete_user_uploads(user_id: UUID | str, kind: str):
         for path in directory.glob(f"{user_id}_{kind}_*"):
             if path.is_file():
                 path.unlink(missing_ok=True)
+
+
+def looks_like_allowed_file(content: bytes, suffix: str) -> bool:
+    if suffix == ".pdf":
+        return content.startswith(b"%PDF")
+    if suffix in {".jpg", ".jpeg"}:
+        return content.startswith(b"\xff\xd8\xff")
+    if suffix == ".png":
+        return content.startswith(b"\x89PNG\r\n\x1a\n")
+    if suffix == ".webp":
+        return len(content) >= 12 and content[:4] == b"RIFF" and content[8:12] == b"WEBP"
+    if suffix in {".doc", ".docx"}:
+        return content.startswith(b"PK\x03\x04") or content.startswith(b"\xd0\xcf\x11\xe0")
+    return False
+
+
+def validate_upload(content: bytes, original_name: str, content_type: str | None, kind: str):
+    suffix = Path(original_name).suffix.lower()
+    if kind == "avatar":
+        allowed_extensions, allowed_mimes, max_size = AVATAR_EXTENSIONS, AVATAR_MIME_TYPES, MAX_AVATAR_BYTES
+    elif kind == "resume":
+        allowed_extensions, allowed_mimes, max_size = RESUME_EXTENSIONS, RESUME_MIME_TYPES, MAX_DOCUMENT_BYTES
+    else:
+        allowed_extensions, allowed_mimes, max_size = CERTIFICATE_EXTENSIONS, CERTIFICATE_MIME_TYPES, MAX_DOCUMENT_BYTES
+    if not content:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    if len(content) > max_size:
+        raise HTTPException(status_code=400, detail="Uploaded file is too large")
+    if suffix not in allowed_extensions:
+        raise HTTPException(status_code=400, detail="File type is not allowed")
+    if content_type and content_type not in allowed_mimes:
+        raise HTTPException(status_code=400, detail="File content type is not allowed")
+    if not looks_like_allowed_file(content, suffix):
+        raise HTTPException(status_code=400, detail="File signature does not match the expected type")
 
 
 @app.get("/uploads/{filename:path}")
@@ -980,9 +1031,10 @@ async def upload_document(
             raise HTTPException(status_code=400, detail="You can upload up to 5 certificates")
 
     original_name = file.filename or safe_kind
-    suffix = Path(original_name).suffix
-    target = UPLOAD_DIR / f"{user['id']}_{safe_kind}_{uuid4().hex}{suffix}"
+    suffix = Path(original_name).suffix.lower()
     content = await file.read()
+    validate_upload(content, original_name, file.content_type, safe_kind)
+    target = UPLOAD_DIR / f"{user['id']}_{safe_kind}_{uuid4().hex}{suffix}"
     target.write_bytes(content)
     file_url = f"/uploads/{target.name}"
     document = execute(
@@ -999,13 +1051,15 @@ async def upload_document(
 
 @app.post("/api/account/avatar")
 async def upload_avatar(user: Annotated[dict, Depends(current_user)], file: UploadFile = File(...)):
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Profile picture must be an image")
+    original_name = file.filename or "avatar.jpg"
+    suffix = Path(original_name).suffix.lower() or ".jpg"
+    if not Path(original_name).suffix:
+        original_name = f"{original_name}{suffix}"
+    content = await file.read()
+    validate_upload(content, original_name, file.content_type, "avatar")
     delete_upload_file(user.get("avatar_url"))
     delete_user_uploads(user["id"], "avatar")
-    suffix = Path(file.filename or "avatar").suffix.lower() or ".jpg"
     target = UPLOAD_DIR / f"{user['id']}_avatar_{uuid4().hex}{suffix}"
-    content = await file.read()
     target.write_bytes(content)
     avatar_url = f"/uploads/{target.name}"
     updated = execute(
@@ -1648,9 +1702,10 @@ async def upload_admin_document(
         if certificate_count >= 5:
             raise HTTPException(status_code=400, detail="You can upload up to 5 certificates")
     original_name = file.filename or safe_kind
-    suffix = Path(original_name).suffix
-    target = UPLOAD_DIR / f"{user_id}_{safe_kind}_{uuid4().hex}{suffix}"
+    suffix = Path(original_name).suffix.lower()
     content = await file.read()
+    validate_upload(content, original_name, file.content_type, safe_kind)
+    target = UPLOAD_DIR / f"{user_id}_{safe_kind}_{uuid4().hex}{suffix}"
     target.write_bytes(content)
     file_url = f"/uploads/{target.name}"
     document = execute(
@@ -1670,13 +1725,15 @@ async def upload_admin_avatar(user_id: UUID, user: Annotated[dict, Depends(admin
     target_user = fetch_one("SELECT id, avatar_url FROM users WHERE id = %s", (user_id,))
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Profile picture must be an image")
+    original_name = file.filename or "avatar.jpg"
+    suffix = Path(original_name).suffix.lower() or ".jpg"
+    if not Path(original_name).suffix:
+        original_name = f"{original_name}{suffix}"
+    content = await file.read()
+    validate_upload(content, original_name, file.content_type, "avatar")
     delete_upload_file(target_user.get("avatar_url"))
     delete_user_uploads(user_id, "avatar")
-    suffix = Path(file.filename or "avatar").suffix.lower() or ".jpg"
     target = UPLOAD_DIR / f"{user_id}_avatar_{uuid4().hex}{suffix}"
-    content = await file.read()
     target.write_bytes(content)
     avatar_url = f"/uploads/{target.name}"
     execute("UPDATE users SET avatar_url = %s WHERE id = %s", (avatar_url, user_id))
