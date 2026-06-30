@@ -900,7 +900,22 @@ def login(body: LoginBody):
 def verify_mfa(body: VerifyMfaBody):
     challenge = fetch_one(
         """
-        SELECT m.*, u.id AS user_id, u.full_name, u.email, u.phone, u.dob, u.role, u.plan, u.status, u.headline, u.location, u.avatar_url
+        SELECT
+          m.id AS challenge_id,
+          m.otp_hash,
+          m.expires_at,
+          m.used_at,
+          u.id,
+          u.full_name,
+          u.email,
+          u.phone,
+          u.dob,
+          u.role,
+          u.plan,
+          u.status,
+          u.headline,
+          u.location,
+          u.avatar_url
         FROM mfa_challenges m
         JOIN users u ON u.id = m.user_id
         WHERE m.id = %s AND m.used_at IS NULL AND m.expires_at > NOW()
@@ -912,7 +927,7 @@ def verify_mfa(body: VerifyMfaBody):
     if challenge.get("status") == "suspended":
         raise HTTPException(status_code=403, detail="This account is suspended")
     execute("UPDATE mfa_challenges SET used_at = NOW() WHERE id = %s", (body.challengeId,))
-    execute("UPDATE users SET last_active_at = NOW() WHERE id = %s", (challenge["user_id"],))
+    execute("UPDATE users SET last_active_at = NOW() WHERE id = %s", (challenge["id"],))
     return {"user": public_user(challenge), "token": create_token(challenge)}
 
 
