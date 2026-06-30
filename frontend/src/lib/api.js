@@ -20,7 +20,12 @@ export async function api(path, options = {}) {
     ...options.headers
   };
 
-  const response = await fetch(`${API_URL}${path}`, { ...options, headers });
+  let response;
+  try {
+    response = await fetch(`${API_URL}${path}`, { ...options, headers });
+  } catch (error) {
+    throw new Error("Cannot reach Rawabet server. Please check your internet connection or try again in a moment.");
+  }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.detail || data.message || "Request failed");
   return data;

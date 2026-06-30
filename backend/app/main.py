@@ -59,6 +59,7 @@ app.add_middleware(
     "http://www.rawabet-sy.com",
     "https://rawabet-sy.com",
     "https://www.rawabet-sy.com",
+    "https://localhost",
 ],
     allow_credentials=True,
     allow_methods=["*"],
