@@ -831,7 +831,7 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
   }
 
   return (
-    <main className={`login-page ${lang === "ar" ? "login-page-rtl" : ""}`}>
+    <main className={`login-page login-page-${publicPage} ${lang === "ar" ? "login-page-rtl" : ""}`}>
       <header className="login-top">
         <img className="login-top-logo" src="/brand/rawabet-logo-lockup-cropped.png" alt="Rawabet - روابط تجمعنا" />
         <div className="login-public-actions">
