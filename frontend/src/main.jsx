@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { api, clearToken, setToken } from "./lib/api.js";
 import "./styles.css";
@@ -9,6 +9,10 @@ const text = {
     sub: "Professional Network",
     email: "Email",
     password: "Password",
+    repeatPassword: "Repeat password",
+    showPassword: "Show password",
+    hidePassword: "Hide password",
+    passwordsDoNotMatch: "Passwords do not match.",
     login: "Sign in",
     loginSubtitle: "Find jobs, build a verified professional profile, share resumes and skills, and manage your career opportunities in one place.",
     loginTrustOne: "Verified profiles",
@@ -180,13 +184,14 @@ const text = {
     lastActive: "Last active",
     actions: "Actions",
     save: "Save",
-    support: "Support",
-    supportMessage: "Write a support message",
+    support: "AI assistant",
+    supportMessage: "Ask the AI assistant",
     send: "Send",
     clearingChat: "Clearing...",
     speakLive: "Speak with live support",
     endConversation: "End conversation",
     liveAgentRequest: "I want to speak with live support.",
+    liveSupportStarted: "Live support is now connected. Send your message and an admin will reply here.",
     clearFailed: "Could not clear the conversation.",
     editUser: "Edit user",
     addUser: "Add user",
@@ -222,6 +227,10 @@ const text = {
     sub: "شبكة مهنية",
     email: "البريد الإلكتروني",
     password: "كلمة المرور",
+    repeatPassword: "تأكيد كلمة المرور",
+    showPassword: "إظهار كلمة المرور",
+    hidePassword: "إخفاء كلمة المرور",
+    passwordsDoNotMatch: "كلمتا المرور غير متطابقتين.",
     login: "تسجيل الدخول",
     loginSubtitle: "ابحث عن الوظائف، وابن ملفا مهنيا موثقا، وشارك سيرتك الذاتية ومهاراتك، وأدر فرصك المهنية في مكان واحد.",
     loginTrustOne: "ملفات موثقة",
@@ -393,13 +402,14 @@ const text = {
     lastActive: "آخر نشاط",
     actions: "الإجراءات",
     save: "حفظ",
-    support: "الدعم",
-    supportMessage: "اكتب رسالة للدعم",
+    support: "المساعد الذكي",
+    supportMessage: "اسأل المساعد الذكي",
     send: "إرسال",
     clearingChat: "جار المسح...",
     speakLive: "التحدث مع دعم مباشر",
     endConversation: "إنهاء المحادثة",
     liveAgentRequest: "أريد التحدث مع موظف دعم مباشر.",
+    liveSupportStarted: "تم تحويلك إلى الدعم المباشر. اكتب رسالتك وسيقوم المدير بالرد هنا.",
     clearFailed: "تعذر مسح المحادثة.",
     editUser: "تعديل المستخدم",
     addUser: "إضافة مستخدم",
@@ -722,6 +732,10 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
   const [phone, setPhone] = useState("");
   const [dob, setDob] = useState("");
   const [password, setPassword] = useState("");
+  const [repeatPassword, setRepeatPassword] = useState("");
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [showRepeatPassword, setShowRepeatPassword] = useState(false);
   const [contactName, setContactName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactSubject, setContactSubject] = useState("");
@@ -763,6 +777,10 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
     event.preventDefault();
     setError("");
     setNotice("");
+    if (password !== repeatPassword) {
+      setError(t("passwordsDoNotMatch"));
+      return;
+    }
     setRegistering(true);
     try {
       const data = await api("/auth/register", { method: "POST", body: JSON.stringify({ fullName, email, phone, dob, password }) });
@@ -873,7 +891,15 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
               <span>{t("needAccount")}</span>
             </div>
             <label>{t("email")}<input name="rawabet-login-email" autoComplete="new-password" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-            <label>{t("password")}<input name="rawabet-login-password" autoComplete="new-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+            <PasswordField
+              label={t("password")}
+              name="rawabet-login-password"
+              value={password}
+              onChange={setPassword}
+              visible={showLoginPassword}
+              setVisible={setShowLoginPassword}
+              t={t}
+            />
             {error && <p className="error">{error}</p>}
             <button className="primary-button loading-button" disabled={loggingIn}>{loggingIn && <span className="spinner" aria-hidden="true"></span>}{t("login")}</button>
             <button className="auth-switch" type="button" onClick={() => { setMode("register"); setError(""); }}>{t("needAccount")}</button>
@@ -888,7 +914,8 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
             <label>{t("email")}<input value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
             <label>{t("phone")}<input value={phone} onChange={(event) => setPhone(event.target.value)} required /></label>
             <label>{t("dob")}<input type="date" value={dob} onChange={(event) => setDob(event.target.value)} required /></label>
-            <label>{t("password")}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
+            <PasswordField label={t("password")} value={password} onChange={setPassword} visible={showRegisterPassword} setVisible={setShowRegisterPassword} t={t} required />
+            <PasswordField label={t("repeatPassword")} value={repeatPassword} onChange={setRepeatPassword} visible={showRepeatPassword} setVisible={setShowRepeatPassword} t={t} required />
             {error && <p className="error">{error}</p>}
             <button className="primary-button loading-button" disabled={registering}>{registering && <span className="spinner" aria-hidden="true"></span>}{t("createAccount")}</button>
             <button className="auth-switch" type="button" disabled={registering} onClick={() => { setMode("login"); setError(""); }}>{t("haveAccount")} {t("login")}</button>
@@ -2079,7 +2106,11 @@ function SupportWindow({ t, me, users, initialUserId = "", onUpdate, close }) {
   const [sending, setSending] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [chatError, setChatError] = useState("");
+  const messagesRef = useRef(null);
+  const initializedMessagesRef = useRef(false);
+  const latestMessageIdRef = useRef("");
   async function loadMessages(userId = targetUserId) {
+    if (!userId) return;
     const query = isSupportAdmin && userId ? `?user_id=${userId}` : "";
     setMessages(await api(`/support/messages${query}`));
     await onUpdate?.();
@@ -2091,6 +2122,27 @@ function SupportWindow({ t, me, users, initialUserId = "", onUpdate, close }) {
     if (isSupportAdmin && initialUserId && initialUserId !== targetUserId) setTargetUserId(initialUserId);
   }, [initialUserId, isSupportAdmin, targetUserId]);
   useEffect(() => { loadMessages(); }, [targetUserId]);
+  useEffect(() => {
+    if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+    const latest = messages[messages.length - 1];
+    if (!latest) return;
+    if (!initializedMessagesRef.current) {
+      initializedMessagesRef.current = true;
+      latestMessageIdRef.current = latest.id;
+      return;
+    }
+    if (latest.id !== latestMessageIdRef.current) {
+      const ownRole = isSupportAdmin ? "admin" : "user";
+      if (["admin", "user"].includes(latest.sender_role) && latest.sender_role !== ownRole) playNotificationBeep();
+      latestMessageIdRef.current = latest.id;
+    }
+  }, [messages.length]);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      loadMessages().catch(() => {});
+    }, 3500);
+    return () => clearInterval(timer);
+  }, [targetUserId, isSupportAdmin]);
   async function sendMessage(event) {
     event.preventDefault();
     if (!message.trim()) return;
@@ -2133,14 +2185,16 @@ function SupportWindow({ t, me, users, initialUserId = "", onUpdate, close }) {
     close();
   }
   const lastMessage = messages[messages.length - 1];
-  const showBotOptions = lastMessage?.sender_role === "bot" && /دعم مباشر|live support|end the conversation|إنهاء المحادثة/.test(lastMessage.message || "");
+  const liveMode = messages.some((item) => item.sender_role === "user" && /دعم مباشر|live support|live agent|human|موظف/i.test(item.message || ""));
+  const showBotOptions = !liveMode && lastMessage?.sender_role === "bot" && /دعم مباشر|live support|end the conversation|إنهاء المحادثة|end the conversation/i.test(lastMessage.message || "");
   return (
     <div className="support-window">
       <header><strong>{t("support")}</strong><div><button type="button" onClick={clearChat} disabled={clearing}>{clearing ? t("clearingChat") : t("clearChat")}</button><button onClick={close}>×</button></div></header>
       {isSupportAdmin && <select value={targetUserId} onChange={(e) => setTargetUserId(e.target.value)}>{users.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select>}
-      <div className="support-messages">
-        {messages.map((item) => <p className={`support-bubble ${item.sender_role}`} key={item.id}><strong>{item.sender_role}</strong>{item.message}</p>)}
+      <div className="support-messages" ref={messagesRef}>
+        {messages.map((item) => <SupportBubble item={item} key={item.id} />)}
       </div>
+      {liveMode && !isSupportAdmin && <p className="notice support-live-note">{t("liveSupportStarted")}</p>}
       {showBotOptions && <div className="support-options">
         <button className="secondary-button compact" type="button" onClick={requestLiveSupport} disabled={sending}>{t("speakLive")}</button>
         <button className="secondary-button compact" type="button" onClick={endConversation} disabled={clearing}>{t("endConversation")}</button>
@@ -2151,6 +2205,44 @@ function SupportWindow({ t, me, users, initialUserId = "", onUpdate, close }) {
         <button className="primary-button" disabled={sending}>{t("send")}</button>
       </form>
     </div>
+  );
+}
+
+function SupportBubble({ item }) {
+  const lines = String(item.message || "").split(/\r?\n/).filter((line) => line.trim());
+  return (
+    <div className={`support-bubble ${item.sender_role}`}>
+      <strong>{item.sender_role === "bot" ? "AI assistant" : item.sender_role}</strong>
+      <span>
+        {lines.length ? lines.map((line, index) => <span className="support-line" key={`${item.id}-${index}`}>{line}</span>) : <span className="support-line">-</span>}
+      </span>
+    </div>
+  );
+}
+
+function PasswordField({ label, name, value, onChange, visible, setVisible, t, required = false }) {
+  return (
+    <label>{label}
+      <span className="password-field">
+        <input
+          name={name}
+          autoComplete="new-password"
+          type={visible ? "text" : "password"}
+          value={value}
+          required={required}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <button
+          type="button"
+          className="password-toggle"
+          aria-label={visible ? t("hidePassword") : t("showPassword")}
+          title={visible ? t("hidePassword") : t("showPassword")}
+          onClick={() => setVisible((current) => !current)}
+        >
+          {visible ? "◉" : "○"}
+        </button>
+      </span>
+    </label>
   );
 }
 
@@ -2250,6 +2342,28 @@ function initials(name = "") {
 
 function formatNumber(value = 0) {
   return Number(value || 0).toLocaleString();
+}
+
+function playNotificationBeep() {
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    const context = new AudioContextClass();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.value = 880;
+    gain.gain.setValueAtTime(0.0001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.08, context.currentTime + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.18);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.2);
+    window.setTimeout(() => context.close?.(), 260);
+  } catch {
+    // Notification sound is best-effort; browsers may block audio before user interaction.
+  }
 }
 
 function assetUrl(path = "") {

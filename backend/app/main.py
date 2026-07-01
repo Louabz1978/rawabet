@@ -44,7 +44,7 @@ RATE_LIMIT_RULES = (
     ("/api/contact", 5, 300),
     ("/api/account/avatar", 20, 3600),
     ("/api/account/documents", 20, 3600),
-    ("/api/support/messages", 60, 300),
+    ("/api/support/messages", 500, 300),
 )
 
 app = FastAPI(title="Rawabet API", version="1.0.0")
@@ -526,9 +526,8 @@ def send_interview_email(email: str, full_name: str, job: dict | None, scheduled
 
 RAWABET_CONTEXT = """
 Rawabet / روابط is a professional employment platform for Arab professionals.
-It has a user platform and an admin platform.
 
-User platform:
+User capabilities:
 - Register with full name, email, phone, date of birth, and password.
 - Verify registration by email OTP before the account is created.
 - Log in only when the account is active or verified; suspended accounts must not log in.
@@ -539,17 +538,9 @@ User platform:
 - Certificate uploads can add up to five certificates.
 - Use Jobs to search job title/company, filter by category and salary, view details, apply, and track application status.
 - Applied jobs can be filtered by status, category, salary, and company.
-- Support chat lets users ask the bot or request live admin support.
+- AI assistant chat lets users ask about using Rawabet, jobs, profiles, applications, interviews, and documents.
+- Users can request live support when the assistant cannot help or when they need a person.
 - Clear chat removes the current support conversation.
-
-Admin platform:
-- Overview shows analytics for users, jobs posted, applications, outcomes, categories, profile health, pending documents, active jobs, suspended users, and interviews.
-- User Management lets admins search users, open a user profile, change plan between free/premium, verify, activate, deactivate/suspend, delete, and view attachments.
-- User profile editing lets admins update user information, plan, role, status, about, skills, profile picture, resume, and certificates.
-- Job Management lets admins add jobs, edit jobs, delete jobs, search by job number/title/company, and manage job status.
-- Applications lets admins review applicants and change application status to submitted, review, interview, accepted, or rejected.
-- Interviews lets admins select a user, select a job, schedule date/time, channel, notes, mark application as interview, and send email notification.
-- Support Inbox shows users who messaged support, unread counts by user, and lets admin open each chat and reply.
 
 Statuses:
 - Application statuses: submitted, review, interview, accepted, rejected.
@@ -558,8 +549,10 @@ Statuses:
 - Plans: free, premium.
 
 Bot rules:
-- Answer only questions about Rawabet and how to use this platform.
-- Prefer clear numbered steps and mention the exact page/menu/button names.
+- Answer only questions about what normal users can do in Rawabet.
+- Do not explain admin tools, agent tools, internal dashboards, analytics, user management, or job management.
+- Prefer clear numbered steps or bullets and put every bullet/step on its own line.
+- Mention exact user-facing page/menu/button names.
 - Use Arabic by default unless the user writes English.
 - If a question is outside Rawabet or cannot be answered from this context, ask whether the user wants live support or wants to end the conversation.
 """
@@ -567,6 +560,7 @@ Bot rules:
 LIVE_AGENT_REPLY = "تم إشعار فريق الدعم بطلبك. سيقوم موظف دعم مباشر بالرد عليك من صندوق الدعم."
 END_CHAT_REPLY = "حسنا، يمكنك إنهاء المحادثة الآن. إذا احتجت مساعدة لاحقا افتح نافذة الدعم مرة أخرى."
 UNKNOWN_REPLY = "لا أملك إجابة مؤكدة عن هذا السؤال داخل معلومات منصة روابط. هل تريد التحدث مع موظف دعم مباشر أم إنهاء المحادثة؟"
+UNKNOWN_REPLY_EN = "I do not have a confirmed answer from Rawabet platform information. Would you like to speak with live support or end the conversation?"
 
 
 def normalize_arabic_text(value: str) -> str:
@@ -588,6 +582,133 @@ def normalize_arabic_text(value: str) -> str:
 def contains_any_intent(value: str, stems: list[str]) -> bool:
     normalized = normalize_arabic_text(value)
     return any(stem in normalized for stem in stems)
+
+
+def question_is_english(value: str) -> bool:
+    return bool(re.search(r"[A-Za-z]", value)) and not bool(re.search(r"[\u0600-\u06FF]", value))
+
+
+def unknown_reply_for(question: str) -> str:
+    return UNKNOWN_REPLY_EN if question_is_english(question) else UNKNOWN_REPLY
+
+
+def is_live_support_request(value: str) -> bool:
+    lowered = value.lower()
+    normalized = normalize_arabic_text(value)
+    live_terms = ["live agent", "human", "support agent", "live support", "موظف", "دعم مباشر", "شخص", "انسان", "إنسان"]
+    return any(term in lowered or normalize_arabic_text(term) in normalized for term in live_terms)
+
+
+def live_support_requested(user_id: UUID) -> bool:
+    row = fetch_one(
+        """
+        SELECT EXISTS (
+          SELECT 1
+          FROM support_messages
+          WHERE user_id = %s
+            AND sender_role = 'user'
+            AND (
+              message ILIKE '%%live support%%'
+              OR message ILIKE '%%live agent%%'
+              OR message ILIKE '%%human%%'
+              OR message ILIKE '%%دعم مباشر%%'
+              OR message ILIKE '%%موظف%%'
+            )
+        ) AS requested
+        """,
+        (user_id,),
+    )
+    return bool(row and row.get("requested"))
+
+
+def active_jobs_context() -> str:
+    try:
+        job_number_expr = "job_number" if jobs_have_job_number_column() else "NULL::integer AS job_number"
+        jobs = fetch_all(
+            f"""
+            SELECT {job_number_expr}, company_name, title, category, location, type, salary_range, description,
+                   COALESCE(screening_questions, '[]'::jsonb) AS screening_questions
+            FROM jobs
+            WHERE status = 'active'
+            ORDER BY created_at DESC
+            LIMIT 80
+            """
+        )
+    except Exception:
+        jobs = []
+    if not jobs:
+        return "Current active jobs: No active jobs are available in the database."
+    lines = ["Current active jobs users can ask about:"]
+    for job in jobs:
+        number = f"#{job.get('job_number')} " if job.get("job_number") else ""
+        questions = job.get("screening_questions") or []
+        if not isinstance(questions, list):
+            questions = []
+        description = re.sub(r"\s+", " ", (job.get("description") or "")).strip()
+        if len(description) > 260:
+            description = f"{description[:260].rstrip()}..."
+        lines.append(
+            f"- {number}{job.get('title')} at {job.get('company_name')} | "
+            f"Category: {job.get('category')} | Location: {job.get('location')} | "
+            f"Type: {job.get('type')} | Salary: {job.get('salary_range') or '-'} | "
+            f"Description: {description or '-'} | Screening questions: {'; '.join(map(str, questions)) or '-'}"
+        )
+    return "\n".join(lines)
+
+
+def matching_jobs_reply(question: str) -> str | None:
+    lowered = question.lower()
+    normalized = normalize_arabic_text(question)
+    search_intents = ["search", "find", "show me", "ابحث", "اعثر", "اريد", "أريد", "وظائف", "وظيفة"]
+    if not any(term in lowered or normalize_arabic_text(term) in normalized for term in search_intents):
+        return None
+    if not any(term in lowered or normalize_arabic_text(term) in normalized for term in ["job", "jobs", "وظيفة", "وظائف"]):
+        return None
+    stop_words = {
+        "search", "find", "show", "me", "job", "jobs", "in", "at", "for", "about", "rawabet",
+        "ابحث", "اعثر", "اريد", "أريد", "لي", "عن", "في", "على", "وظيفة", "وظائف", "الوظائف", "مناسبه", "مناسبة"
+    }
+    words = re.findall(r"[\w\u0600-\u06FF]+", question)
+    keywords = []
+    for word in words:
+        normalized_word = normalize_arabic_text(word)
+        if len(normalized_word) < 3 or normalized_word in {normalize_arabic_text(item) for item in stop_words}:
+            continue
+        keywords.append(word)
+    if not keywords:
+        return None
+    like_values = [f"%{keyword}%" for keyword in keywords[:6]]
+    conditions = []
+    params = []
+    for value in like_values:
+        conditions.append("(company_name ILIKE %s OR title ILIKE %s OR location ILIKE %s OR category ILIKE %s OR COALESCE(description,'') ILIKE %s)")
+        params.extend([value, value, value, value, value])
+    try:
+        job_number_expr = "job_number" if jobs_have_job_number_column() else "NULL::integer AS job_number"
+        jobs = fetch_all(
+            f"""
+            SELECT id, {job_number_expr}, company_name, title, category, location, type, salary_range, description
+            FROM jobs
+            WHERE status = 'active' AND ({' OR '.join(conditions)})
+            ORDER BY created_at DESC
+            LIMIT 10
+            """,
+            tuple(params),
+        )
+    except Exception:
+        return None
+    if not jobs:
+        return "لم أجد وظائف مطابقة مباشرة لهذا البحث داخل الوظائف النشطة. هل تريد التحدث مع دعم مباشر أم إنهاء المحادثة؟"
+    lines = ["وجدت الوظائف التالية المرتبطة ببحثك:"]
+    for job in jobs:
+        job_id = f"#{job.get('job_number')}" if job.get("job_number") else str(job.get("id"))
+        lines.append(f"- رقم الوظيفة: {job_id}")
+        lines.append(f"  المسمى: {job.get('title')}")
+        lines.append(f"  الجهة: {job.get('company_name')}")
+        lines.append(f"  الموقع: {job.get('location')}")
+        lines.append(f"  الراتب: {job.get('salary_range') or '-'}")
+    lines.append("افتح صفحة الوظائف وابحث برقم الوظيفة أو اسم الجهة لعرض التفاصيل والتقديم.")
+    return "\n".join(lines)
 
 
 RAWABET_GUIDES = [
@@ -637,11 +758,11 @@ RAWABET_GUIDES = [
     },
     {
         "terms": ["interview", "schedule interview", "مقابلة", "المقابلات", "جدولة"],
-        "answer": "بالنسبة للمقابلات:\n1. الإدارة تفتح لوحة الإدارة ثم المقابلات.\n2. تختار المستخدم والوظيفة.\n3. تحدد التاريخ والوقت والقناة وتضيف الملاحظات.\n4. عند الحفظ يتم تحديث حالة الطلب إلى مقابلة.\n5. يصل للمستخدم إشعار بريد بالمقابلة، وتظهر المقابلة في الصفحة الرئيسية وتُميّز الوظيفة."
+        "answer": "لمتابعة المقابلات كمستخدم:\n1. عندما يتم تحديد مقابلة لك، تظهر في الصفحة الرئيسية ضمن المقابلات القادمة.\n2. ستصلك رسالة بريد تحتوي على معلومات المقابلة إذا كان بريدك صحيحا.\n3. تظهر الوظيفة المرتبطة بالمقابلة بشكل مميز حتى تنتبه لها.\n4. إذا تغيرت نتيجة المقابلة إلى مقبول أو مرفوض، يتم تحديث حالة طلبك وتختفي من المقابلات القادمة."
     },
     {
         "terms": ["support", "chat", "clear chat", "live support", "دعم", "محادثة", "مسح المحادثة", "دعم مباشر"],
-        "answer": "لاستخدام الدعم:\n1. اضغط الدعم من الشريط العلوي.\n2. اكتب سؤالك عن منصة روابط.\n3. سيجيبك المساعد عن خطوات استخدام المنصة.\n4. إذا لم يجد جوابا سيعرض خيار التحدث مع دعم مباشر أو إنهاء المحادثة.\n5. لمسح المحادثة اضغط مسح المحادثة، وسيتم حذف رسائل هذه المحادثة فقط.\n6. في لوحة الإدارة تظهر رسائل المستخدمين في صندوق الدعم ويمكن فتح محادثة كل مستخدم والرد عليه."
+        "answer": "لاستخدام المساعد الذكي:\n1. اضغط المساعد الذكي من الشريط العلوي.\n2. اكتب سؤالك عن منصة روابط أو الوظائف المتاحة.\n3. سيجيبك المساعد بخطوات واضحة عن استخدام المنصة.\n4. إذا لم يجد جوابا سيعرض خيار التحدث مع دعم مباشر أو إنهاء المحادثة.\n5. عند اختيار الدعم المباشر، اكتب رسالتك وسيظهر رد فريق الدعم داخل نفس المحادثة.\n6. لمسح المحادثة اضغط مسح المحادثة."
     },
     {
         "terms": ["admin", "dashboard", "analytics", "reports", "إدارة", "لوحة", "تحليلات", "تقارير"],
@@ -653,7 +774,7 @@ RAWABET_GUIDES = [
     },
     {
         "terms": ["plan", "premium", "free", "الخطة", "مميز", "مجاني", "بريميوم"],
-        "answer": "لتغيير خطة المستخدم:\n1. افتح الإدارة ثم إدارة المستخدمين.\n2. ابحث عن المستخدم المطلوب.\n3. في عمود الخطة اختر مجاني أو مميز.\n4. يتم حفظ التغيير مباشرة.\n5. يمكنك أيضا فتح تعديل المستخدم وتغيير الخطة من داخل ملفه."
+        "answer": "حول الخطة في روابط:\n1. قد يظهر حسابك بخطة مجاني أو مميز.\n2. الخطة تظهر ضمن بيانات حسابك عند مراجعة الملف.\n3. إذا أردت تغيير الخطة أو معرفة الصلاحيات المتاحة لك، تواصل مع الدعم المباشر.\n4. لا يمكن للمستخدم تغيير الخطة بنفسه من واجهة المستخدم."
     },
     {
         "terms": ["add job", "edit job", "delete job", "manage job", "post job", "job number", "job id", "إضافة وظيفة", "اضافة وظيفة", "أضيف وظيفة", "اضيف وظيفة", "أعدل وظيفة", "اعدل وظيفة", "تعديل وظيفة", "حذف وظيفة", "رقم الوظيفة", "إدارة الوظائف", "ادارة الوظائف"],
@@ -673,12 +794,22 @@ RAWABET_GUIDES = [
 def local_platform_reply(question: str) -> str | None:
     lowered = question.lower()
     normalized_question = normalize_arabic_text(question)
-    wants_live = ["live agent", "human", "support agent", "موظف", "دعم مباشر", "شخص", "انسان", "إنسان"]
     wants_end = ["end conversation", "close chat", "انهاء", "إنهاء", "انهي", "إنهي", "نهاية"]
-    if any(term in lowered or normalize_arabic_text(term) in normalized_question for term in wants_live):
+    restricted_terms = [
+        "admin", "administrator", "agent", "dashboard", "analytics", "report", "reports", "manage users", "user management",
+        "add job", "edit job", "delete job", "manage job", "post job", "approve", "reject application", "application management",
+        "إدارة المستخدمين", "ادارة المستخدمين", "لوحة الإدارة", "لوحة الادارة", "تحليلات", "تقارير", "وكيل", "الوكيل", "مدير", "الإدارة", "الادارة"
+    ]
+    if any(term in lowered or normalize_arabic_text(term) in normalized_question for term in restricted_terms):
+        return unknown_reply_for(question)
+    if is_live_support_request(question):
         return LIVE_AGENT_REPLY
     if any(term in lowered or normalize_arabic_text(term) in normalized_question for term in wants_end):
         return END_CHAT_REPLY
+    detailed_job_terms = ["description", "details", "salary", "requirements", "وصف", "تفاصيل", "راتب", "شروط", "متطلبات", "معلومات"]
+    job_terms = ["job", "jobs", "وظيفة", "وظائف"]
+    if any(term in lowered or normalize_arabic_text(term) in normalized_question for term in detailed_job_terms) and any(term in lowered or normalize_arabic_text(term) in normalized_question for term in job_terms):
+        return None
     best_guide = None
     best_score = 0
     for guide in RAWABET_GUIDES:
@@ -699,24 +830,29 @@ def platform_bot_reply(question: str) -> str:
     normalized_question = normalize_arabic_text(question)
     platform_terms = [
         "rawabet", "روابط", "platform", "profile", "resume", "cv", "certificate", "job", "jobs", "apply", "application",
-        "interview", "support", "admin", "dashboard", "analytics", "plan", "premium", "free", "status", "otp", "register",
+        "interview", "support", "plan", "premium", "free", "status", "otp", "register",
         "login", "upload", "attachment", "photo", "avatar", "skill", "experience", "salary", "category", "filter",
         "ملف", "وظيفة", "وظائف", "تقديم", "اتقدم", "اقدم", "التقدم", "قدم", "ارشدني", "مناسب", "مناسبا", "طلب", "طلبات", "حالة", "مقابلة", "دعم", "شهادة", "شهادات", "سيرة",
         "الخطة", "مميز", "مجاني", "الحالة", "تسجيل", "دخول", "تحقق", "رمز", "رفع", "مرفق", "مرفقات", "صورة", "صورتي", "صور",
-        "مهارات", "خبرات", "راتب", "فئة", "بحث", "فلتر", "إدارة", "لوحة", "تحليلات", "مستخدم", "مستخدمين"
+        "مهارات", "خبرات", "راتب", "فئة", "بحث", "فلتر"
     ]
     if not any(term in lowered or normalize_arabic_text(term) in normalized_question for term in platform_terms):
-        return UNKNOWN_REPLY
+        return unknown_reply_for(question)
+    job_match_reply = matching_jobs_reply(question)
+    if job_match_reply:
+        return job_match_reply
     local_reply = local_platform_reply(question)
     if local_reply:
         return local_reply
-    fallback = UNKNOWN_REPLY
+    fallback = unknown_reply_for(question)
     if not OPENAI_API_KEY:
         return fallback
+    context = f"{RAWABET_CONTEXT}\n\n{active_jobs_context()}"
+    unknown = unknown_reply_for(question)
     payload = {
         "model": "gpt-4o-mini",
         "messages": [
-            {"role": "system", "content": f"You are Rawabet's in-platform support guide. Answer only questions about Rawabet. Use Arabic by default unless the user writes English. Give practical numbered steps using page/menu/button names from the context. Be specific and helpful. If the user asks about a feature not in the context, reply exactly with: {UNKNOWN_REPLY}\n\n{RAWABET_CONTEXT}"},
+            {"role": "system", "content": f"You are Rawabet's AI assistant for normal platform users only. Answer only from the context below. Do not answer admin, agent, internal dashboard, analytics, or management questions. Use Arabic by default unless the user writes English. If you use bullets or numbered steps, every bullet or step must be on its own separate line. If the user asks about a job, use the current active jobs in context and include job number when available. If the user asks about something not in the context, reply exactly with: {unknown}\n\n{context}"},
             {"role": "user", "content": question},
         ],
         "temperature": 0.2,
@@ -2084,6 +2220,8 @@ def create_support_message(body: SupportMessageBody, user: Annotated[dict, Depen
     is_support_admin = user["role"] in {"admin", "master_admin"} or is_master_admin(user)
     target_user_id = body.userId if is_support_admin and body.userId else user["id"]
     sender_role = "admin" if is_support_admin else "user"
+    was_live = live_support_requested(target_user_id) if sender_role == "user" else False
+    requested_live = is_live_support_request(body.message) if sender_role == "user" else False
     message = execute(
         """
         INSERT INTO support_messages (user_id, sender_role, message)
@@ -2093,7 +2231,16 @@ def create_support_message(body: SupportMessageBody, user: Annotated[dict, Depen
         (target_user_id, sender_role, body.message),
     )
     bot_reply = None
-    if sender_role == "user":
+    if sender_role == "user" and requested_live:
+        bot_reply = execute(
+            """
+            INSERT INTO support_messages (user_id, sender_role, message)
+            VALUES (%s,'bot',%s)
+            RETURNING *
+            """,
+            (target_user_id, LIVE_AGENT_REPLY),
+        )
+    elif sender_role == "user" and not was_live:
         bot_reply = execute(
             """
             INSERT INTO support_messages (user_id, sender_role, message)

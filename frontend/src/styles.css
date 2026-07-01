@@ -1590,7 +1590,9 @@ html[dir="rtl"] .support-window {
   background: #fff;
   color: var(--ink);
   font-size: 0.86rem;
+  line-height: 1.55;
   box-shadow: 0 1px 0 rgba(16, 24, 40, 0.04);
+  white-space: pre-line;
 }
 
 .support-bubble strong {
@@ -1611,6 +1613,17 @@ html[dir="rtl"] .support-window {
 
 .support-bubble.bot {
   background: var(--brand-soft);
+}
+
+.support-line {
+  display: block;
+}
+
+.support-live-note {
+  margin: 0;
+  padding: 0 4px;
+  font-size: 0.76rem;
+  line-height: 1.45;
 }
 
 .support-options {
@@ -1844,6 +1857,33 @@ html[dir="rtl"] .support-window {
   font-size: 0.82rem;
   border-radius: 4px;
   background: #fff;
+}
+
+.password-field {
+  position: relative;
+  display: block;
+}
+
+.password-field input {
+  padding-inline-end: 42px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  inset-inline-end: 8px;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--brand);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
 }
 
 .login-card .primary-button {
