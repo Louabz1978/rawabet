@@ -1674,7 +1674,10 @@ html[dir="rtl"] .support-window {
   margin: 0 auto;
   padding: 16px clamp(30px, 4.5vw, 74px) 16px;
   overflow: hidden;
-  background: #fff;
+  background:
+    radial-gradient(circle at 18% 24%, rgba(16, 183, 167, 0.12), transparent 28%),
+    radial-gradient(circle at 88% 14%, rgba(9, 42, 83, 0.1), transparent 26%),
+    linear-gradient(135deg, rgba(231, 241, 247, 0.72), rgba(255, 255, 255, 0.92) 42%, rgba(16, 183, 167, 0.08));
 }
 
 .login-top {
@@ -1701,6 +1704,40 @@ html[dir="rtl"] .support-window {
   z-index: 10;
   cursor: pointer;
   margin-inline-end: 28px;
+}
+
+.login-public-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.login-public-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid rgba(9, 42, 83, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(10px);
+}
+
+.login-public-nav button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--brand);
+  font-size: 0.76rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.login-public-nav button.active {
+  background: var(--brand);
+  color: #fff;
 }
 
 .login-stage {
@@ -1811,6 +1848,43 @@ html[dir="rtl"] .support-window {
   font-size: 0.86rem;
   font-weight: 750;
   border-radius: 999px;
+}
+
+.login-info-card {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  max-width: 430px;
+  padding: 18px;
+  border: 1px solid rgba(9, 42, 83, 0.11);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: 0 18px 38px rgba(6, 29, 58, 0.08);
+  backdrop-filter: blur(12px);
+}
+
+.login-info-card h2 {
+  margin: 0;
+  color: var(--brand);
+  font-size: 1.08rem;
+  line-height: 1.2;
+}
+
+.login-info-card p,
+.login-contact-intro {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.6;
+}
+
+.login-contact-card textarea {
+  min-height: 86px;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+  resize: vertical;
+  border-radius: 4px;
 }
 
 .login-page-rtl .login-copy h1 {
@@ -2423,10 +2497,14 @@ td span {
   }
   .agent-profile-grid-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .agent-tool-list { grid-template-columns: 1fr; }
-  .login-page { width: min(100%, calc(100vw - 24px)); height: auto; min-height: 100dvh; padding: 12px 14px 18px; overflow: auto; }
-  .login-top { margin-bottom: 8px; }
+  .login-page { width: 100%; max-width: 100vw; height: 100dvh; min-height: 0; padding: 12px 18px 18px; overflow-x: hidden; overflow-y: auto; }
+  .login-top { margin-bottom: 22px; }
   .login-top-logo { width: 118px; max-height: 92px; }
-  .login-stage { gap: 12px; min-height: auto; margin-top: -10px; align-items: start; }
+  .login-public-actions { gap: 7px; }
+  .login-language-button { margin-inline-end: 0; }
+  .login-public-nav { gap: 2px; padding: 3px; }
+  .login-public-nav button { min-height: 28px; padding: 0 7px; font-size: 0.66rem; }
+  .login-stage { width: 100%; gap: 12px; min-height: auto; margin-top: 0; align-items: start; justify-items: center; }
   .login-page-rtl .login-copy,
   .login-page-rtl .login-visual {
     grid-column: auto;
@@ -2434,21 +2512,23 @@ td span {
   }
   .login-page-rtl .login-copy { transform: none; }
   .login-heading { gap: 7px; }
-  .login-copy { width: min(100%, 340px); padding-top: 0; }
+  .login-copy { width: min(100%, 340px); max-width: calc(100vw - 36px); padding-top: 0; }
   .login-copy h1,
   .login-page-rtl .login-copy h1 {
-    max-width: 340px;
-    font-size: clamp(1.2rem, 6vw, 1.55rem);
+    max-width: 100%;
+    font-size: clamp(1.05rem, 5.2vw, 1.36rem);
     font-weight: 500;
     line-height: 1.12;
     white-space: nowrap;
   }
   .login-heading span { font-size: 0.84rem; line-height: 1.5; }
-  .login-card { padding: 0; }
+  .login-card, .login-info-card { max-width: 100%; padding: 0; }
+  .login-info-card { padding: 14px; }
+  .login-info-card p, .login-contact-intro { font-size: 0.72rem; }
   .login-card label { font-size: 0.72rem; }
   .login-card input,
   .login-card .primary-button { min-height: 38px; }
-  .login-visual { min-height: auto; padding-top: 0; }
+  .login-visual { display: none; }
   .login-visual-card { padding: 0; }
   .login-visual img { width: min(470px, 104vw); max-height: none; }
   .login-trust-strip { margin-top: 14px; }

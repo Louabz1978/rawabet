@@ -41,6 +41,7 @@ RATE_LIMIT_RULES = (
     ("/api/auth/verify-mfa", 8, 300),
     ("/api/auth/register", 5, 300),
     ("/api/auth/verify-registration", 8, 300),
+    ("/api/contact", 5, 300),
     ("/api/account/avatar", 20, 3600),
     ("/api/account/documents", 20, 3600),
     ("/api/support/messages", 60, 300),
@@ -429,6 +430,13 @@ class ClearSupportBody(BaseModel):
     userId: UUID | None = None
 
 
+class ContactBody(BaseModel):
+    name: str
+    email: EmailStr
+    subject: str | None = None
+    message: str
+
+
 @app.get("/api/health")
 def health():
     return {"ok": True, "service": "rawabet-python-api"}
@@ -471,6 +479,31 @@ def send_verification_email(email: str, otp: str) -> tuple[bool, str | None]:
 
 def send_mfa_email(email: str, otp: str) -> tuple[bool, str | None]:
     return send_plain_email(email, "Rawabet secure sign-in code", f"Your Rawabet secure sign-in code is: {otp}\n\nThis code expires in 10 minutes. If you did not try to sign in, contact the platform administrator immediately.")
+
+
+@app.post("/api/contact")
+def send_contact_message(body: ContactBody):
+    name = body.name.strip()
+    subject = (body.subject or "Rawabet contact request").strip()
+    message = body.message.strip()
+    if len(name) < 2:
+        raise HTTPException(status_code=400, detail="Please enter your name.")
+    if len(message) < 10:
+        raise HTTPException(status_code=400, detail="Please enter a message with at least 10 characters.")
+    email_sent, email_error = send_plain_email(
+        "loutfi.abouzaid@gmail.com",
+        f"Rawabet contact: {subject[:80]}",
+        (
+            "New contact message from Rawabet.\n\n"
+            f"Name: {name}\n"
+            f"Email: {body.email}\n"
+            f"Subject: {subject or '-'}\n\n"
+            f"{message}\n"
+        ),
+    )
+    if not email_sent:
+        raise HTTPException(status_code=500, detail=email_error or "Could not send contact message.")
+    return {"message": "Message sent successfully."}
 
 
 def send_interview_email(email: str, full_name: str, job: dict | None, scheduled_at: str, channel: str, notes: str | None) -> tuple[bool, str | None]:

@@ -25,6 +25,16 @@ const text = {
     demoAdmin: "Admin demo",
     demoUser: "User demo",
     home: "Home",
+    aboutUs: "About us",
+    contactUs: "Contact us",
+    contactName: "Name",
+    contactSubject: "Subject",
+    contactMessage: "Message",
+    contactIntro: "Send a question or partnership request to the Rawabet team.",
+    contactSuccess: "Your message was sent successfully.",
+    aboutTitle: "About Rawabet",
+    aboutBodyOne: "Rawabet is a bilingual professional hiring platform built for people and organizations that need verified profiles, resumes, certificates, work history, job applications, interviews, and support in one organized place.",
+    aboutBodyTwo: "Professionals can build their profile, upload documents, apply to jobs, answer screening questions, follow application status, and communicate with support. Admins and agents can manage users, jobs, interviews, applications, analytics, and shared candidate profiles.",
     profile: "Profile",
     jobs: "Jobs",
     admin: "Admin",
@@ -50,7 +60,7 @@ const text = {
     portfolio: "Portfolio",
     event: "Event",
     welcomeTitle: "Welcome to Rawabet",
-    welcome: "Find Your Future Job",
+    welcome: "Future Job is Waiting",
     welcomeBody: "Rawabet helps professionals create bilingual profiles, upload resumes and certificates, apply to jobs, and connect with opportunity.",
     editProfile: "Save profile",
     fullName: "Full name",
@@ -228,6 +238,16 @@ const text = {
     demoAdmin: "تجربة المدير",
     demoUser: "تجربة المستخدم",
     home: "الرئيسية",
+    aboutUs: "من نحن",
+    contactUs: "تواصل معنا",
+    contactName: "الاسم",
+    contactSubject: "الموضوع",
+    contactMessage: "الرسالة",
+    contactIntro: "أرسل سؤالا أو طلب تعاون إلى فريق روابط.",
+    contactSuccess: "تم إرسال رسالتك بنجاح.",
+    aboutTitle: "من نحن",
+    aboutBodyOne: "روابط منصة توظيف مهنية ثنائية اللغة تساعد الأفراد والجهات على إدارة الملفات الموثقة والسير الذاتية والشهادات والخبرات وطلبات التقديم والمقابلات والدعم في مكان واحد منظم.",
+    aboutBodyTwo: "يمكن للمهنيين بناء ملفاتهم ورفع المستندات والتقديم على الوظائف والإجابة عن أسئلة التقديم ومتابعة حالة الطلب والتواصل مع الدعم. كما تساعد الإدارة والوكلاء على إدارة المستخدمين والوظائف والمقابلات والطلبات والتحليلات والمرشحين المشاركين.",
     profile: "الملف",
     jobs: "الوظائف",
     admin: "الإدارة",
@@ -253,7 +273,7 @@ const text = {
     portfolio: "أعمال",
     event: "فعالية",
     welcomeTitle: "مرحبا بك في روابط",
-    welcome: "اعثر على وظيفة المستقبل",
+    welcome: "وظيفة المستقبل بانتظارك",
     welcomeBody: "روابط تساعد المهنيين على إنشاء ملفات ثنائية اللغة ورفع السير الذاتية والشهادات والتقديم للوظائف والتواصل مع الفرص.",
     editProfile: "حفظ الملف",
     fullName: "الاسم الكامل",
@@ -696,17 +716,23 @@ function App() {
 
 function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
   const [mode, setMode] = useState("login");
+  const [publicPage, setPublicPage] = useState("home");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [dob, setDob] = useState("");
   const [password, setPassword] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactSubject, setContactSubject] = useState("");
+  const [contactMessage, setContactMessage] = useState("");
   const [otp, setOtp] = useState("");
   const [mfaChallengeId, setMfaChallengeId] = useState("");
   const [notice, setNotice] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [sendingContact, setSendingContact] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -777,11 +803,45 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
     }
   }
 
+  async function submitContact(event) {
+    event.preventDefault();
+    setError("");
+    setNotice("");
+    setSendingContact(true);
+    try {
+      const data = await api("/contact", {
+        method: "POST",
+        body: JSON.stringify({
+          name: contactName,
+          email: contactEmail,
+          subject: contactSubject,
+          message: contactMessage
+        })
+      });
+      setNotice(data.message || t("contactSuccess"));
+      setContactName("");
+      setContactEmail("");
+      setContactSubject("");
+      setContactMessage("");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSendingContact(false);
+    }
+  }
+
   return (
     <main className={`login-page ${lang === "ar" ? "login-page-rtl" : ""}`}>
       <header className="login-top">
         <img className="login-top-logo" src="/brand/rawabet-logo-lockup-cropped.png" alt="Rawabet - روابط تجمعنا" />
-        <button type="button" className="icon-button login-language-button" onClick={() => setLang((current) => current === "en" ? "ar" : "en")}>{t("language")}</button>
+        <div className="login-public-actions">
+          <nav className="login-public-nav" aria-label="Public pages">
+            <button type="button" className={publicPage === "home" ? "active" : ""} onClick={() => { setPublicPage("home"); setError(""); setNotice(""); }}>{t("home")}</button>
+            <button type="button" className={publicPage === "about" ? "active" : ""} onClick={() => { setPublicPage("about"); setError(""); setNotice(""); }}>{t("aboutUs")}</button>
+            <button type="button" className={publicPage === "contact" ? "active" : ""} onClick={() => { setPublicPage("contact"); setError(""); setNotice(""); }}>{t("contactUs")}</button>
+          </nav>
+          <button type="button" className="icon-button login-language-button" onClick={() => setLang((current) => current === "en" ? "ar" : "en")}>{t("language")}</button>
+        </div>
       </header>
       <section className="login-stage">
         <div className="login-copy">
@@ -790,7 +850,24 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
             <h1>{t("welcome")}</h1>
             <span>{t("loginSubtitle")}</span>
           </div>
-          {mode === "login" && <form className="login-card" onSubmit={submitLogin} autoComplete="off">
+          {publicPage === "about" && <section className="login-info-card">
+            <h2>{t("aboutTitle")}</h2>
+            <p>{t("aboutBodyOne")}</p>
+            <p>{t("aboutBodyTwo")}</p>
+          </section>}
+
+          {publicPage === "contact" && <form className="login-card login-contact-card" onSubmit={submitContact}>
+            <p className="login-contact-intro">{t("contactIntro")}</p>
+            <label>{t("contactName")}<input value={contactName} onChange={(event) => setContactName(event.target.value)} required /></label>
+            <label>{t("email")}<input type="email" value={contactEmail} onChange={(event) => setContactEmail(event.target.value)} required /></label>
+            <label>{t("contactSubject")}<input value={contactSubject} onChange={(event) => setContactSubject(event.target.value)} /></label>
+            <label>{t("contactMessage")}<textarea rows="4" value={contactMessage} onChange={(event) => setContactMessage(event.target.value)} required /></label>
+            {notice && <p className="notice">{notice}</p>}
+            {error && <p className="error">{error}</p>}
+            <button className="primary-button loading-button" disabled={sendingContact}>{sendingContact && <span className="spinner" aria-hidden="true"></span>}{t("send")}</button>
+          </form>}
+
+          {publicPage === "home" && mode === "login" && <form className="login-card" onSubmit={submitLogin} autoComplete="off">
             <div className="login-card-head">
               <strong>{t("login")}</strong>
               <span>{t("needAccount")}</span>
@@ -802,7 +879,7 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
             <button className="auth-switch" type="button" onClick={() => { setMode("register"); setError(""); }}>{t("needAccount")}</button>
           </form>}
 
-          {mode === "register" && <form className="login-card" onSubmit={register}>
+          {publicPage === "home" && mode === "register" && <form className="login-card" onSubmit={register}>
             <div className="login-card-head">
               <strong>{t("createAccount")}</strong>
               <span>{t("checkEmail")}</span>
@@ -817,7 +894,7 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
             <button className="auth-switch" type="button" disabled={registering} onClick={() => { setMode("login"); setError(""); }}>{t("haveAccount")} {t("login")}</button>
           </form>}
 
-          {mode === "verify" && <form className="login-card" onSubmit={verify}>
+          {publicPage === "home" && mode === "verify" && <form className="login-card" onSubmit={verify}>
             <div className="login-card-head">
               <strong>{t("verifyEmail")}</strong>
               <span>{t("checkEmail")}</span>
@@ -830,7 +907,7 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
             <button className="auth-switch" type="button" disabled={verifying} onClick={() => { setMode("login"); setError(""); }}>{t("haveAccount")} {t("login")}</button>
           </form>}
 
-          {mode === "mfa" && <form className="login-card" onSubmit={verifyMfa}>
+          {publicPage === "home" && mode === "mfa" && <form className="login-card" onSubmit={verifyMfa}>
             <div className="login-card-head">
               <strong>{t("verifyEmail")}</strong>
               <span>{t("checkEmail")}</span>
