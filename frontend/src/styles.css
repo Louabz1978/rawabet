@@ -91,6 +91,11 @@ button:disabled { cursor: not-allowed; opacity: 0.68; }
   width: 220px;
 }
 
+.mobile-main-actions,
+.mobile-home-search {
+  display: none;
+}
+
 .search {
   display: flex;
   align-items: center;
@@ -1778,6 +1783,24 @@ html[dir="rtl"] .support-window {
   padding-top: 92px;
 }
 
+.login-mode-register {
+  overflow-y: auto;
+}
+
+.login-mode-register .login-copy {
+  padding-top: 96px;
+  padding-bottom: 26px;
+}
+
+.login-mode-register .login-card {
+  gap: 8px;
+}
+
+.login-mode-register .login-card input {
+  min-height: 36px;
+  padding-block: 7px;
+}
+
 .login-page-rtl .login-copy {
   grid-column: 2;
   grid-row: 1;
@@ -2528,8 +2551,66 @@ td span {
 
 @media (max-width: 760px) {
   .app-shell { padding-bottom: 76px; }
-  .topbar { grid-template-columns: 1fr auto; gap: 10px; padding: 8px 12px; }
+  .topbar {
+    grid-template-columns: 1fr auto;
+    gap: 8px 10px;
+    padding: 8px 12px 10px;
+  }
+  .brand {
+    grid-column: 1 / 2;
+  }
   .brand small, .desktop-nav, .top-actions .primary-button { display: none; }
+  .top-actions {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
+  }
+  .top-actions .notify-button,
+  .top-actions .secondary-button:not(.icon-button) {
+    display: none;
+  }
+  .mobile-main-actions {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+  }
+  .mobile-main-actions button {
+    position: relative;
+    min-width: 0;
+    min-height: 34px;
+    padding: 0 8px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--brand);
+    font-size: 0.72rem;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .mobile-main-actions button.active {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: #fff;
+  }
+  .mobile-main-actions span {
+    position: absolute;
+    top: -7px;
+    inset-inline-end: 6px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: var(--green);
+    color: #fff;
+    font-size: 0.6rem;
+    line-height: 16px;
+  }
+  .post-card .mobile-home-search {
+    display: flex;
+    width: 100%;
+    margin: 10px 0 4px;
+  }
   main { margin: 14px auto; padding: 0 12px; }
   .layout-grid, .admin-console, .admin-layout, .admin-profile-grid, .job-admin-grid, .form-grid, .upload-grid, .metric-grid, .login-stage, .profile-hero {
     grid-template-columns: 1fr;
@@ -2546,6 +2627,7 @@ td span {
   .agent-profile-grid-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .agent-tool-list { grid-template-columns: 1fr; }
   .login-page { width: 100%; max-width: 100vw; height: 100dvh; min-height: 0; padding: 12px 18px 18px; overflow-x: hidden; overflow-y: auto; }
+  .login-mode-register { height: auto; min-height: 100dvh; }
   .login-top { margin-bottom: 22px; }
   .login-top-logo { width: 96px; max-height: 78px; }
   .login-public-actions { gap: 7px; }
@@ -2578,6 +2660,9 @@ td span {
   .login-card label { font-size: 0.72rem; }
   .login-card input,
   .login-card .primary-button { min-height: 38px; }
+  .login-mode-register .login-card { gap: 7px; padding-bottom: 20px; }
+  .login-mode-register .login-card input,
+  .login-mode-register .login-card .primary-button { min-height: 36px; }
   .login-contact-card textarea { min-height: 58px; }
   .login-visual { display: none; }
   .login-visual-card { padding: 0; }

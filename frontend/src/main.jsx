@@ -689,6 +689,11 @@ function App() {
           <img className="brand-mark" src="/brand/rawabet-mark.png" alt="" />
           <img className="brand-wordmark" src="/brand/rawabet-wordmark.png" alt="Rawabet - روابط تجمعنا" />
         </button>
+        {!isAgent && <div className="mobile-main-actions">
+          <button className={view === "home" ? "active" : ""} type="button" onClick={() => setView("home")}>{t("home")}</button>
+          <button type="button" onClick={() => isAdminRole(session.role) ? (setAdminStartTab("support"), setView("admin")) : setSupportOpen(true)}>{t("support")}{supportUnread > 0 && <span>{supportUnread}</span>}</button>
+          <button type="button" onClick={logout}>{t("logout")}</button>
+        </div>}
         {!isAgent && <label className="search">
           <span>⌕</span>
           <input placeholder={t("search")} value={jobSearch} onChange={(event) => { setJobMode("all"); setJobSearch(event.target.value); setView("jobs"); }} />
@@ -712,7 +717,7 @@ function App() {
 
       <main className={view === "admin" || isAgent ? "admin-main" : ""}>
         {isAgent ? <AgentWorkspace t={t} lang={lang} agent={me.user} shares={agentShares} interviews={agentInterviews} reload={loadApp} /> : <>
-          {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} />}
+          {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} jobSearch={jobSearch} setJobSearch={setJobSearch} setJobMode={setJobMode} />}
           {view === "profile" && <Profile t={t} me={me} reload={loadApp} />}
           {view === "jobs" && <Jobs t={t} lang={lang} jobs={jobs} applications={me.applications || []} interviews={me.interviews || []} search={jobSearch} mode={jobMode} setMode={setJobMode} selectedJobId={selectedJobId} clearSelectedJob={() => setSelectedJobId("")} reload={loadApp} />}
           {view === "admin" && isAdminRole(session.role) && <Admin t={t} lang={lang} session={session} admin={admin} users={adminUsers} setUsers={setAdminUsers} jobs={jobs} applications={adminApplications} setApplications={setAdminApplications} interviews={adminInterviews} supportThreads={supportThreads} initialTab={adminStartTab} clearInitialTab={() => setAdminStartTab("")} reload={loadApp} openSupport={(userId) => { setSupportTarget(userId || ""); setSupportOpen(true); }} />}
@@ -849,7 +854,7 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
   }
 
   return (
-    <main className={`login-page login-page-${publicPage} ${lang === "ar" ? "login-page-rtl" : ""}`}>
+    <main className={`login-page login-page-${publicPage} login-mode-${mode} ${lang === "ar" ? "login-page-rtl" : ""}`}>
       <header className="login-top">
         <img className="login-top-logo" src="/brand/rawabet-logo-lockup-cropped.png" alt="Rawabet - روابط تجمعنا" />
         <div className="login-public-actions">
@@ -962,7 +967,7 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
   );
 }
 
-function Home({ t, lang, me, jobs, setView, openJob, openAppliedJobs, openBuilder }) {
+function Home({ t, lang, me, jobs, setView, openJob, openAppliedJobs, openBuilder, jobSearch, setJobSearch, setJobMode }) {
   const strength = Number(me.profile?.profile_strength ?? 0);
   const applications = me.applications || [];
   const priorityApplications = applications.filter((item) => ["interview", "review"].includes(normalizeStatusValue(item.status)));
@@ -995,6 +1000,10 @@ function Home({ t, lang, me, jobs, setView, openJob, openAppliedJobs, openBuilde
       <section className="feed">
         <article className="panel post-card">
           <div className="post-head"><div className="company-logo">R</div><div><h2>{t("adminPosts")}</h2><p>{t("jobs")}</p></div></div>
+          <label className="search mobile-home-search">
+            <span>⌕</span>
+            <input placeholder={t("search")} value={jobSearch} onChange={(event) => { setJobMode("all"); setJobSearch(event.target.value); setView("jobs"); }} />
+          </label>
           <div className="admin-post-list">
             {orderedJobs.length ? orderedJobs.map((job) => (
               <article className={scheduledJobIds.has(job.id) ? "admin-post highlighted-job" : "admin-post"} key={job.id}>

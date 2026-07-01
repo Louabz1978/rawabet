@@ -445,7 +445,7 @@ def health():
 @app.get("/api/support/bot-version")
 def support_bot_version():
     return {
-        "version": "rawabet-guide-2026-06-28-apply-intents",
+        "version": "rawabet-guide-2026-06-30-exact-job-matching",
         "sample": platform_bot_reply("كيف اتقدم ارشدني"),
     }
 
@@ -579,6 +579,10 @@ def normalize_arabic_text(value: str) -> str:
     return normalized
 
 
+def text_tokens(value: str) -> list[str]:
+    return [normalize_arabic_text(token) for token in re.findall(r"[\w\u0600-\u06FF]+", value) if len(normalize_arabic_text(token)) >= 3]
+
+
 def contains_any_intent(value: str, stems: list[str]) -> bool:
     normalized = normalize_arabic_text(value)
     return any(stem in normalized for stem in stems)
@@ -666,48 +670,74 @@ def matching_jobs_reply(question: str) -> str | None:
         return None
     stop_words = {
         "search", "find", "show", "me", "job", "jobs", "in", "at", "for", "about", "rawabet",
-        "ابحث", "اعثر", "اريد", "أريد", "لي", "عن", "في", "على", "وظيفة", "وظائف", "الوظائف", "مناسبه", "مناسبة"
+        "ابحث", "اعثر", "اريد", "أريد", "هل", "يوجد", "هناك", "لي", "عن", "في", "على", "وظيفة", "وظائف", "الوظائف", "مناسبه", "مناسبة"
     }
+    normalized_stop_words = {normalize_arabic_text(item) for item in stop_words}
     words = re.findall(r"[\w\u0600-\u06FF]+", question)
     keywords = []
     for word in words:
         normalized_word = normalize_arabic_text(word)
-        if len(normalized_word) < 3 or normalized_word in {normalize_arabic_text(item) for item in stop_words}:
+        if len(normalized_word) < 3 or normalized_word in normalized_stop_words:
             continue
-        keywords.append(word)
+        keywords.append(normalized_word)
     if not keywords:
         return None
-    like_values = [f"%{keyword}%" for keyword in keywords[:6]]
-    conditions = []
-    params = []
-    for value in like_values:
-        conditions.append("(company_name ILIKE %s OR title ILIKE %s OR location ILIKE %s OR category ILIKE %s OR COALESCE(description,'') ILIKE %s)")
-        params.extend([value, value, value, value, value])
     try:
         job_number_expr = "job_number" if jobs_have_job_number_column() else "NULL::integer AS job_number"
         jobs = fetch_all(
             f"""
             SELECT id, {job_number_expr}, company_name, title, category, location, type, salary_range, description
             FROM jobs
-            WHERE status = 'active' AND ({' OR '.join(conditions)})
+            WHERE status = 'active'
             ORDER BY created_at DESC
-            LIMIT 10
+            LIMIT 200
             """,
-            tuple(params),
         )
     except Exception:
         return None
     if not jobs:
         return "لم أجد وظائف مطابقة مباشرة لهذا البحث داخل الوظائف النشطة. هل تريد التحدث مع دعم مباشر أم إنهاء المحادثة؟"
-    lines = ["وجدت الوظائف التالية المرتبطة ببحثك:"]
+
+    location_tokens = set()
     for job in jobs:
+        location_tokens.update(text_tokens(job.get("location") or ""))
+    non_location_keywords = [keyword for keyword in keywords if keyword not in location_tokens]
+
+    exact_company_matches = []
+    for job in jobs:
+        company = normalize_arabic_text(job.get("company_name") or "")
+        company_base = re.split(r"[-–|،,]", company, maxsplit=1)[0].strip()
+        if company and company in normalized:
+            exact_company_matches.append(job)
+            continue
+        if len(company_base) >= 4 and company_base in normalized:
+            exact_company_matches.append(job)
+
+    matched_jobs = exact_company_matches
+    if not matched_jobs:
+        scored_jobs = []
+        for job in jobs:
+            title = normalize_arabic_text(job.get("title") or "")
+            company = normalize_arabic_text(job.get("company_name") or "")
+            category = normalize_arabic_text(job.get("category") or "")
+            description = normalize_arabic_text(job.get("description") or "")
+            location = normalize_arabic_text(job.get("location") or "")
+            searchable = " ".join([title, company, category, description])
+            score = sum(1 for keyword in non_location_keywords if keyword in searchable)
+            if not non_location_keywords:
+                score = sum(1 for keyword in keywords if keyword in location)
+            if score:
+                scored_jobs.append((score, job))
+        scored_jobs.sort(key=lambda item: (-item[0], item[1].get("job_number") or 0))
+        matched_jobs = [job for _, job in scored_jobs[:10]]
+
+    if not matched_jobs:
+        return "لم أجد وظائف مطابقة مباشرة لهذا البحث داخل الوظائف النشطة. هل تريد التحدث مع دعم مباشر أم إنهاء المحادثة؟"
+
+    lines = ["وجدت الوظائف المطابقة لبحثك:"]
+    for job in matched_jobs[:10]:
         job_id = f"#{job.get('job_number')}" if job.get("job_number") else str(job.get("id"))
-        lines.append(f"- رقم الوظيفة: {job_id}")
-        lines.append(f"  المسمى: {job.get('title')}")
-        lines.append(f"  الجهة: {job.get('company_name')}")
-        lines.append(f"  الموقع: {job.get('location')}")
-        lines.append(f"  الراتب: {job.get('salary_range') or '-'}")
-    lines.append("افتح صفحة الوظائف وابحث برقم الوظيفة أو اسم الجهة لعرض التفاصيل والتقديم.")
+        lines.append(f"رقم الوظيفة: {job_id}")
     return "\n".join(lines)
 
 
