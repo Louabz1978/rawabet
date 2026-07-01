@@ -445,7 +445,7 @@ def health():
 @app.get("/api/support/bot-version")
 def support_bot_version():
     return {
-        "version": "rawabet-guide-2026-06-30-exact-job-matching",
+        "version": "rawabet-guide-2026-06-30-greetings",
         "sample": platform_bot_reply("كيف اتقدم ارشدني"),
     }
 
@@ -596,6 +596,55 @@ def unknown_reply_for(question: str) -> str:
     return UNKNOWN_REPLY_EN if question_is_english(question) else UNKNOWN_REPLY
 
 
+def greeting_reply(question: str) -> str | None:
+    normalized = normalize_arabic_text(question).strip()
+    lowered = question.lower().strip()
+    normalized = re.sub(r"[^\w\u0600-\u06FF\s]", " ", normalized)
+    lowered = re.sub(r"[^\w\s]", " ", lowered)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    lowered = re.sub(r"\s+", " ", lowered).strip()
+    if not normalized:
+        return None
+
+    arabic_phrases = {
+        "السلام عليكم",
+        "سلام عليكم",
+        "وعليكم السلام",
+        "مرحبا",
+        "اهلا",
+        "اهلا وسهلا",
+        "هلا",
+        "صباح الخير",
+        "مساء الخير",
+        "يعطيك العافيه",
+        "كيفك",
+        "كيف الحال",
+    }
+    english_phrases = {
+        "hi",
+        "hello",
+        "hey",
+        "good morning",
+        "good afternoon",
+        "good evening",
+        "how are you",
+        "thanks",
+        "thank you",
+    }
+    arabic_tokens = {"السلام", "عليكم", "سلام", "وعليكم", "مرحبا", "اهلا", "وسهلا", "هلا", "صباح", "الخير", "مساء", "يعطيك", "العافيه", "كيفك", "كيف", "الحال"}
+    english_tokens = {"hi", "hello", "hey", "good", "morning", "afternoon", "evening", "how", "are", "you", "thanks", "thank", "thankyou"}
+
+    if normalized in arabic_phrases or lowered in english_phrases:
+        return "أهلا بك في روابط. كيف يمكنني مساعدتك؟" if not question_is_english(question) else "Hello, welcome to Rawabet. How can I help you?"
+
+    tokens = re.findall(r"[\w\u0600-\u06FF]+", normalized if not question_is_english(question) else lowered)
+    if tokens and len(tokens) <= 4:
+        allowed = english_tokens if question_is_english(question) else arabic_tokens
+        if all(token in allowed for token in tokens):
+            return "أهلا بك في روابط. كيف يمكنني مساعدتك؟" if not question_is_english(question) else "Hello, welcome to Rawabet. How can I help you?"
+    return None
+
+
 def is_live_support_request(value: str) -> bool:
     lowered = value.lower()
     normalized = normalize_arabic_text(value)
@@ -663,7 +712,7 @@ def active_jobs_context() -> str:
 def matching_jobs_reply(question: str) -> str | None:
     lowered = question.lower()
     normalized = normalize_arabic_text(question)
-    search_intents = ["search", "find", "show me", "ابحث", "اعثر", "اريد", "أريد", "وظائف", "وظيفة"]
+    search_intents = ["search", "find", "show me", "available", "ابحث", "اعثر", "اريد", "أريد", "يوجد", "متاح"]
     if not any(term in lowered or normalize_arabic_text(term) in normalized for term in search_intents):
         return None
     if not any(term in lowered or normalize_arabic_text(term) in normalized for term in ["job", "jobs", "وظيفة", "وظائف"]):
@@ -858,6 +907,9 @@ def local_platform_reply(question: str) -> str | None:
 def platform_bot_reply(question: str) -> str:
     lowered = question.lower()
     normalized_question = normalize_arabic_text(question)
+    greeting = greeting_reply(question)
+    if greeting:
+        return greeting
     platform_terms = [
         "rawabet", "روابط", "platform", "profile", "resume", "cv", "certificate", "job", "jobs", "apply", "application",
         "interview", "support", "plan", "premium", "free", "status", "otp", "register",
