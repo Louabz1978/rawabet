@@ -2862,6 +2862,21 @@ td span {
   .layout-grid, .admin-console, .admin-layout, .admin-profile-grid, .job-admin-grid, .form-grid, .upload-grid, .metric-grid, .login-stage, .profile-hero {
     grid-template-columns: 1fr;
   }
+  .layout-grid {
+    display: grid;
+  }
+  .profile-rail {
+    order: 1;
+  }
+  .mobile-home-priority {
+    order: 2;
+  }
+  .feed {
+    order: 3;
+  }
+  .insight-rail {
+    order: 4;
+  }
   .mobile-home-priority,
   .courses-page {
     display: grid;

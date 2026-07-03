@@ -32,15 +32,19 @@ try:
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
     REPORTLAB_AVAILABLE = True
-except Exception:
+    REPORTLAB_IMPORT_ERROR = ""
+except Exception as exc:
     REPORTLAB_AVAILABLE = False
+    REPORTLAB_IMPORT_ERROR = str(exc)
 
 try:
     import arabic_reshaper
     from bidi.algorithm import get_display
+    ARABIC_PDF_AVAILABLE = True
 except Exception:
     arabic_reshaper = None
     get_display = None
+    ARABIC_PDF_AVAILABLE = False
 
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -659,12 +663,21 @@ def has_arabic(value: str | None) -> bool:
 
 def resume_font_name() -> str:
     if not REPORTLAB_AVAILABLE:
-        return "Helvetica"
+        raise RuntimeError(f"ReportLab is not installed or could not be imported: {REPORTLAB_IMPORT_ERROR}")
     candidates = [
         "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
         "/System/Library/Fonts/Supplemental/Arial.ttf",
         "/Library/Fonts/Arial Unicode.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
+        "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf",
+        "/usr/share/fonts/noto/NotoSansArabic-Regular.ttf",
+        "/usr/share/fonts/google-noto/NotoNaskhArabic-Regular.ttf",
+        "/usr/share/fonts/google-noto/NotoSansArabic-Regular.ttf",
+        "/usr/share/fonts/google-noto-vf/NotoSansArabic[wght].ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
     ]
     for path in candidates:
@@ -674,7 +687,7 @@ def resume_font_name() -> str:
                 return "RawabetResume"
             except Exception:
                 continue
-    return "Helvetica"
+    raise RuntimeError("No Arabic-capable TrueType font was found. Install DejaVu Sans or Noto Arabic fonts on the server.")
 
 
 def pdf_text(value: object) -> str:
@@ -800,6 +813,10 @@ def paragraph(text: object, style):
 
 
 def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], education: list[dict], courses: list[dict], body: ResumeBuilderBody) -> bytes:
+    if not REPORTLAB_AVAILABLE:
+        raise RuntimeError(f"ReportLab is not installed or could not be imported: {REPORTLAB_IMPORT_ERROR}")
+    if not ARABIC_PDF_AVAILABLE:
+        raise RuntimeError("Arabic PDF support is not installed. Install arabic-reshaper and python-bidi.")
     fallback = default_resume_sections(user, profile, experiences, education, courses, body)
     sections = openai_resume_sections(user, profile, experiences, education, courses, body, fallback)
     def listify(value):
@@ -813,12 +830,6 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
         if isinstance(item, dict):
             normalized_experiences.append({**item, "bullets": listify(item.get("bullets"))[:7]})
     sections["experiences"] = normalized_experiences or fallback["experiences"]
-    if not REPORTLAB_AVAILABLE:
-        lines = [user.get("full_name") or "Rawabet Resume", user.get("email") or "", user.get("phone") or "", "", sections.get("summary", "")]
-        for item in sections.get("experiences", []):
-            lines.extend(["", f"{item.get('title')} - {item.get('company')}", *(item.get("bullets") or [])])
-        return make_simple_pdf(f"{user.get('full_name') or 'Rawabet'} Resume", lines)
-
     font = resume_font_name()
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=14 * mm, leftMargin=14 * mm, topMargin=13 * mm, bottomMargin=13 * mm)
@@ -1770,7 +1781,13 @@ def build_resume_pdf(body: ResumeBuilderBody, user: Annotated[dict, Depends(curr
     )
     education = fetch_all("SELECT * FROM education WHERE user_id = %s ORDER BY end_year DESC NULLS LAST", (user["id"],))
     courses = fetch_all("SELECT * FROM courses WHERE user_id = %s ORDER BY completion_date DESC NULLS LAST, created_at DESC", (user["id"],))
-    pdf = make_resume_pdf(user, profile, experiences, education, courses, body)
+    try:
+        pdf = make_resume_pdf(user, profile, experiences, education, courses, body)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Smart resume PDF dependencies are missing or incomplete: {exc}. Install requirements and Arabic fonts, then restart Rawabet backend.",
+        )
     safe_name = re.sub(r"[^A-Za-z0-9_-]+", "-", user.get("full_name") or "rawabet").strip("-").lower() or "rawabet"
     return Response(
         content=pdf,
