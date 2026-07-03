@@ -93,6 +93,9 @@ button:disabled { cursor: not-allowed; opacity: 0.68; }
 
 .mobile-main-actions,
 .mobile-home-search,
+.mobile-home-priority,
+.mobile-menu-button,
+.mobile-drawer-menu,
 .mobile-chat-button,
 .mobile-bottom-nav {
   display: none;
@@ -168,6 +171,11 @@ button:disabled { cursor: not-allowed; opacity: 0.68; }
   font-weight: 800;
 }
 
+.mobile-menu-button,
+.mobile-drawer-menu {
+  display: none;
+}
+
 .primary-button, .secondary-button {
   min-height: 42px;
   padding: 0 18px;
@@ -206,6 +214,14 @@ main {
 
 main.admin-main {
   max-width: min(1540px, calc(100vw - 36px));
+}
+
+.app-version {
+  margin: 18px auto 10px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
 }
 
 .panel, .profile-card, .metric-card, .login-card {
@@ -672,6 +688,15 @@ button.feature-card:hover {
 
 .admin-post p {
   font-size: 0.9rem;
+}
+
+.agent-assigned-job p {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  font-size: 0.78rem;
 }
 
 .admin-post .compact {
@@ -1222,42 +1247,49 @@ textarea { min-height: 110px; resize: vertical; }
 }
 
 .job-table-wrap {
-  overflow-x: visible;
+  overflow-x: auto;
 }
 
 .job-table-wrap table {
-  min-width: 0;
-  table-layout: fixed;
+  min-width: 1220px;
+  table-layout: auto;
 }
 
 .job-table-wrap th:nth-child(1),
 .job-table-wrap td:nth-child(1) {
-  width: 10%;
+  width: 110px;
 }
 
 .job-table-wrap th:nth-child(2),
 .job-table-wrap td:nth-child(2) {
-  width: 31%;
+  width: 260px;
 }
 
 .job-table-wrap th:nth-child(3),
 .job-table-wrap td:nth-child(3) {
-  width: 16%;
+  width: 150px;
 }
 
 .job-table-wrap th:nth-child(4),
 .job-table-wrap td:nth-child(4) {
-  width: 20%;
+  width: 130px;
 }
 
 .job-table-wrap th:nth-child(5),
 .job-table-wrap td:nth-child(5) {
-  width: 9%;
+  width: 210px;
 }
 
 .job-table-wrap th:nth-child(6),
 .job-table-wrap td:nth-child(6) {
-  width: 14%;
+  width: 120px;
+}
+
+.job-table-wrap th:nth-child(7),
+.job-table-wrap td:nth-child(7),
+.job-table-wrap th:nth-child(8),
+.job-table-wrap td:nth-child(8) {
+  width: 150px;
 }
 
 .job-table-wrap td strong,
@@ -1265,6 +1297,11 @@ textarea { min-height: 110px; resize: vertical; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.job-table-wrap .action-select {
+  width: 100%;
+  min-width: 128px;
 }
 
 .job-number {
@@ -2589,12 +2626,17 @@ td span {
 @media (max-width: 760px) {
   .app-shell { padding-bottom: 82px; }
   .topbar {
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto auto 1fr auto;
     gap: 8px 10px;
     padding: 8px 12px 10px;
   }
+  .mobile-menu-button {
+    grid-column: 1;
+    grid-row: 1;
+    display: grid;
+  }
   .brand {
-    grid-column: 1 / 2;
+    grid-column: 2 / 3;
     grid-row: 1;
     min-width: 0;
   }
@@ -2620,7 +2662,7 @@ td span {
     font-size: 0.66rem;
   }
   .top-actions {
-    grid-column: 3;
+    grid-column: 4;
     grid-row: 1;
     align-self: start;
     display: flex;
@@ -2647,6 +2689,54 @@ td span {
     color: #fff;
     font-size: 0.6rem;
     line-height: 16px;
+  }
+  .mobile-drawer-menu {
+    position: fixed;
+    top: 62px;
+    left: 12px;
+    z-index: 45;
+    display: grid;
+    min-width: min(78vw, 280px);
+    gap: 4px;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: 0 18px 42px rgba(9, 42, 83, 0.18);
+    backdrop-filter: blur(14px);
+  }
+  html[dir="rtl"] .mobile-drawer-menu {
+    right: 12px;
+    left: auto;
+  }
+  .mobile-drawer-menu button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 42px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--ink);
+    font-weight: 800;
+    text-align: start;
+  }
+  .mobile-drawer-menu button:hover,
+  .mobile-drawer-menu button:focus-visible {
+    background: var(--brand-soft);
+    outline: 0;
+  }
+  .mobile-drawer-menu b {
+    display: inline-grid;
+    min-width: 26px;
+    height: 22px;
+    place-items: center;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: var(--brand);
+    color: #fff;
+    font-size: 0.72rem;
   }
   .mobile-bottom-nav {
     position: fixed;
@@ -2689,6 +2779,41 @@ td span {
   main { margin: 14px auto; padding: 0 12px; }
   .layout-grid, .admin-console, .admin-layout, .admin-profile-grid, .job-admin-grid, .form-grid, .upload-grid, .metric-grid, .login-stage, .profile-hero {
     grid-template-columns: 1fr;
+  }
+  .mobile-home-priority,
+  .courses-page {
+    display: grid;
+    gap: 10px;
+  }
+  .workspace-panel,
+  .profile-snapshot-panel,
+  .insight-rail > .strength-panel,
+  .insight-rail > .applied-summary-panel {
+    display: none;
+  }
+  .interview-frame {
+    border-color: #f59e0b !important;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+  }
+  .accepted-frame {
+    border-color: #16a34a !important;
+    box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.18);
+  }
+  .course-card {
+    display: grid;
+    gap: 4px;
+    padding: 14px;
+  }
+  .course-card h2 {
+    margin: 0;
+    font-size: 1rem;
+  }
+  .course-card p,
+  .course-card span,
+  .course-card small {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.78rem;
   }
   .agent-profile-head,
   .agent-share-grid,

@@ -1942,6 +1942,33 @@ def update_agent_profile(body: AgentProfileBody, user: Annotated[dict, Depends(a
     return {"ok": True}
 
 
+@app.get("/api/agent/jobs")
+def list_agent_jobs(user: Annotated[dict, Depends(agent_user)]):
+    job_number_expr = "j.job_number" if jobs_have_job_number_column() else "NULL::integer AS job_number"
+    return fetch_all(
+        f"""
+        SELECT
+          j.id,
+          {job_number_expr},
+          j.company_name,
+          j.title,
+          j.category,
+          j.location,
+          j.type,
+          j.salary_range,
+          j.description,
+          j.status,
+          j.created_at,
+          COALESCE(j.screening_questions, '[]'::jsonb) AS screening_questions
+        FROM jobs j
+        JOIN agent_job_assignments aja ON aja.job_id = j.id
+        WHERE aja.agent_id = %s AND j.status = 'active'
+        ORDER BY j.created_at DESC
+        """,
+        (user["id"],),
+    )
+
+
 def agent_can_access_application(agent_id: UUID, application_id: UUID):
     return fetch_one(
         """
