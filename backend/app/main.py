@@ -24,8 +24,8 @@ from .db import execute, fetch_all, fetch_one
 
 try:
     from reportlab.lib import colors
-    from reportlab.lib.enums import TA_LEFT, TA_RIGHT
-    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from reportlab.lib.pagesizes import letter
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import mm
     from reportlab.pdfbase import pdfmetrics
@@ -668,9 +668,6 @@ def resume_font_name() -> str:
         "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
         "/System/Library/Fonts/Supplemental/Arial.ttf",
         "/Library/Fonts/Arial Unicode.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
         "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
         "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf",
@@ -678,6 +675,10 @@ def resume_font_name() -> str:
         "/usr/share/fonts/google-noto/NotoNaskhArabic-Regular.ttf",
         "/usr/share/fonts/google-noto/NotoSansArabic-Regular.ttf",
         "/usr/share/fonts/google-noto-vf/NotoSansArabic[wght].ttf",
+        "/System/Library/Fonts/GeezaPro.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
     ]
     for path in candidates:
@@ -706,40 +707,53 @@ def split_lines(value: str | None) -> list[str]:
     return [line.strip(" •-\t") for line in str(value or "").splitlines() if line.strip(" •-\t")]
 
 
-def date_range(start: object = None, end: object = None, is_current: bool = False) -> str:
+def date_range(start: object = None, end: object = None, is_current: bool = False, current_text: str = "Present") -> str:
     start_text = str(start or "").strip()
-    end_text = "Present" if is_current else str(end or "").strip()
+    end_text = current_text if is_current else str(end or "").strip()
     if start_text and end_text:
         return f"{start_text} - {end_text}"
     return start_text or end_text
 
 
 def default_resume_sections(user: dict, profile: dict, experiences: list[dict], education: list[dict], courses: list[dict], body: ResumeBuilderBody) -> dict:
+    rtl = has_arabic(" ".join([
+        str(user.get("full_name") or ""),
+        str(user.get("headline") or ""),
+        str(profile.get("about") or ""),
+        str(body.summary or ""),
+        str(body.targetTitle or ""),
+    ]))
+    current_text = "حتى الآن" if rtl else "Present"
     skills = profile.get("skills") if isinstance(profile.get("skills"), list) else []
     languages = split_lines(body.languages) or profile.get("languages") or ["Arabic", "English"]
     certs = split_lines(body.certifications)
     certs.extend([f"{course.get('title')} - {course.get('provider') or ''}".strip(" -") for course in courses if course.get("title")])
     education_lines = split_lines(body.education)
     education_lines.extend([
-        " - ".join([part for part in [item.get("degree"), item.get("school"), date_range(item.get("start_year"), item.get("end_year"))] if part])
+        " - ".join([part for part in [item.get("degree"), item.get("school"), date_range(item.get("start_year"), item.get("end_year"), current_text=current_text)] if part])
         for item in education
     ])
     experience_items = []
     for item in experiences:
         description_lines = split_lines(item.get("description"))
-        fallback_bullets = description_lines or [
-            f"Delivered work for {item.get('company') or 'the organization'} with focus on quality, reliability, and measurable outcomes.",
-            "Collaborated with stakeholders to improve processes, documentation, and execution."
-        ]
+        fallback_bullets = description_lines or (
+            [
+                f"نفذت مهام العمل لدى {item.get('company') or 'الجهة'} مع التركيز على الجودة والموثوقية وتحقيق نتائج قابلة للقياس.",
+                "تعاونت مع فرق العمل وأصحاب المصلحة لتحسين الإجراءات والتوثيق وسرعة التنفيذ."
+            ] if rtl else [
+                f"Delivered work for {item.get('company') or 'the organization'} with focus on quality, reliability, and measurable outcomes.",
+                "Collaborated with stakeholders to improve processes, documentation, and execution."
+            ]
+        )
         experience_items.append({
             "title": item.get("title") or "-",
             "company": item.get("company") or "-",
             "location": item.get("location") or "",
-            "dates": date_range(item.get("start_date"), item.get("end_date"), item.get("is_current")),
+            "dates": date_range(item.get("start_date"), item.get("end_date"), item.get("is_current"), current_text=current_text),
             "bullets": fallback_bullets[:5],
         })
     return {
-        "summary": body.summary or profile.get("about") or f"{user.get('headline') or 'Professional'} with verified experience, skills, and career history.",
+        "summary": body.summary or profile.get("about") or ("محترف لديه خبرات ومهارات ومسار عملي موثق." if rtl else f"{user.get('headline') or 'Professional'} with verified experience, skills, and career history."),
         "target_title": body.targetTitle or user.get("headline") or "",
         "skills": skills,
         "languages": languages,
@@ -780,7 +794,7 @@ def openai_resume_sections(user: dict, profile: dict, experiences: list[dict], e
     payload = {
         "model": "gpt-4o-mini",
         "messages": [
-            {"role": "system", "content": "Create a concise professional resume from the provided Rawabet profile. Return strict JSON only with keys: summary, target_title, skills, languages, certifications, education, projects, tools, achievements, additional_info, experiences. experiences must be an array of objects with title, company, location, dates, bullets. Improve bullets with strong action verbs and measurable professional wording. Keep Arabic content Arabic and English content English. Do not invent companies, dates, degrees, or certifications."},
+            {"role": "system", "content": "Create a concise professional Arabic resume from the provided Rawabet profile. Return strict JSON only with keys: summary, target_title, skills, languages, certifications, education, projects, tools, achievements, additional_info, experiences. experiences must be an array of objects with title, company, location, dates, bullets. Write summary, bullets, achievements, additional_info, and any generated resume wording in Arabic. Keep user-entered English proper nouns, company names, job titles, tools, technologies, emails, and degrees exactly as provided when they are already in English. Improve bullets with strong Arabic action verbs and measurable professional wording. Do not invent companies, dates, degrees, or certifications."},
             {"role": "user", "content": json.dumps(prompt, default=str, ensure_ascii=False)},
         ],
         "temperature": 0.25,
@@ -812,6 +826,16 @@ def paragraph(text: object, style):
     return Paragraph(pdf_text(text).replace("\n", "<br/>"), style)
 
 
+def bullet_rows(items: list[str], style, rtl: bool):
+    rows = []
+    for index, item in enumerate(items, start=1):
+        if rtl:
+            rows.append([paragraph(item, style), paragraph(f"{index}.", style)])
+        else:
+            rows.append([paragraph(f"{index}.", style), paragraph(item, style)])
+    return rows
+
+
 def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], education: list[dict], courses: list[dict], body: ResumeBuilderBody) -> bytes:
     if not REPORTLAB_AVAILABLE:
         raise RuntimeError(f"ReportLab is not installed or could not be imported: {REPORTLAB_IMPORT_ERROR}")
@@ -832,77 +856,115 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
     sections["experiences"] = normalized_experiences or fallback["experiences"]
     font = resume_font_name()
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=14 * mm, leftMargin=14 * mm, topMargin=13 * mm, bottomMargin=13 * mm)
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=18 * mm, leftMargin=18 * mm, topMargin=14 * mm, bottomMargin=16 * mm)
     styles = getSampleStyleSheet()
-    base = ParagraphStyle("BaseResume", parent=styles["Normal"], fontName=font, fontSize=8.8, leading=11.2, textColor=colors.HexColor("#17202a"))
-    small = ParagraphStyle("SmallResume", parent=base, fontSize=7.5, leading=9.5, textColor=colors.HexColor("#5f6b7a"))
-    name_style = ParagraphStyle("NameResume", parent=base, fontSize=19, leading=22, textColor=colors.HexColor("#092a53"), spaceAfter=3)
-    title_style = ParagraphStyle("TitleResume", parent=base, fontSize=10, leading=12, textColor=colors.HexColor("#10a89a"), spaceAfter=4)
-    section_style = ParagraphStyle("SectionResume", parent=base, fontSize=9.2, leading=11, textColor=colors.HexColor("#092a53"), spaceBefore=8, spaceAfter=4)
-    section_style.fontName = font
-    section_style.bold = True
-    bullet_style = ParagraphStyle("BulletResume", parent=base, leftIndent=8, firstLineIndent=-5, spaceAfter=2)
+    blue = colors.HexColor("#0070c0")
+    teal = colors.HexColor("#10a89a")
+    ink = colors.HexColor("#111827")
+    muted = colors.HexColor("#595959")
+    base = ParagraphStyle("BaseResume", parent=styles["Normal"], fontName=font, fontSize=8.4, leading=10.7, textColor=ink)
+    small = ParagraphStyle("SmallResume", parent=base, fontSize=7.4, leading=9.2, textColor=muted)
+    name_style = ParagraphStyle("NameResume", parent=base, fontSize=30, leading=35, textColor=colors.black, spaceAfter=8, alignment=TA_LEFT)
+    title_style = ParagraphStyle("TitleResume", parent=base, fontSize=9.5, leading=12, textColor=muted, alignment=TA_LEFT)
+    contact_style = ParagraphStyle("ContactResume", parent=base, fontSize=8.2, leading=11, textColor=colors.black, alignment=TA_RIGHT)
+    section_style = ParagraphStyle("SectionResume", parent=base, fontSize=10, leading=12, textColor=blue, spaceBefore=6, spaceAfter=10, alignment=TA_RIGHT)
+    side_section_style = ParagraphStyle("SideSectionResume", parent=section_style, spaceBefore=0, spaceAfter=12)
+    job_heading = ParagraphStyle("JobHeading", parent=base, fontSize=9.6, leading=12, textColor=colors.black, alignment=TA_RIGHT, spaceAfter=4)
+    role_style = ParagraphStyle("RoleResume", parent=base, fontSize=8.4, leading=10.7, textColor=colors.HexColor("#c0392b"), alignment=TA_CENTER, spaceAfter=4)
+    meta_style = ParagraphStyle("MetaResume", parent=base, fontSize=8, leading=10, textColor=muted, alignment=TA_RIGHT, spaceAfter=4)
+    bullet_style = ParagraphStyle("BulletResume", parent=base, fontSize=8.15, leading=10.4, textColor=colors.black, alignment=TA_RIGHT)
+    side_item = ParagraphStyle("SideItemResume", parent=base, fontSize=8.4, leading=13, textColor=muted, alignment=TA_LEFT)
     rtl = has_arabic(" ".join([user.get("full_name") or "", sections.get("summary") or ""]))
     if rtl:
-        for style in (base, small, name_style, title_style, section_style, bullet_style):
+        for style in (base, small, section_style, side_section_style, job_heading, meta_style, bullet_style):
             style.alignment = TA_RIGHT
 
-    contact = " | ".join([part for part in [user.get("email"), user.get("phone"), user.get("location")] if part])
-    header = [
+    contact_lines = [part for part in [user.get("phone"), user.get("email"), user.get("location")] if part]
+    header_left = [
         paragraph(user.get("full_name") or "Rawabet Resume", name_style),
         paragraph(sections.get("target_title") or user.get("headline") or "", title_style),
-        paragraph(contact, small),
     ]
+    header_right = [paragraph("<br/>".join(contact_lines), contact_style)]
+    header = Table([[header_left, header_right]], colWidths=[124 * mm, 48 * mm], hAlign="LEFT")
+    header.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
 
     def section_block(title: str, items: list[str]):
         if not items:
             return []
-        flow = [paragraph(title.upper(), section_style)]
+        flow = [paragraph(title, side_section_style)]
         for item in items:
-            flow.append(paragraph(item, base))
+            flow.append(paragraph(item, side_item))
         return flow
 
     sidebar = [
-        paragraph("SUMMARY" if not rtl else "الملخص", section_style),
-        paragraph(sections.get("summary") or "-", base),
-        *section_block("SKILLS" if not rtl else "المهارات", sections.get("skills") or []),
-        *section_block("TOOLS" if not rtl else "الأدوات", sections.get("tools") or []),
-        *section_block("LANGUAGES" if not rtl else "اللغات", sections.get("languages") or []),
-        *section_block("CERTIFICATIONS" if not rtl else "الشهادات", sections.get("certifications") or []),
+        paragraph("Skills" if not rtl else "المهارات", side_section_style),
+        *[paragraph(item, side_item) for item in (sections.get("skills") or [])],
+        Spacer(1, 18),
+        *section_block("Languages" if not rtl else "اللغات", sections.get("languages") or []),
+        *section_block("Certifications" if not rtl else "الشهادات", sections.get("certifications") or []),
     ]
+    if sections.get("tools"):
+        sidebar.extend([Spacer(1, 14), *section_block("Tools" if not rtl else "الأدوات", sections.get("tools") or [])])
 
-    main = []
-    main.append(paragraph("PROFESSIONAL EXPERIENCE" if not rtl else "الخبرات العملية", section_style))
+    main = [
+        paragraph("Work Experience" if not rtl else "الخبرات العملية", section_style),
+    ]
     for item in sections.get("experiences", []):
         heading = " - ".join([part for part in [item.get("title"), item.get("company")] if part])
         meta = " | ".join([part for part in [item.get("location"), item.get("dates")] if part])
-        main.extend([paragraph(heading, ParagraphStyle("JobHeading", parent=base, fontSize=10, leading=12, textColor=colors.HexColor("#17202a"))), paragraph(meta, small)])
-        for bullet in (item.get("bullets") or [])[:7]:
-            main.append(paragraph(f"• {bullet}", bullet_style))
-        main.append(Spacer(1, 3))
+        main.extend([paragraph(heading, job_heading), paragraph(meta, meta_style)])
+        bullets = (item.get("bullets") or [])[:7]
+        if bullets:
+            rows = bullet_rows(bullets, bullet_style, rtl)
+            widths = [118 * mm, 7 * mm] if rtl else [7 * mm, 118 * mm]
+            bullet_table = Table(rows, colWidths=widths, hAlign="RIGHT" if rtl else "LEFT")
+            bullet_table.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 1.2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 1.2),
+            ]))
+            main.append(bullet_table)
+        main.append(Spacer(1, 12))
     for title, key in [
-        ("EDUCATION" if not rtl else "التعليم", "education"),
-        ("PROJECTS" if not rtl else "المشاريع", "projects"),
-        ("ACHIEVEMENTS" if not rtl else "الإنجازات", "achievements"),
-        ("ADDITIONAL INFORMATION" if not rtl else "معلومات إضافية", "additional_info"),
+        ("Education" if not rtl else "التعليم", "education"),
+        ("Projects" if not rtl else "المشاريع", "projects"),
+        ("Achievements" if not rtl else "الإنجازات", "achievements"),
+        ("Additional Information" if not rtl else "معلومات إضافية", "additional_info"),
     ]:
         items = sections.get(key) or []
         if items:
             main.append(paragraph(title, section_style))
-            for item in items:
-                main.append(paragraph(f"• {item}", bullet_style))
+            rows = bullet_rows(items, bullet_style, rtl)
+            widths = [118 * mm, 7 * mm] if rtl else [7 * mm, 118 * mm]
+            item_table = Table(rows, colWidths=widths, hAlign="RIGHT" if rtl else "LEFT")
+            item_table.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 1.2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 1.2),
+            ]))
+            main.append(item_table)
+            main.append(Spacer(1, 8))
 
-    story = [KeepTogether(header), Spacer(1, 7)]
-    table = Table([[sidebar, main]], colWidths=[54 * mm, 124 * mm], hAlign="LEFT")
+    story = [header, Spacer(1, 34)]
+    table = Table([[main, sidebar]], colWidths=[126 * mm, 42 * mm], hAlign="LEFT")
     table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (0, 0), colors.HexColor("#eef5f7")),
-        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#d8e1ea")),
-        ("LINEBEFORE", (1, 0), (1, 0), 0.6, colors.HexColor("#d8e1ea")),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-        ("TOPPADDING", (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (0, 0), 0),
+        ("RIGHTPADDING", (0, 0), (0, 0), 16),
+        ("LEFTPADDING", (1, 0), (1, 0), 16),
+        ("RIGHTPADDING", (1, 0), (1, 0), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
     story.append(table)
     doc.build(story)
