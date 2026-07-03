@@ -1054,10 +1054,9 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
 function AppFooter() {
   return (
     <footer className="app-footer">
-      <span className="app-version">v1.1.0</span>
       <span className="footer-brand">
         <img src="/brand/rawabet-mark.png" alt="" />
-        <span>© 2026 Rawabet. All rights reserved.</span>
+        <span>v1.1.0 © 2026 Rawabet. All rights reserved.</span>
       </span>
     </footer>
   );

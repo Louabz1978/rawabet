@@ -1782,7 +1782,8 @@ html[dir="rtl"] .support-window {
   direction: ltr;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  width: min(1220px, calc(100vw - 40px));
+  width: 100%;
+  max-width: none;
   height: 100dvh;
   min-height: 680px;
   margin: 0 auto;
@@ -1903,7 +1904,7 @@ html[dir="rtl"] .support-window {
   direction: rtl;
   text-align: right;
   justify-items: stretch;
-  transform: translateX(-58px);
+  transform: none;
 }
 
 .login-heading {
