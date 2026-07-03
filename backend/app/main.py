@@ -661,10 +661,40 @@ def has_arabic(value: str | None) -> bool:
     return bool(value and re.search(r"[\u0600-\u06FF]", value))
 
 
-def resume_font_name() -> str:
+RESUME_FONT_CACHE: dict[str, str] = {}
+
+
+def resume_font_name(weight: str = "medium") -> str:
     if not REPORTLAB_AVAILABLE:
         raise RuntimeError(f"ReportLab is not installed or could not be imported: {REPORTLAB_IMPORT_ERROR}")
-    candidates = [
+    weight = weight if weight in {"light", "medium", "bold", "black"} else "medium"
+    if weight in RESUME_FONT_CACHE:
+        return RESUME_FONT_CACHE[weight]
+    font_paths = {
+        "light": [
+            str(Path(__file__).resolve().parent / "fonts" / "NotoKufiArabic-Regular.ttf"),
+            "/usr/share/fonts/rawabet/NotoKufiArabic-Regular.ttf",
+        ],
+        "medium": [
+            str(Path(__file__).resolve().parent / "fonts" / "NotoKufiArabic-Medium.ttf"),
+            str(Path(__file__).resolve().parent / "fonts" / "NotoKufiArabic-Regular.ttf"),
+            "/usr/share/fonts/rawabet/NotoKufiArabic-Medium.ttf",
+            "/usr/share/fonts/rawabet/NotoKufiArabic-Regular.ttf",
+        ],
+        "bold": [
+            str(Path(__file__).resolve().parent / "fonts" / "NotoKufiArabic-Bold.ttf"),
+            str(Path(__file__).resolve().parent / "fonts" / "NotoKufiArabic-Medium.ttf"),
+            "/usr/share/fonts/rawabet/NotoKufiArabic-Bold.ttf",
+            "/usr/share/fonts/rawabet/NotoKufiArabic-Medium.ttf",
+        ],
+        "black": [
+            str(Path(__file__).resolve().parent / "fonts" / "NotoKufiArabic-ExtraBold.ttf"),
+            str(Path(__file__).resolve().parent / "fonts" / "NotoKufiArabic-Bold.ttf"),
+            "/usr/share/fonts/rawabet/NotoKufiArabic-ExtraBold.ttf",
+            "/usr/share/fonts/rawabet/NotoKufiArabic-Bold.ttf",
+        ],
+    }
+    fallback_candidates = [
         "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
         "/System/Library/Fonts/Supplemental/Arial.ttf",
         "/Library/Fonts/Arial Unicode.ttf",
@@ -675,17 +705,19 @@ def resume_font_name() -> str:
         "/usr/share/fonts/google-noto/NotoNaskhArabic-Regular.ttf",
         "/usr/share/fonts/google-noto/NotoSansArabic-Regular.ttf",
         "/usr/share/fonts/google-noto-vf/NotoSansArabic[wght].ttf",
-        "/System/Library/Fonts/GeezaPro.ttc",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
     ]
+    candidates = font_paths[weight] + font_paths["medium"] + fallback_candidates
     for path in candidates:
         if Path(path).exists():
             try:
-                pdfmetrics.registerFont(TTFont("RawabetResume", path))
-                return "RawabetResume"
+                font_name = f"RawabetResume{weight.title()}"
+                pdfmetrics.registerFont(TTFont(font_name, path))
+                RESUME_FONT_CACHE[weight] = font_name
+                return font_name
             except Exception:
                 continue
     raise RuntimeError("No Arabic-capable TrueType font was found. Install DejaVu Sans or Noto Arabic fonts on the server.")
@@ -705,6 +737,13 @@ def pdf_text(value: object) -> str:
 
 def split_lines(value: str | None) -> list[str]:
     return [line.strip(" •-\t") for line in str(value or "").splitlines() if line.strip(" •-\t")]
+
+
+def trim_resume_line(value: object, limit: int = 520) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit].rstrip()}..."
 
 
 def date_range(start: object = None, end: object = None, is_current: bool = False, current_text: str = "Present") -> str:
@@ -736,15 +775,19 @@ def default_resume_sections(user: dict, profile: dict, experiences: list[dict], 
     experience_items = []
     for item in experiences:
         description_lines = split_lines(item.get("description"))
-        fallback_bullets = description_lines or (
-            [
-                f"نفذت مهام العمل لدى {item.get('company') or 'الجهة'} مع التركيز على الجودة والموثوقية وتحقيق نتائج قابلة للقياس.",
-                "تعاونت مع فرق العمل وأصحاب المصلحة لتحسين الإجراءات والتوثيق وسرعة التنفيذ."
-            ] if rtl else [
+        if rtl and description_lines and any(has_arabic(line) for line in description_lines):
+            fallback_bullets = description_lines
+        elif rtl:
+            fallback_bullets = [
+                f"نفذت مهام {item.get('title') or 'الدور الوظيفي'} لدى {item.get('company') or 'الجهة'} مع التركيز على الجودة والموثوقية وتحقيق نتائج قابلة للقياس.",
+                "تعاونت مع فرق العمل وأصحاب المصلحة لتحسين الإجراءات، التوثيق، وسرعة التنفيذ.",
+                "استخدمت الخبرات والأدوات المتاحة لدعم العمل اليومي ورفع كفاءة المخرجات."
+            ]
+        else:
+            fallback_bullets = description_lines or [
                 f"Delivered work for {item.get('company') or 'the organization'} with focus on quality, reliability, and measurable outcomes.",
                 "Collaborated with stakeholders to improve processes, documentation, and execution."
             ]
-        )
         experience_items.append({
             "title": item.get("title") or "-",
             "company": item.get("company") or "-",
@@ -826,6 +869,10 @@ def paragraph(text: object, style):
     return Paragraph(pdf_text(text).replace("\n", "<br/>"), style)
 
 
+def underlined_paragraph(text: object, style):
+    return Paragraph(f"<u>{pdf_text(text).replace(chr(10), '<br/>')}</u>", style)
+
+
 def bullet_rows(items: list[str], style, rtl: bool):
     rows = []
     for index, item in enumerate(items, start=1):
@@ -849,34 +896,49 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
         return split_lines(str(value or ""))
     for key in ("skills", "languages", "certifications", "education", "projects", "tools", "achievements", "additional_info"):
         sections[key] = listify(sections.get(key))
+    rtl = has_arabic(" ".join([
+        str(user.get("full_name") or ""),
+        str(user.get("headline") or ""),
+        str(sections.get("summary") or ""),
+        str(sections.get("target_title") or ""),
+    ]))
     normalized_experiences = []
     for item in sections.get("experiences") or []:
         if isinstance(item, dict):
-            normalized_experiences.append({**item, "bullets": listify(item.get("bullets"))[:7]})
+            bullets = [trim_resume_line(bullet) for bullet in listify(item.get("bullets"))[:7]]
+            if rtl and bullets and not any(has_arabic(bullet) for bullet in bullets):
+                bullets = [
+                    f"نفذت مهام {item.get('title') or 'الدور الوظيفي'} لدى {item.get('company') or 'الجهة'} مع التركيز على الجودة والموثوقية وتحقيق نتائج قابلة للقياس.",
+                    "تعاونت مع فرق العمل وأصحاب المصلحة لتحسين الإجراءات، التوثيق، وسرعة التنفيذ.",
+                    "دعمت مخرجات العمل من خلال تنظيم المهام، متابعة التفاصيل، وتطبيق أفضل الممارسات."
+                ]
+            normalized_experiences.append({**item, "bullets": bullets})
     sections["experiences"] = normalized_experiences or fallback["experiences"]
-    font = resume_font_name()
+    font = resume_font_name("medium")
+    font_light = resume_font_name("light")
+    font_bold = resume_font_name("bold")
+    font_black = resume_font_name("black")
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=18 * mm, leftMargin=18 * mm, topMargin=14 * mm, bottomMargin=16 * mm)
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=50, leftMargin=50, topMargin=48, bottomMargin=42)
     styles = getSampleStyleSheet()
     blue = colors.HexColor("#0070c0")
-    teal = colors.HexColor("#10a89a")
-    ink = colors.HexColor("#111827")
+    red = colors.HexColor("#c0392b")
+    ink = colors.black
     muted = colors.HexColor("#595959")
-    base = ParagraphStyle("BaseResume", parent=styles["Normal"], fontName=font, fontSize=8.4, leading=10.7, textColor=ink)
-    small = ParagraphStyle("SmallResume", parent=base, fontSize=7.4, leading=9.2, textColor=muted)
-    name_style = ParagraphStyle("NameResume", parent=base, fontSize=30, leading=35, textColor=colors.black, spaceAfter=8, alignment=TA_LEFT)
-    title_style = ParagraphStyle("TitleResume", parent=base, fontSize=9.5, leading=12, textColor=muted, alignment=TA_LEFT)
-    contact_style = ParagraphStyle("ContactResume", parent=base, fontSize=8.2, leading=11, textColor=colors.black, alignment=TA_RIGHT)
-    section_style = ParagraphStyle("SectionResume", parent=base, fontSize=10, leading=12, textColor=blue, spaceBefore=6, spaceAfter=10, alignment=TA_RIGHT)
-    side_section_style = ParagraphStyle("SideSectionResume", parent=section_style, spaceBefore=0, spaceAfter=12)
-    job_heading = ParagraphStyle("JobHeading", parent=base, fontSize=9.6, leading=12, textColor=colors.black, alignment=TA_RIGHT, spaceAfter=4)
-    role_style = ParagraphStyle("RoleResume", parent=base, fontSize=8.4, leading=10.7, textColor=colors.HexColor("#c0392b"), alignment=TA_CENTER, spaceAfter=4)
-    meta_style = ParagraphStyle("MetaResume", parent=base, fontSize=8, leading=10, textColor=muted, alignment=TA_RIGHT, spaceAfter=4)
-    bullet_style = ParagraphStyle("BulletResume", parent=base, fontSize=8.15, leading=10.4, textColor=colors.black, alignment=TA_RIGHT)
-    side_item = ParagraphStyle("SideItemResume", parent=base, fontSize=8.4, leading=13, textColor=muted, alignment=TA_LEFT)
-    rtl = has_arabic(" ".join([user.get("full_name") or "", sections.get("summary") or ""]))
+    base = ParagraphStyle("BaseResume", parent=styles["Normal"], fontName=font, fontSize=9.0, leading=12.0, textColor=ink)
+    name_style = ParagraphStyle("NameResume", parent=base, fontName=font_bold, fontSize=32, leading=38, textColor=colors.black, spaceAfter=18, alignment=TA_LEFT)
+    title_style = ParagraphStyle("TitleResume", parent=base, fontName=font_light, fontSize=10.1, leading=12.5, textColor=muted, alignment=TA_LEFT)
+    contact_style = ParagraphStyle("ContactResume", parent=base, fontSize=10.1, leading=15, textColor=colors.black, alignment=TA_LEFT)
+    section_style = ParagraphStyle("SectionResume", parent=base, fontName=font_bold, fontSize=10.8, leading=13.5, textColor=blue, spaceBefore=0, spaceAfter=24, alignment=TA_CENTER)
+    side_section_style = ParagraphStyle("SideSectionResume", parent=section_style, alignment=TA_RIGHT, spaceBefore=0, spaceAfter=20)
+    company_style = ParagraphStyle("CompanyResume", parent=base, fontName=font_bold, fontSize=9.9, leading=13, textColor=colors.black, alignment=TA_CENTER, spaceAfter=10)
+    role_style = ParagraphStyle("RoleResume", parent=base, fontSize=9.4, leading=12, textColor=red, alignment=TA_CENTER, spaceAfter=10)
+    meta_style = ParagraphStyle("MetaResume", parent=base, fontSize=8.8, leading=11.5, textColor=muted, alignment=TA_CENTER, spaceAfter=11)
+    responsibilities_style = ParagraphStyle("ResponsibilitiesResume", parent=base, fontName=font_bold, fontSize=8.8, leading=11.5, textColor=muted, alignment=TA_CENTER, spaceAfter=18)
+    bullet_style = ParagraphStyle("BulletResume", parent=base, fontSize=8.9, leading=12.5, textColor=colors.black, alignment=TA_RIGHT)
+    side_item = ParagraphStyle("SideItemResume", parent=base, fontName=font_bold, fontSize=8.9, leading=17.5, textColor=muted, alignment=TA_LEFT)
     if rtl:
-        for style in (base, small, section_style, side_section_style, job_heading, meta_style, bullet_style):
+        for style in (base, section_style, side_section_style, company_style, role_style, meta_style, responsibilities_style, bullet_style):
             style.alignment = TA_RIGHT
 
     contact_lines = [part for part in [user.get("phone"), user.get("email"), user.get("location")] if part]
@@ -885,7 +947,7 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
         paragraph(sections.get("target_title") or user.get("headline") or "", title_style),
     ]
     header_right = [paragraph("<br/>".join(contact_lines), contact_style)]
-    header = Table([[header_left, header_right]], colWidths=[124 * mm, 48 * mm], hAlign="LEFT")
+    header = Table([[header_left, header_right]], colWidths=[380, 132], hAlign="LEFT")
     header.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
@@ -905,24 +967,28 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
     sidebar = [
         paragraph("Skills" if not rtl else "المهارات", side_section_style),
         *[paragraph(item, side_item) for item in (sections.get("skills") or [])],
-        Spacer(1, 18),
+        Spacer(1, 48),
         *section_block("Languages" if not rtl else "اللغات", sections.get("languages") or []),
         *section_block("Certifications" if not rtl else "الشهادات", sections.get("certifications") or []),
     ]
     if sections.get("tools"):
-        sidebar.extend([Spacer(1, 14), *section_block("Tools" if not rtl else "الأدوات", sections.get("tools") or [])])
+        sidebar.extend([Spacer(1, 34), *section_block("Tools" if not rtl else "الأدوات", sections.get("tools") or [])])
 
-    main = [
-        paragraph("Work Experience" if not rtl else "الخبرات العملية", section_style),
-    ]
-    for item in sections.get("experiences", []):
-        heading = " - ".join([part for part in [item.get("title"), item.get("company")] if part])
-        meta = " | ".join([part for part in [item.get("location"), item.get("dates")] if part])
-        main.extend([paragraph(heading, job_heading), paragraph(meta, meta_style)])
+    main_intro = [paragraph("Work Experience" if not rtl else "الخبرات العملية", section_style)]
+    table_rows = []
+    for index, item in enumerate(sections.get("experiences", [])):
+        company_line = " - ".join([part for part in [item.get("company"), item.get("location")] if part])
+        role_line = item.get("title") or ""
+        job_flow = [
+            paragraph(company_line, company_style),
+            underlined_paragraph(role_line, role_style) if role_line else Spacer(1, 0),
+            paragraph(item.get("dates") or "", meta_style),
+            paragraph("Roles and responsibilities:" if not rtl else "الأدوار والمسؤوليات:", responsibilities_style),
+        ]
         bullets = (item.get("bullets") or [])[:7]
         if bullets:
             rows = bullet_rows(bullets, bullet_style, rtl)
-            widths = [118 * mm, 7 * mm] if rtl else [7 * mm, 118 * mm]
+            widths = [310, 18] if rtl else [18, 310]
             bullet_table = Table(rows, colWidths=widths, hAlign="RIGHT" if rtl else "LEFT")
             bullet_table.setStyle(TableStyle([
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -931,8 +997,14 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
                 ("TOPPADDING", (0, 0), (-1, -1), 1.2),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 1.2),
             ]))
-            main.append(bullet_table)
-        main.append(Spacer(1, 12))
+            job_flow.append(bullet_table)
+        job_flow.append(Spacer(1, 20))
+        if index == 0:
+            table_rows.append([main_intro + job_flow, sidebar])
+        else:
+            table_rows.append([job_flow, []])
+    if not table_rows:
+        table_rows.append([main_intro, sidebar])
     for title, key in [
         ("Education" if not rtl else "التعليم", "education"),
         ("Projects" if not rtl else "المشاريع", "projects"),
@@ -941,9 +1013,9 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
     ]:
         items = sections.get(key) or []
         if items:
-            main.append(paragraph(title, section_style))
+            section_flow = [paragraph(title, section_style)]
             rows = bullet_rows(items, bullet_style, rtl)
-            widths = [118 * mm, 7 * mm] if rtl else [7 * mm, 118 * mm]
+            widths = [310, 18] if rtl else [18, 310]
             item_table = Table(rows, colWidths=widths, hAlign="RIGHT" if rtl else "LEFT")
             item_table.setStyle(TableStyle([
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -952,17 +1024,18 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
                 ("TOPPADDING", (0, 0), (-1, -1), 1.2),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 1.2),
             ]))
-            main.append(item_table)
-            main.append(Spacer(1, 8))
+            section_flow.append(item_table)
+            section_flow.append(Spacer(1, 8))
+            table_rows.append([section_flow, []])
 
-    story = [header, Spacer(1, 34)]
-    table = Table([[main, sidebar]], colWidths=[126 * mm, 42 * mm], hAlign="LEFT")
+    story = [header, Spacer(1, 58)]
+    table = Table(table_rows, colWidths=[335, 130], hAlign="LEFT", splitByRow=1)
     table.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (0, 0), 0),
-        ("RIGHTPADDING", (0, 0), (0, 0), 16),
-        ("LEFTPADDING", (1, 0), (1, 0), 16),
-        ("RIGHTPADDING", (1, 0), (1, 0), 0),
+        ("LEFTPADDING", (0, 0), (0, -1), 0),
+        ("RIGHTPADDING", (0, 0), (0, -1), 22),
+        ("LEFTPADDING", (1, 0), (1, -1), 18),
+        ("RIGHTPADDING", (1, 0), (1, -1), 0),
         ("TOPPADDING", (0, 0), (-1, -1), 0),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
@@ -1849,6 +1922,11 @@ def build_resume_pdf(body: ResumeBuilderBody, user: Annotated[dict, Depends(curr
         raise HTTPException(
             status_code=500,
             detail=f"Smart resume PDF dependencies are missing or incomplete: {exc}. Install requirements and Arabic fonts, then restart Rawabet backend.",
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Smart resume PDF could not be generated: {exc}",
         )
     safe_name = re.sub(r"[^A-Za-z0-9_-]+", "-", user.get("full_name") or "rawabet").strip("-").lower() or "rawabet"
     return Response(

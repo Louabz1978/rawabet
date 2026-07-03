@@ -1458,14 +1458,23 @@ function SmartResumePanel({ t, me, reload }) {
         throw new Error(data.detail || data.message || "Request failed");
       }
       const blob = await response.blob();
+      if (!blob.size) throw new Error("Resume PDF was empty. Please try again.");
+      if (blob.type && !blob.type.includes("pdf")) {
+        const message = await blob.text().catch(() => "");
+        throw new Error(message || "Resume PDF could not be generated.");
+      }
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
       link.download = "rawabet-smart-resume.pdf";
+      link.target = "_blank";
       document.body.appendChild(link);
       link.click();
       link.remove();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+      if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        setTimeout(() => window.open(url, "_blank", "noopener,noreferrer"), 600);
+      }
     } catch (err) {
       alert(err.message);
     } finally {
