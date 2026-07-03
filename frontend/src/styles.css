@@ -219,13 +219,15 @@ main.admin-main {
 .app-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   width: min(1180px, calc(100vw - 36px));
   margin: 18px auto 10px;
   padding: 10px 2px;
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 700;
+  direction: ltr;
+  text-align: left;
 }
 
 .app-version {
@@ -238,12 +240,6 @@ main.admin-main {
   align-items: center;
   gap: 8px;
   color: var(--muted);
-}
-
-.footer-brand img {
-  width: 22px;
-  height: 22px;
-  object-fit: contain;
 }
 
 .panel, .profile-card, .metric-card, .login-card {
@@ -900,6 +896,63 @@ input, textarea, select {
 
 textarea { min-height: 110px; resize: vertical; }
 .span { grid-column: 1 / -1; }
+
+.smart-resume-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.smart-resume-panel .section-head p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.resume-source-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 12px;
+}
+
+.resume-source-grid article {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.resume-source-grid article > strong {
+  color: var(--brand);
+  font-size: 0.86rem;
+}
+
+.smart-resume-form textarea,
+.row-fields textarea {
+  min-height: 94px;
+  resize: vertical;
+}
+
+.compact-timeline {
+  padding: 6px 0;
+}
+
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 42px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.inline-check input {
+  width: auto;
+}
 
 .row-fields {
   display: grid;
@@ -2785,15 +2838,21 @@ td span {
     border: 0;
     border-radius: 16px;
     background: transparent;
-    color: var(--muted);
-    font-size: 1rem;
+    color: #111827;
+    font-size: 1.05rem;
     font-weight: 900;
   }
   .mobile-bottom-nav button.active {
-    background: var(--brand);
-    color: #fff;
+    background: #f3f6f8;
+    color: #111827;
   }
   .mobile-bottom-nav span {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    place-items: center;
+    border: 1.5px solid currentColor;
+    border-radius: 999px;
     line-height: 1;
   }
   .post-card .mobile-home-search {
@@ -2840,6 +2899,7 @@ td span {
   }
   .agent-profile-head,
   .agent-share-grid,
+  .resume-source-grid,
   .profile-facts div {
     grid-template-columns: 1fr;
   }

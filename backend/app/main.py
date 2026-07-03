@@ -3,6 +3,7 @@ from uuid import uuid4
 from typing import Annotated
 from uuid import UUID
 from email.message import EmailMessage
+from io import BytesIO
 import json
 import os
 import re
@@ -20,6 +21,26 @@ from pydantic import BaseModel, EmailStr
 from .auth import admin_user, agent_user, create_token, current_user, hash_password, is_master_admin, public_user, verify_password
 from .config import APP_ENV, OPENAI_API_KEY, SMTP_FROM, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USER, UPLOAD_DIR
 from .db import execute, fetch_all, fetch_one
+
+try:
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_LEFT, TA_RIGHT
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    REPORTLAB_AVAILABLE = True
+except Exception:
+    REPORTLAB_AVAILABLE = False
+
+try:
+    import arabic_reshaper
+    from bidi.algorithm import get_display
+except Exception:
+    arabic_reshaper = None
+    get_display = None
 
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -427,8 +448,12 @@ class ResumeBuilderBody(BaseModel):
     targetTitle: str | None = None
     summary: str | None = None
     education: str | None = None
+    certifications: str | None = None
+    projects: str | None = None
+    tools: str | None = None
     achievements: str | None = None
     languages: str | None = None
+    additionalInfo: str | None = None
 
 
 class CourseBody(BaseModel):
@@ -628,9 +653,96 @@ def make_simple_pdf(title: str, lines: list[str]) -> bytes:
     return bytes(pdf)
 
 
-def openai_resume_lines(user: dict, profile: dict, experiences: list[dict], body: ResumeBuilderBody, fallback_lines: list[str]) -> list[str]:
+def has_arabic(value: str | None) -> bool:
+    return bool(value and re.search(r"[\u0600-\u06FF]", value))
+
+
+def resume_font_name() -> str:
+    if not REPORTLAB_AVAILABLE:
+        return "Helvetica"
+    candidates = [
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+        "/Library/Fonts/Arial Unicode.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    ]
+    for path in candidates:
+        if Path(path).exists():
+            try:
+                pdfmetrics.registerFont(TTFont("RawabetResume", path))
+                return "RawabetResume"
+            except Exception:
+                continue
+    return "Helvetica"
+
+
+def pdf_text(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if has_arabic(text) and arabic_reshaper and get_display:
+        try:
+            return get_display(arabic_reshaper.reshape(text))
+        except Exception:
+            return text
+    return text
+
+
+def split_lines(value: str | None) -> list[str]:
+    return [line.strip(" •-\t") for line in str(value or "").splitlines() if line.strip(" •-\t")]
+
+
+def date_range(start: object = None, end: object = None, is_current: bool = False) -> str:
+    start_text = str(start or "").strip()
+    end_text = "Present" if is_current else str(end or "").strip()
+    if start_text and end_text:
+        return f"{start_text} - {end_text}"
+    return start_text or end_text
+
+
+def default_resume_sections(user: dict, profile: dict, experiences: list[dict], education: list[dict], courses: list[dict], body: ResumeBuilderBody) -> dict:
+    skills = profile.get("skills") if isinstance(profile.get("skills"), list) else []
+    languages = split_lines(body.languages) or profile.get("languages") or ["Arabic", "English"]
+    certs = split_lines(body.certifications)
+    certs.extend([f"{course.get('title')} - {course.get('provider') or ''}".strip(" -") for course in courses if course.get("title")])
+    education_lines = split_lines(body.education)
+    education_lines.extend([
+        " - ".join([part for part in [item.get("degree"), item.get("school"), date_range(item.get("start_year"), item.get("end_year"))] if part])
+        for item in education
+    ])
+    experience_items = []
+    for item in experiences:
+        description_lines = split_lines(item.get("description"))
+        fallback_bullets = description_lines or [
+            f"Delivered work for {item.get('company') or 'the organization'} with focus on quality, reliability, and measurable outcomes.",
+            "Collaborated with stakeholders to improve processes, documentation, and execution."
+        ]
+        experience_items.append({
+            "title": item.get("title") or "-",
+            "company": item.get("company") or "-",
+            "location": item.get("location") or "",
+            "dates": date_range(item.get("start_date"), item.get("end_date"), item.get("is_current")),
+            "bullets": fallback_bullets[:5],
+        })
+    return {
+        "summary": body.summary or profile.get("about") or f"{user.get('headline') or 'Professional'} with verified experience, skills, and career history.",
+        "target_title": body.targetTitle or user.get("headline") or "",
+        "skills": skills,
+        "languages": languages,
+        "certifications": certs,
+        "education": education_lines,
+        "projects": split_lines(body.projects),
+        "tools": split_lines(body.tools),
+        "achievements": split_lines(body.achievements),
+        "additional_info": split_lines(body.additionalInfo),
+        "experiences": experience_items,
+    }
+
+
+def openai_resume_sections(user: dict, profile: dict, experiences: list[dict], education: list[dict], courses: list[dict], body: ResumeBuilderBody, fallback: dict) -> dict:
     if not OPENAI_API_KEY:
-        return fallback_lines
+        return fallback
     prompt = {
         "name": user.get("full_name"),
         "email": user.get("email"),
@@ -642,18 +754,24 @@ def openai_resume_lines(user: dict, profile: dict, experiences: list[dict], body
         "targetTitle": body.targetTitle,
         "summaryNotes": body.summary,
         "education": body.education,
+        "educationFromProfile": education,
+        "certifications": body.certifications,
+        "coursesFromProfile": courses,
+        "projects": body.projects,
+        "tools": body.tools,
         "achievements": body.achievements,
         "languages": body.languages,
+        "additionalInfo": body.additionalInfo,
         "experiences": experiences,
     }
     payload = {
         "model": "gpt-4o-mini",
         "messages": [
-            {"role": "system", "content": "Create a concise professional resume from the provided Rawabet profile. Return only plain text lines. No markdown tables. Keep it under 45 lines."},
+            {"role": "system", "content": "Create a concise professional resume from the provided Rawabet profile. Return strict JSON only with keys: summary, target_title, skills, languages, certifications, education, projects, tools, achievements, additional_info, experiences. experiences must be an array of objects with title, company, location, dates, bullets. Improve bullets with strong action verbs and measurable professional wording. Keep Arabic content Arabic and English content English. Do not invent companies, dates, degrees, or certifications."},
             {"role": "user", "content": json.dumps(prompt, default=str, ensure_ascii=False)},
         ],
         "temperature": 0.25,
-        "max_tokens": 900,
+        "max_tokens": 1800,
     }
     request = urllib.request.Request(
         "https://api.openai.com/v1/chat/completions",
@@ -665,10 +783,119 @@ def openai_resume_lines(user: dict, profile: dict, experiences: list[dict], body
         with urllib.request.urlopen(request, timeout=16) as response:
             data = json.loads(response.read().decode("utf-8"))
             text = data["choices"][0]["message"]["content"].strip()
-            lines = [line.strip(" -") for line in text.splitlines() if line.strip()]
-            return lines[:60] or fallback_lines
+            text = re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.MULTILINE).strip()
+            parsed = json.loads(text)
+            if isinstance(parsed, dict):
+                merged = {**fallback, **{key: value for key, value in parsed.items() if value}}
+                if not isinstance(merged.get("experiences"), list) or not merged["experiences"]:
+                    merged["experiences"] = fallback["experiences"]
+                return merged
+            return fallback
     except (urllib.error.URLError, KeyError, IndexError, json.JSONDecodeError):
-        return fallback_lines
+        return fallback
+
+
+def paragraph(text: object, style):
+    return Paragraph(pdf_text(text).replace("\n", "<br/>"), style)
+
+
+def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], education: list[dict], courses: list[dict], body: ResumeBuilderBody) -> bytes:
+    fallback = default_resume_sections(user, profile, experiences, education, courses, body)
+    sections = openai_resume_sections(user, profile, experiences, education, courses, body, fallback)
+    def listify(value):
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        return split_lines(str(value or ""))
+    for key in ("skills", "languages", "certifications", "education", "projects", "tools", "achievements", "additional_info"):
+        sections[key] = listify(sections.get(key))
+    normalized_experiences = []
+    for item in sections.get("experiences") or []:
+        if isinstance(item, dict):
+            normalized_experiences.append({**item, "bullets": listify(item.get("bullets"))[:7]})
+    sections["experiences"] = normalized_experiences or fallback["experiences"]
+    if not REPORTLAB_AVAILABLE:
+        lines = [user.get("full_name") or "Rawabet Resume", user.get("email") or "", user.get("phone") or "", "", sections.get("summary", "")]
+        for item in sections.get("experiences", []):
+            lines.extend(["", f"{item.get('title')} - {item.get('company')}", *(item.get("bullets") or [])])
+        return make_simple_pdf(f"{user.get('full_name') or 'Rawabet'} Resume", lines)
+
+    font = resume_font_name()
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=14 * mm, leftMargin=14 * mm, topMargin=13 * mm, bottomMargin=13 * mm)
+    styles = getSampleStyleSheet()
+    base = ParagraphStyle("BaseResume", parent=styles["Normal"], fontName=font, fontSize=8.8, leading=11.2, textColor=colors.HexColor("#17202a"))
+    small = ParagraphStyle("SmallResume", parent=base, fontSize=7.5, leading=9.5, textColor=colors.HexColor("#5f6b7a"))
+    name_style = ParagraphStyle("NameResume", parent=base, fontSize=19, leading=22, textColor=colors.HexColor("#092a53"), spaceAfter=3)
+    title_style = ParagraphStyle("TitleResume", parent=base, fontSize=10, leading=12, textColor=colors.HexColor("#10a89a"), spaceAfter=4)
+    section_style = ParagraphStyle("SectionResume", parent=base, fontSize=9.2, leading=11, textColor=colors.HexColor("#092a53"), spaceBefore=8, spaceAfter=4)
+    section_style.fontName = font
+    section_style.bold = True
+    bullet_style = ParagraphStyle("BulletResume", parent=base, leftIndent=8, firstLineIndent=-5, spaceAfter=2)
+    rtl = has_arabic(" ".join([user.get("full_name") or "", sections.get("summary") or ""]))
+    if rtl:
+        for style in (base, small, name_style, title_style, section_style, bullet_style):
+            style.alignment = TA_RIGHT
+
+    contact = " | ".join([part for part in [user.get("email"), user.get("phone"), user.get("location")] if part])
+    header = [
+        paragraph(user.get("full_name") or "Rawabet Resume", name_style),
+        paragraph(sections.get("target_title") or user.get("headline") or "", title_style),
+        paragraph(contact, small),
+    ]
+
+    def section_block(title: str, items: list[str]):
+        if not items:
+            return []
+        flow = [paragraph(title.upper(), section_style)]
+        for item in items:
+            flow.append(paragraph(item, base))
+        return flow
+
+    sidebar = [
+        paragraph("SUMMARY" if not rtl else "الملخص", section_style),
+        paragraph(sections.get("summary") or "-", base),
+        *section_block("SKILLS" if not rtl else "المهارات", sections.get("skills") or []),
+        *section_block("TOOLS" if not rtl else "الأدوات", sections.get("tools") or []),
+        *section_block("LANGUAGES" if not rtl else "اللغات", sections.get("languages") or []),
+        *section_block("CERTIFICATIONS" if not rtl else "الشهادات", sections.get("certifications") or []),
+    ]
+
+    main = []
+    main.append(paragraph("PROFESSIONAL EXPERIENCE" if not rtl else "الخبرات العملية", section_style))
+    for item in sections.get("experiences", []):
+        heading = " - ".join([part for part in [item.get("title"), item.get("company")] if part])
+        meta = " | ".join([part for part in [item.get("location"), item.get("dates")] if part])
+        main.extend([paragraph(heading, ParagraphStyle("JobHeading", parent=base, fontSize=10, leading=12, textColor=colors.HexColor("#17202a"))), paragraph(meta, small)])
+        for bullet in (item.get("bullets") or [])[:7]:
+            main.append(paragraph(f"• {bullet}", bullet_style))
+        main.append(Spacer(1, 3))
+    for title, key in [
+        ("EDUCATION" if not rtl else "التعليم", "education"),
+        ("PROJECTS" if not rtl else "المشاريع", "projects"),
+        ("ACHIEVEMENTS" if not rtl else "الإنجازات", "achievements"),
+        ("ADDITIONAL INFORMATION" if not rtl else "معلومات إضافية", "additional_info"),
+    ]:
+        items = sections.get(key) or []
+        if items:
+            main.append(paragraph(title, section_style))
+            for item in items:
+                main.append(paragraph(f"• {item}", bullet_style))
+
+    story = [KeepTogether(header), Spacer(1, 7)]
+    table = Table([[sidebar, main]], colWidths=[54 * mm, 124 * mm], hAlign="LEFT")
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, 0), colors.HexColor("#eef5f7")),
+        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#d8e1ea")),
+        ("LINEBEFORE", (1, 0), (1, 0), 0.6, colors.HexColor("#d8e1ea")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.append(table)
+    doc.build(story)
+    return buffer.getvalue()
 
 
 RAWABET_CONTEXT = """
@@ -681,7 +908,9 @@ User capabilities:
 - Use Home to see profile strength, applied jobs count, profile completion shortcuts, admin-posted jobs, and upcoming interviews.
 - Use Profile to edit name, phone, date of birth, headline, location, about, skills, profile picture, resume, certificates, and work history.
 - Profile picture uploads replace the previous picture.
-- Resume uploads replace the previous resume.
+- Users can keep up to two uploaded resumes.
+- If a user does not have a CV/resume, they can use Create smart resume to generate and download a PDF resume from their profile, skills, work history, education, courses, certifications, projects, tools, achievements, and extra notes.
+- Generated smart resumes download directly and are not automatically saved into uploaded resumes.
 - Certificate uploads can add up to five certificates.
 - Use Jobs to search job title/company, filter by category and salary, view details, apply, and track application status.
 - Applied jobs can be filtered by status, category, salary, and company.
@@ -701,13 +930,16 @@ Bot rules:
 - Prefer clear numbered steps or bullets and put every bullet/step on its own line.
 - Mention exact user-facing page/menu/button names.
 - Use Arabic by default unless the user writes English.
-- If a question is outside Rawabet or cannot be answered from this context, ask whether the user wants live support or wants to end the conversation.
+- If a user asks for jobs and there are no matching active jobs, answer naturally that there are no matching jobs at this moment and suggest checking Jobs again later or changing search terms. Do not send them to live support just because no matching job exists.
+- If a question is outside Rawabet or truly cannot be answered from this context, ask whether the user wants live support or wants to end the conversation.
 """
 
 LIVE_AGENT_REPLY = "تم إشعار فريق الدعم بطلبك. سيقوم موظف دعم مباشر بالرد عليك من صندوق الدعم."
 END_CHAT_REPLY = "حسنا، يمكنك إنهاء المحادثة الآن. إذا احتجت مساعدة لاحقا افتح نافذة الدعم مرة أخرى."
-UNKNOWN_REPLY = "لا أملك إجابة مؤكدة عن هذا السؤال داخل معلومات منصة روابط. هل تريد التحدث مع موظف دعم مباشر أم إنهاء المحادثة؟"
-UNKNOWN_REPLY_EN = "I do not have a confirmed answer from Rawabet platform information. Would you like to speak with live support or end the conversation?"
+UNKNOWN_REPLY = "لا أملك إجابة مؤكدة عن هذا السؤال داخل معلومات منصة روابط. يمكنني مساعدتك في البحث عن الوظائف، التقديم، الملف الشخصي، السيرة، الشهادات، المقابلات، وحالات الطلبات. هل تريد التحدث مع دعم مباشر أم إنهاء المحادثة؟"
+UNKNOWN_REPLY_EN = "I do not have a confirmed answer from Rawabet platform information. I can help with jobs, applications, profile updates, resumes, certificates, interviews, and application statuses. Would you like to speak with live support or end the conversation?"
+NO_JOB_MATCH_REPLY = "لا توجد وظائف مطابقة لهذا البحث حاليا. يمكنك تجربة كلمات أخرى أو فتح صفحة الوظائف لاحقا لأن الإدارة تضيف وظائف جديدة باستمرار."
+NO_JOB_MATCH_REPLY_EN = "We do not have matching jobs at this moment. You can try different keywords or check the Jobs page again later because new jobs may be added."
 
 
 def normalize_arabic_text(value: str) -> str:
@@ -741,6 +973,10 @@ def question_is_english(value: str) -> bool:
 
 def unknown_reply_for(question: str) -> str:
     return UNKNOWN_REPLY_EN if question_is_english(question) else UNKNOWN_REPLY
+
+
+def no_job_match_reply_for(question: str) -> str:
+    return NO_JOB_MATCH_REPLY_EN if question_is_english(question) else NO_JOB_MATCH_REPLY
 
 
 def greeting_reply(question: str) -> str | None:
@@ -856,16 +1092,56 @@ def active_jobs_context() -> str:
     return "\n".join(lines)
 
 
+def active_agents_context() -> str:
+    try:
+        agents = fetch_all(
+            """
+            SELECT u.full_name, u.headline, u.location,
+                   COALESCE(p.agency_name, '') AS agency_name,
+                   COALESCE(p.agency_about, '') AS agency_about,
+                   COALESCE(p.website, '') AS website,
+                   COUNT(j.id)::int AS open_jobs
+            FROM users u
+            LEFT JOIN profiles p ON p.user_id = u.id
+            LEFT JOIN agent_job_assignments aja ON aja.agent_id = u.id
+            LEFT JOIN jobs j ON j.id = aja.job_id AND j.status = 'active'
+            WHERE u.role = 'agent' AND u.status IN ('active', 'verified')
+            GROUP BY u.id, p.agency_name, p.agency_about, p.website
+            ORDER BY open_jobs DESC, u.full_name
+            LIMIT 40
+            """
+        )
+    except Exception:
+        agents = []
+    if not agents:
+        return "Current companies/agencies: No public agency profiles are available."
+    lines = ["Current companies/agencies users can browse:"]
+    for agent in agents:
+        about = re.sub(r"\s+", " ", (agent.get("agency_about") or "")).strip()
+        if len(about) > 220:
+            about = f"{about[:220].rstrip()}..."
+        lines.append(
+            f"- {agent.get('agency_name') or agent.get('full_name')} | "
+            f"Representative: {agent.get('full_name')} | Headline: {agent.get('headline') or '-'} | "
+            f"Location: {agent.get('location') or '-'} | Open jobs: {agent.get('open_jobs') or 0} | About: {about or '-'}"
+        )
+    return "\n".join(lines)
+
+
 def matching_jobs_reply(question: str) -> str | None:
     lowered = question.lower()
     normalized = normalize_arabic_text(question)
-    search_intents = ["search", "find", "show me", "available", "ابحث", "اعثر", "اريد", "أريد", "يوجد", "متاح"]
-    if not any(term in lowered or normalize_arabic_text(term) in normalized for term in search_intents):
+    resume_terms = ["resume", "cv", "سيره", "سيرة", "سي في", "السي في"]
+    if any(term in lowered or normalize_arabic_text(term) in normalized for term in resume_terms):
         return None
-    if not any(term in lowered or normalize_arabic_text(term) in normalized for term in ["job", "jobs", "وظيفة", "وظائف"]):
+    search_intents = ["search", "find", "show me", "available", "have", "looking", "ابحث", "اعثر", "اريد", "أريد", "يوجد", "عندكم", "متاح"]
+    job_terms = ["job", "jobs", "position", "vacancy", "work", "وظيفة", "وظائف", "شاغر", "عمل"]
+    has_search_intent = any(term in lowered or normalize_arabic_text(term) in normalized for term in search_intents)
+    has_job_term = any(term in lowered or normalize_arabic_text(term) in normalized for term in job_terms)
+    if not (has_search_intent or has_job_term):
         return None
     stop_words = {
-        "search", "find", "show", "me", "job", "jobs", "in", "at", "for", "about", "rawabet",
+        "search", "find", "show", "me", "do", "you", "have", "any", "job", "jobs", "position", "vacancy", "work", "in", "at", "for", "about", "rawabet",
         "ابحث", "اعثر", "اريد", "أريد", "هل", "يوجد", "هناك", "لي", "عن", "في", "على", "وظيفة", "وظائف", "الوظائف", "مناسبه", "مناسبة"
     }
     normalized_stop_words = {normalize_arabic_text(item) for item in stop_words}
@@ -873,10 +1149,16 @@ def matching_jobs_reply(question: str) -> str | None:
     keywords = []
     for word in words:
         normalized_word = normalize_arabic_text(word)
+        if normalized_word in {"it", "ايتي"}:
+            keywords.extend(["technology", "information", "technical", "تقنيه", "معلومات", "حاسوب"])
+            continue
+        if normalized_word in {"tech", "technology", "تقني", "تقنيه", "تكنولوجيا"}:
+            keywords.extend(["technology", "technical", "تقنيه"])
+            continue
         if len(normalized_word) < 3 or normalized_word in normalized_stop_words:
             continue
         keywords.append(normalized_word)
-    if not keywords:
+    if not keywords and not has_job_term:
         return None
     try:
         job_number_expr = "job_number" if jobs_have_job_number_column() else "NULL::integer AS job_number"
@@ -892,7 +1174,7 @@ def matching_jobs_reply(question: str) -> str | None:
     except Exception:
         return None
     if not jobs:
-        return "لم أجد وظائف مطابقة مباشرة لهذا البحث داخل الوظائف النشطة. هل تريد التحدث مع دعم مباشر أم إنهاء المحادثة؟"
+        return no_job_match_reply_for(question)
 
     location_tokens = set()
     for job in jobs:
@@ -928,12 +1210,12 @@ def matching_jobs_reply(question: str) -> str | None:
         matched_jobs = [job for _, job in scored_jobs[:10]]
 
     if not matched_jobs:
-        return "لم أجد وظائف مطابقة مباشرة لهذا البحث داخل الوظائف النشطة. هل تريد التحدث مع دعم مباشر أم إنهاء المحادثة؟"
+        return no_job_match_reply_for(question)
 
-    lines = ["وجدت الوظائف المطابقة لبحثك:"]
+    lines = ["I found these matching job IDs:" if question_is_english(question) else "وجدت أرقام الوظائف المطابقة لبحثك:"]
     for job in matched_jobs[:10]:
         job_id = f"#{job.get('job_number')}" if job.get("job_number") else str(job.get("id"))
-        lines.append(f"رقم الوظيفة: {job_id}")
+        lines.append(f"Job ID: {job_id}" if question_is_english(question) else f"رقم الوظيفة: {job_id}")
     return "\n".join(lines)
 
 
@@ -957,10 +1239,16 @@ RAWABET_GUIDES = [
         "answer": "لتغيير الصورة الشخصية:\n1. افتح صفحة الملف أو اضغط أكمل الملف.\n2. في قسم الصورة والسيرة والشهادات اختر الصورة الشخصية.\n3. اختر صورة من جهازك.\n4. يتم رفع الصورة واستبدال أي صورة قديمة تلقائيا.\n5. تظهر الصورة الجديدة في ملفك وفي شاشة الإدارة."
     },
     {
+        "intent": "smart_resume",
+        "stems": ["سير", "cv", "ذكي", "انشاء", "انشئ", "اعمل", "اصنع"],
+        "terms": ["create smart resume", "smart resume", "resume builder", "ai resume", "create resume", "generate resume", "no cv", "no resume", "do not have cv", "dont have cv", "don't have cv", "إنشاء سيرة ذكية", "انشاء سيرة ذكية", "سيرة ذكية", "السي في", "سي في", "ليس لدي سيرة", "ليس عندي سيرة", "لا يوجد لدي سي في", "لا املك سيرة", "ماهو انشاء سيرة ذكية", "ما هو انشاء سيرة ذكية", "ساعدني في السيرة", "اعمل سيرة", "أنشئ سيرة", "انشئ سيرة"],
+        "answer": "إذا لم يكن لديك سيرة ذاتية، استخدم إنشاء سيرة ذكية داخل روابط:\n1. افتح القائمة أو مساحة العمل واختر إنشاء سيرة ذكية.\n2. قبل الإنشاء، حاول إكمال ملفك بإضافة المسمى المهني، النبذة، المهارات، تاريخ العمل، التعليم، الدورات، والشهادات.\n3. ستجد أن النظام يسحب المهارات وتاريخ العمل من ملفك تلقائيا.\n4. أضف أي شهادات مع التواريخ، مشاريع، أدوات تستخدمها، إنجازات، ولغات.\n5. اضغط تحميل السيرة.\n6. سيستخدم الذكاء الاصطناعي معلومات ملفك والمعلومات التي كتبتها لصياغة نقاط احترافية وإنشاء ملف PDF.\n7. السيرة الذكية يتم تحميلها مباشرة ولا تُحفظ تلقائيا ضمن مرفقاتك.\n8. إذا أردت استخدامها في التقديم، ارفع ملف PDF الناتج في قسم السيرة الذاتية داخل الملف.\n9. يمكنك الاحتفاظ بما يصل إلى سيرتين ذاتيتين مرفوعتين في ملفك واختيار أي واحدة عند التقديم على وظيفة."
+    },
+    {
         "intent": "resume",
         "stems": ["سير", "cv"],
         "terms": ["resume", "cv", "سيرة", "السيرة", "السيرة الذاتية", "سيرتي", "تعديل سيرتي", "ارفع سيرتي"],
-        "answer": "لرفع السيرة الذاتية:\n1. افتح الملف أو أكمل الملف.\n2. اختر حقل السيرة الذاتية.\n3. ارفع ملف PDF أو DOC أو DOCX.\n4. روابط يحتفظ بسيرة واحدة فقط، لذلك أي رفع جديد يستبدل السيرة السابقة.\n5. يظهر رابط السيرة في مرفقات ملفك ولدى الإدارة."
+        "answer": "لرفع السيرة الذاتية:\n1. افتح الملف أو أكمل الملف.\n2. اختر حقل السيرة الذاتية.\n3. ارفع ملف PDF أو DOC أو DOCX.\n4. يمكنك الاحتفاظ بما يصل إلى سيرتين ذاتيتين في ملفك.\n5. عند التقديم على وظيفة يمكنك اختيار السيرة التي تريد إرسالها.\n6. إذا لم يكن لديك سيرة جاهزة، استخدم إنشاء سيرة ذكية أولا لتحميل PDF ثم ارفعه في ملفك."
     },
     {
         "intent": "certificates",
@@ -1032,6 +1320,16 @@ def local_platform_reply(question: str) -> str | None:
         return LIVE_AGENT_REPLY
     if any(term in lowered or normalize_arabic_text(term) in normalized_question for term in wants_end):
         return END_CHAT_REPLY
+    smart_resume_terms = [
+        "smart resume", "resume builder", "ai resume", "create resume", "generate resume", "no cv", "no resume",
+        "do not have cv", "dont have cv", "don't have cv", "انشاء سيره ذكيه", "سيره ذكيه", "السي في",
+        "سي في", "لا يوجد لدي سي في", "ليس لدي سيره", "ليس عندي سيره", "لا املك سيره", "ساعدني في السيره",
+        "ماهو انشاء سيره ذكيه", "ما هو انشاء سيره ذكيه", "اعمل سيره", "انشي سيره", "انشاء سيره"
+    ]
+    if any(term in lowered or normalize_arabic_text(term) in normalized_question for term in smart_resume_terms):
+        smart_guide = next((guide for guide in RAWABET_GUIDES if guide.get("intent") == "smart_resume"), None)
+        if smart_guide:
+            return smart_guide["answer"]
     detailed_job_terms = ["description", "details", "salary", "requirements", "وصف", "تفاصيل", "راتب", "شروط", "متطلبات", "معلومات"]
     job_terms = ["job", "jobs", "وظيفة", "وظائف"]
     if any(term in lowered or normalize_arabic_text(term) in normalized_question for term in detailed_job_terms) and any(term in lowered or normalize_arabic_text(term) in normalized_question for term in job_terms):
@@ -1061,7 +1359,7 @@ def platform_bot_reply(question: str) -> str:
         "rawabet", "روابط", "platform", "profile", "resume", "cv", "certificate", "job", "jobs", "apply", "application",
         "interview", "support", "plan", "premium", "free", "status", "otp", "register",
         "login", "upload", "attachment", "photo", "avatar", "skill", "experience", "salary", "category", "filter",
-        "ملف", "وظيفة", "وظائف", "تقديم", "اتقدم", "اقدم", "التقدم", "قدم", "ارشدني", "مناسب", "مناسبا", "طلب", "طلبات", "حالة", "مقابلة", "دعم", "شهادة", "شهادات", "سيرة",
+        "ملف", "وظيفة", "وظائف", "تقديم", "اتقدم", "اقدم", "التقدم", "قدم", "ارشدني", "مناسب", "مناسبا", "طلب", "طلبات", "حالة", "مقابلة", "دعم", "شهادة", "شهادات", "سيرة", "سيره", "سي في",
         "الخطة", "مميز", "مجاني", "الحالة", "تسجيل", "دخول", "تحقق", "رمز", "رفع", "مرفق", "مرفقات", "صورة", "صورتي", "صور",
         "مهارات", "خبرات", "راتب", "فئة", "بحث", "فلتر"
     ]
@@ -1076,12 +1374,12 @@ def platform_bot_reply(question: str) -> str:
     fallback = unknown_reply_for(question)
     if not OPENAI_API_KEY:
         return fallback
-    context = f"{RAWABET_CONTEXT}\n\n{active_jobs_context()}"
+    context = f"{RAWABET_CONTEXT}\n\n{active_jobs_context()}\n\n{active_agents_context()}"
     unknown = unknown_reply_for(question)
     payload = {
         "model": "gpt-4o-mini",
         "messages": [
-            {"role": "system", "content": f"You are Rawabet's AI assistant for normal platform users only. Answer only from the context below. Do not answer admin, agent, internal dashboard, analytics, or management questions. Use Arabic by default unless the user writes English. If you use bullets or numbered steps, every bullet or step must be on its own separate line. If the user asks about a job, use the current active jobs in context and include job number when available. If the user asks about something not in the context, reply exactly with: {unknown}\n\n{context}"},
+            {"role": "system", "content": f"You are Rawabet's AI assistant for normal platform users only. Act like a helpful human support assistant and try to resolve common user questions before offering live support. Answer only from the context below. Do not answer admin, agent, internal dashboard, analytics, or management questions. Use Arabic by default unless the user writes English. If you use bullets or numbered steps, every bullet or step must be on its own separate line. If the user asks about jobs, search the active jobs context semantically by title, company, category, location, and description; include matching job numbers only when available. If no active jobs match, say there are no matching jobs at this moment and suggest trying another keyword or checking Jobs later; do not offer live support for a normal no-match job search. If the user asks about companies/agencies, use the public companies/agencies context. If the user asks how to use the platform, guide them step by step using user-facing page and button names. If the user asks something truly outside Rawabet, reply exactly with: {unknown}\n\n{context}"},
             {"role": "user", "content": question},
         ],
         "temperature": 0.2,
@@ -1459,49 +1757,26 @@ def add_experience(body: ExperienceBody, user: Annotated[dict, Depends(current_u
 
 @app.post("/api/account/resume-builder", status_code=201)
 def build_resume_pdf(body: ResumeBuilderBody, user: Annotated[dict, Depends(current_user)]):
-    if resume_count_for(user["id"]) >= 2:
-        raise HTTPException(status_code=400, detail="You can upload up to 2 resumes. Remove one resume before creating a new one.")
-    profile = fetch_one("SELECT about, skills FROM profiles WHERE user_id = %s", (user["id"],)) or {}
-    experiences = fetch_all("SELECT title, company, location, description FROM experiences WHERE user_id = %s ORDER BY start_date DESC NULLS LAST LIMIT 6", (user["id"],))
-    skills = profile.get("skills") if isinstance(profile.get("skills"), list) else []
-    lines = [
-        user.get("full_name") or "Rawabet profile",
-        user.get("email") or "",
-        user.get("phone") or "",
-        user.get("location") or "",
-        "",
-        "Professional Summary",
-        body.summary or profile.get("about") or "Experienced professional using Rawabet to present verified career information.",
-        "",
-        "Target Role",
-        body.targetTitle or user.get("headline") or "",
-        "",
-        "Skills",
-        ", ".join(skills) or "-",
-        "",
-        "Experience",
-    ]
-    for item in experiences:
-        lines.append(f"{item.get('title') or '-'} - {item.get('company') or '-'}")
-        if item.get("description"):
-            lines.append(item["description"])
-    lines.extend(["", "Education", body.education or "-", "", "Achievements", body.achievements or "-", "", "Languages", body.languages or ", ".join(profile.get("languages") or []) or "-"])
-
-    lines = openai_resume_lines(user, profile, experiences, body, lines)
-    pdf = make_simple_pdf(f"{user.get('full_name') or 'Rawabet'} Resume", lines)
-    target = UPLOAD_DIR / f"{user['id']}_resume_generated_{uuid4().hex}.pdf"
-    target.write_bytes(pdf)
-    file_url = f"/uploads/{target.name}"
-    document = execute(
+    profile = fetch_one("SELECT about, skills, languages FROM profiles WHERE user_id = %s", (user["id"],)) or {}
+    experiences = fetch_all(
         """
-        INSERT INTO documents (user_id, kind, file_name, file_path, mime_type, file_size, verification_status)
-        VALUES (%s,'resume',%s,%s,'application/pdf',%s,'pending')
-        RETURNING id, kind, file_name, mime_type, file_size, verification_status, created_at, %s AS file_url
+        SELECT title, company, location, start_date, end_date, is_current, description
+        FROM experiences
+        WHERE user_id = %s
+        ORDER BY start_date DESC NULLS LAST
+        LIMIT 8
         """,
-        (user["id"], "rawabet-generated-resume.pdf", str(target), len(pdf), file_url),
+        (user["id"],),
     )
-    sync_profile_strength(user["id"])
-    return document
+    education = fetch_all("SELECT * FROM education WHERE user_id = %s ORDER BY end_year DESC NULLS LAST", (user["id"],))
+    courses = fetch_all("SELECT * FROM courses WHERE user_id = %s ORDER BY completion_date DESC NULLS LAST, created_at DESC", (user["id"],))
+    pdf = make_resume_pdf(user, profile, experiences, education, courses, body)
+    safe_name = re.sub(r"[^A-Za-z0-9_-]+", "-", user.get("full_name") or "rawabet").strip("-").lower() or "rawabet"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}-smart-resume.pdf"'},
+    )
 
 
 @app.post("/api/account/documents", status_code=201)
@@ -1536,6 +1811,23 @@ async def upload_document(
     )
     sync_profile_strength(user["id"])
     return document
+
+
+@app.delete("/api/account/documents/{document_id}")
+def delete_account_document(document_id: UUID, user: Annotated[dict, Depends(current_user)]):
+    document = execute(
+        """
+        DELETE FROM documents
+        WHERE id = %s AND user_id = %s AND kind IN ('resume', 'certificate')
+        RETURNING user_id, file_path
+        """,
+        (document_id, user["id"]),
+    )
+    if not document:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    delete_upload_file(document.get("file_path"))
+    sync_profile_strength(document["user_id"])
+    return {"ok": True}
 
 
 @app.post("/api/account/avatar")

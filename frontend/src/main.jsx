@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { api, clearToken, setToken } from "./lib/api.js";
+import { api, clearToken, getToken, setToken } from "./lib/api.js";
 import "./styles.css";
 
 const text = {
@@ -78,9 +78,16 @@ const text = {
     resume: "Resume",
     chooseResume: "Choose resume",
     createResumeWithAI: "Create resume with AI",
+    smartResume: "Create smart resume",
+    smartResumeIntro: "Rawabet will use your profile, work history, skills, courses, and the details below to create a polished PDF resume.",
+    resumeUsesProfile: "Uses profile skills and work history automatically",
     targetRole: "Target role",
     education: "Education",
+    certifications: "Certifications",
+    projects: "Projects",
+    tools: "Tools",
     achievements: "Achievements",
+    additionalInfo: "Additional information",
     generateResume: "Generate resume PDF",
     courses: "Courses",
     addCourse: "Add course",
@@ -101,6 +108,7 @@ const text = {
     noAttachments: "No attachments yet",
     viewFile: "View file",
     removeAttachment: "Remove",
+    downloadResume: "Download resume",
     maxCertificates: "Up to 5 certificates",
     profileBuilder: "Profile Builder",
     completeYourRawabet: "Complete your Rawabet profile",
@@ -112,6 +120,7 @@ const text = {
     filesStayLocalBody: "Uploads are sent to the Python backend and saved for this profile.",
     experience: "Experience",
     addExperience: "Add experience",
+    current: "Current",
     title: "Title",
     company: "Company",
     type: "Type",
@@ -320,9 +329,16 @@ const text = {
     resume: "السيرة الذاتية",
     chooseResume: "اختر السيرة الذاتية",
     createResumeWithAI: "إنشاء سيرة بالذكاء الاصطناعي",
+    smartResume: "إنشاء سيرة ذكية",
+    smartResumeIntro: "ستستخدم روابط ملفك وخبراتك ومهاراتك ودوراتك والمعلومات أدناه لإنشاء سيرة PDF احترافية.",
+    resumeUsesProfile: "يستخدم مهارات الملف وتاريخ العمل تلقائيا",
     targetRole: "الوظيفة المستهدفة",
     education: "التعليم",
+    certifications: "الشهادات",
+    projects: "المشاريع",
+    tools: "الأدوات",
     achievements: "الإنجازات",
+    additionalInfo: "معلومات إضافية",
     generateResume: "إنشاء PDF للسيرة",
     courses: "الدورات",
     addCourse: "إضافة دورة",
@@ -343,6 +359,7 @@ const text = {
     noAttachments: "لا توجد مرفقات بعد",
     viewFile: "عرض الملف",
     removeAttachment: "حذف",
+    downloadResume: "تحميل السيرة",
     maxCertificates: "حتى 5 شهادات",
     profileBuilder: "منشئ الملف",
     completeYourRawabet: "أكمل ملفك في روابط",
@@ -354,6 +371,7 @@ const text = {
     filesStayLocalBody: "يتم إرسال الملفات إلى باكند بايثون وحفظها لهذا الملف.",
     experience: "الخبرات",
     addExperience: "إضافة خبرة",
+    current: "حالي",
     title: "المسمى",
     company: "الشركة",
     type: "النوع",
@@ -530,6 +548,7 @@ const USER_STATUSES = ["active", "verified", "review", "suspended"];
 const JOB_STATUSES = ["active", "paused", "closed"];
 const PLAN_OPTIONS = ["free", "premium"];
 const USER_ROLES = ["member", "agent", "admin", "master_admin"];
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 function statusLabel(value, lang) {
   return STATUS_LABELS[value]?.[lang] || value || "-";
@@ -751,6 +770,12 @@ function App() {
     setMobileMenuOpen(false);
   }
 
+  function openSmartResume() {
+    setSelectedJobId("");
+    setView("smartResume");
+    setMobileMenuOpen(false);
+  }
+
   if (!session || !me) return <Login lang={lang} setLang={setLang} t={t} login={login} verifyAndLoad={verifyAndLoad} error={error} setError={setError} />;
   const isAgent = session.role === "agent";
 
@@ -787,14 +812,16 @@ function App() {
         <button type="button" onClick={openAppliedJobs}><span>{t("appliedJobs")}</span><b>{formatNumber(me.applications?.length || 0)}</b></button>
         <button type="button" onClick={openAllJobs}>{t("findJob")}</button>
         <button type="button" onClick={() => { setView("agents"); setMobileMenuOpen(false); }}>{t("findCompany")}</button>
+        <button type="button" onClick={openSmartResume}>{t("smartResume")}</button>
         <button type="button" onClick={openComingInterviews}>{t("upcomingInterviews")}</button>
         <button type="button" onClick={logout}>{t("logout")}</button>
       </nav>}
 
       <main className={view === "admin" || isAgent ? "admin-main" : ""}>
         {isAgent ? <AgentWorkspace t={t} lang={lang} agent={me.user} profile={me.profile || {}} shares={agentShares} interviews={agentInterviews} jobs={agentJobs} reload={loadApp} /> : <>
-          {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} agents={agents} setSelectedAgent={setSelectedAgent} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} jobSearch={jobSearch} setJobSearch={setJobSearch} setJobMode={setJobMode} />}
+          {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} agents={agents} setSelectedAgent={setSelectedAgent} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} openSmartResume={openSmartResume} jobSearch={jobSearch} setJobSearch={setJobSearch} setJobMode={setJobMode} />}
           {view === "profile" && <Profile t={t} me={me} reload={loadApp} />}
+          {view === "smartResume" && <SmartResumePage t={t} me={me} reload={loadApp} />}
           {view === "courses" && <CoursesPage t={t} courses={me.courses || []} />}
           {view === "agents" && <AgentsPage t={t} agents={agents} selectedAgent={selectedAgent} setSelectedAgent={setSelectedAgent} openJob={openJob} />}
           {view === "jobs" && <Jobs t={t} lang={lang} jobs={jobs} documents={me.documents || []} applications={me.applications || []} interviews={me.interviews || []} search={jobSearch} mode={jobMode} setMode={setJobMode} selectedJobId={selectedJobId} clearSelectedJob={() => setSelectedJobId("")} reload={loadApp} />}
@@ -1055,14 +1082,13 @@ function AppFooter() {
   return (
     <footer className="app-footer">
       <span className="footer-brand">
-        <img src="/brand/rawabet-mark.png" alt="" />
         <span>v1.1.0 © 2026 Rawabet. All rights reserved.</span>
       </span>
     </footer>
   );
 }
 
-function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJob, openAppliedJobs, openBuilder, jobSearch, setJobSearch, setJobMode }) {
+function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJob, openAppliedJobs, openBuilder, openSmartResume, jobSearch, setJobSearch, setJobMode }) {
   const strength = Number(me.profile?.profile_strength ?? 0);
   const applications = me.applications || [];
   const priorityApplications = applications.filter((item) => ["interview", "review"].includes(normalizeStatusValue(item.status)));
@@ -1108,6 +1134,7 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
         <section className="panel side-panel workspace-panel">
           <h2>{t("workspace")}</h2>
           <button className="panel-link" onClick={() => setView("profile")}><span>↗</span>{t("publicProfile")}</button>
+          <button className="panel-link" onClick={openSmartResume}><span>◈</span>{t("smartResume")}</button>
           <button className="panel-link" onClick={() => setView("allJobs")}><span>▦</span>{t("savedJobs")}</button>
           {["admin", "master_admin"].includes(me.user.role) && <button className="panel-link" onClick={() => setView("admin")}><span>▥</span>{t("adminDashboard")}</button>}
         </section>
@@ -1172,11 +1199,11 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
 function MobileBottomNav({ t, view, setView, openAllJobs, openComingInterviews }) {
   const items = [
     { id: "home", icon: "⌂", label: t("home"), action: () => setView("home") },
-    { id: "allJobs", icon: "💼", label: t("jobs"), action: openAllJobs },
-    { id: "courses", icon: "🎓", label: t("courses"), action: () => setView("courses") },
-    { id: "agents", icon: "🏢", label: t("companies"), action: () => setView("agents") },
-    { id: "interviews", icon: "📅", label: t("upcomingInterviews"), action: openComingInterviews },
-    { id: "profile", icon: "👤", label: t("profile"), action: () => setView("profile") }
+    { id: "profile", icon: "○", label: t("profile"), action: () => setView("profile") },
+    { id: "allJobs", icon: "▢", label: t("jobs"), action: openAllJobs },
+    { id: "interviews", icon: "□", label: t("upcomingInterviews"), action: openComingInterviews },
+    { id: "courses", icon: "◇", label: t("courses"), action: () => setView("courses") },
+    { id: "agents", icon: "▥", label: t("companies"), action: () => setView("agents") }
   ];
   return (
     <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
@@ -1277,7 +1304,7 @@ function ProfileBuilder({ t, me, reload, close }) {
     about: me.profile?.about || "",
     skills: (me.profile?.skills || []).join(", ")
   });
-  const [experience, setExperience] = useState({ title: "", company: "" });
+  const [experience, setExperience] = useState({ title: "", company: "", location: "", startDate: "", endDate: "", isCurrent: false, description: "" });
   const [saving, setSaving] = useState(false);
 
   async function saveProfile(event) {
@@ -1319,7 +1346,12 @@ function ProfileBuilder({ t, me, reload, close }) {
   async function addExperience() {
     if (!experience.title || !experience.company) return;
     await api("/account/experience", { method: "POST", body: JSON.stringify(experience) });
-    setExperience({ title: "", company: "" });
+    setExperience({ title: "", company: "", location: "", startDate: "", endDate: "", isCurrent: false, description: "" });
+    await reload();
+  }
+
+  async function deleteAttachment(documentId) {
+    await api(`/account/documents/${documentId}`, { method: "DELETE" });
     await reload();
   }
 
@@ -1356,7 +1388,7 @@ function ProfileBuilder({ t, me, reload, close }) {
               <Avatar user={me.user} size="large" />
               <div><strong>{t("filesStayLocal")}</strong><p>{t("filesStayLocalBody")}</p></div>
             </div>
-            <DocumentLinks t={t} documents={me.documents} avatarUrl={me.user.avatarUrl} />
+            <DocumentLinks t={t} documents={me.documents} avatarUrl={me.user.avatarUrl} onDelete={deleteAttachment} />
           </section>
 
           <section className="builder-panel span">
@@ -1364,10 +1396,15 @@ function ProfileBuilder({ t, me, reload, close }) {
             <div className="row-fields">
               <input placeholder={t("title")} value={experience.title} onChange={(e) => setExperience({ ...experience, title: e.target.value })} />
               <input placeholder={t("company")} value={experience.company} onChange={(e) => setExperience({ ...experience, company: e.target.value })} />
+              <input placeholder={t("location")} value={experience.location} onChange={(e) => setExperience({ ...experience, location: e.target.value })} />
+              <input type="date" value={experience.startDate} onChange={(e) => setExperience({ ...experience, startDate: e.target.value })} />
+              <input type="date" value={experience.endDate} disabled={experience.isCurrent} onChange={(e) => setExperience({ ...experience, endDate: e.target.value })} />
+              <label className="inline-check"><input type="checkbox" checked={experience.isCurrent} onChange={(e) => setExperience({ ...experience, isCurrent: e.target.checked, endDate: e.target.checked ? "" : experience.endDate })} />{t("current")}</label>
+              <textarea className="span" placeholder={t("description")} value={experience.description} onChange={(e) => setExperience({ ...experience, description: e.target.value })} />
               <button className="secondary-button" type="button" onClick={addExperience}>{t("addExperience")}</button>
             </div>
             <div className="timeline-list">
-              {me.experiences.map((item) => <div className="timeline-item" key={item.id}><strong>{item.title}</strong><span>{item.company}</span></div>)}
+              {me.experiences.map((item) => <div className="timeline-item" key={item.id}><strong>{item.title}</strong><span>{item.company}{item.start_date || item.end_date ? ` · ${[item.start_date, item.is_current ? "Present" : item.end_date].filter(Boolean).join(" - ")}` : ""}</span></div>)}
             </div>
           </section>
         </div>
@@ -1381,6 +1418,96 @@ function ProfileBuilder({ t, me, reload, close }) {
   );
 }
 
+function SmartResumePage({ t, me, reload }) {
+  return (
+    <div className="profile-page">
+      <SmartResumePanel t={t} me={me} reload={reload} />
+    </div>
+  );
+}
+
+function SmartResumePanel({ t, me, reload }) {
+  const [resumeBuilder, setResumeBuilder] = useState({
+    targetTitle: me.user.headline || "",
+    summary: me.profile?.about || "",
+    education: (me.education || []).map((item) => [item.degree, item.school, [item.start_year, item.end_year].filter(Boolean).join(" - ")].filter(Boolean).join(" - ")).join("\n"),
+    certifications: (me.courses || []).map((course) => [course.title, course.provider, course.completion_date].filter(Boolean).join(" - ")).join("\n"),
+    projects: "",
+    tools: "",
+    achievements: "",
+    languages: Array.isArray(me.profile?.languages) ? me.profile.languages.join("\n") : "Arabic\nEnglish",
+    additionalInfo: ""
+  });
+  const [buildingResume, setBuildingResume] = useState(false);
+  const skills = Array.isArray(me.profile?.skills) ? me.profile.skills : [];
+
+  async function generateResume(event) {
+    event.preventDefault();
+    setBuildingResume(true);
+    try {
+      const response = await fetch(`${API_URL}/account/resume-builder`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {})
+        },
+        body: JSON.stringify(resumeBuilder)
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || data.message || "Request failed");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "rawabet-smart-resume.pdf";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setBuildingResume(false);
+    }
+  }
+
+  return (
+    <section className="panel smart-resume-panel">
+      <div className="section-head">
+        <div>
+          <h2>{t("smartResume")}</h2>
+          <p>{t("smartResumeIntro")}</p>
+        </div>
+        <span className="status">{t("resumeUsesProfile")}</span>
+      </div>
+      <div className="resume-source-grid">
+        <article>
+          <strong>{t("skills")}</strong>
+          <div className="chips">{skills.length ? skills.map((skill) => <span key={skill}>{skill}</span>) : <span>{t("skills")}</span>}</div>
+        </article>
+        <article>
+          <strong>{t("workTimeline")}</strong>
+          {(me.experiences || []).length ? me.experiences.map((item) => <div className="timeline-item compact-timeline" key={item.id}><strong>{item.title}</strong><span>{item.company}{item.start_date || item.end_date ? ` · ${[item.start_date, item.is_current ? "Present" : item.end_date].filter(Boolean).join(" - ")}` : ""}</span></div>) : <p>{t("addExperience")}</p>}
+        </article>
+      </div>
+      <form className="form-grid smart-resume-form" onSubmit={generateResume}>
+        <label>{t("targetRole")}<input value={resumeBuilder.targetTitle} onChange={(e) => setResumeBuilder({ ...resumeBuilder, targetTitle: e.target.value })} /></label>
+        <label>{t("language")}<textarea rows="3" value={resumeBuilder.languages} onChange={(e) => setResumeBuilder({ ...resumeBuilder, languages: e.target.value })} /></label>
+        <label className="span">{t("about")}<textarea rows="4" value={resumeBuilder.summary} onChange={(e) => setResumeBuilder({ ...resumeBuilder, summary: e.target.value })} /></label>
+        <label>{t("education")}<textarea rows="5" value={resumeBuilder.education} onChange={(e) => setResumeBuilder({ ...resumeBuilder, education: e.target.value })} /></label>
+        <label>{t("certifications")}<textarea rows="5" value={resumeBuilder.certifications} onChange={(e) => setResumeBuilder({ ...resumeBuilder, certifications: e.target.value })} /></label>
+        <label>{t("projects")}<textarea rows="5" value={resumeBuilder.projects} onChange={(e) => setResumeBuilder({ ...resumeBuilder, projects: e.target.value })} /></label>
+        <label>{t("tools")}<textarea rows="5" value={resumeBuilder.tools} onChange={(e) => setResumeBuilder({ ...resumeBuilder, tools: e.target.value })} /></label>
+        <label>{t("achievements")}<textarea rows="5" value={resumeBuilder.achievements} onChange={(e) => setResumeBuilder({ ...resumeBuilder, achievements: e.target.value })} /></label>
+        <label>{t("additionalInfo")}<textarea rows="5" value={resumeBuilder.additionalInfo} onChange={(e) => setResumeBuilder({ ...resumeBuilder, additionalInfo: e.target.value })} /></label>
+        <button className="primary-button loading-button span" disabled={buildingResume}>{buildingResume && <span className="spinner" aria-hidden="true"></span>}{t("downloadResume")}</button>
+      </form>
+    </section>
+  );
+}
+
 function Profile({ t, me, reload }) {
   const [form, setForm] = useState({
     fullName: me.user.fullName || "",
@@ -1391,9 +1518,7 @@ function Profile({ t, me, reload }) {
     about: me.profile?.about || "",
     skills: (me.profile?.skills || []).join(", ")
   });
-  const [experience, setExperience] = useState({ title: "", company: "" });
-  const [resumeBuilder, setResumeBuilder] = useState({ targetTitle: "", summary: "", education: "", achievements: "", languages: "" });
-  const [buildingResume, setBuildingResume] = useState(false);
+  const [experience, setExperience] = useState({ title: "", company: "", location: "", startDate: "", endDate: "", isCurrent: false, description: "" });
 
   async function saveProfile(event) {
     event.preventDefault();
@@ -1428,22 +1553,13 @@ function Profile({ t, me, reload }) {
   async function addExperience(event) {
     event.preventDefault();
     await api("/account/experience", { method: "POST", body: JSON.stringify(experience) });
-    setExperience({ title: "", company: "" });
+    setExperience({ title: "", company: "", location: "", startDate: "", endDate: "", isCurrent: false, description: "" });
     await reload();
   }
 
-  async function generateResume(event) {
-    event.preventDefault();
-    setBuildingResume(true);
-    try {
-      const document = await api("/account/resume-builder", { method: "POST", body: JSON.stringify(resumeBuilder) });
-      window.open(assetUrl(document.file_url || document.fileUrl), "_blank", "noopener,noreferrer");
-      await reload();
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setBuildingResume(false);
-    }
+  async function deleteAttachment(documentId) {
+    await api(`/account/documents/${documentId}`, { method: "DELETE" });
+    await reload();
   }
 
   return (
@@ -1463,25 +1579,22 @@ function Profile({ t, me, reload }) {
         <label>{t("profilePicture")}<input type="file" accept="image/*" onChange={(e) => uploadAvatar(e.target.files[0])} /></label>
         <label>{t("resume")}<input type="file" accept=".pdf,.doc,.docx" onChange={(e) => upload("resume", e.target.files[0])} /><span>2</span></label>
         <label>{t("certificate")}<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={(e) => upload("certificate", e.target.files[0])} /><span>{t("maxCertificates")}</span></label>
-        <div className="span"><DocumentLinks t={t} documents={me.documents} avatarUrl={me.user.avatarUrl} /></div>
+        <div className="span"><DocumentLinks t={t} documents={me.documents} avatarUrl={me.user.avatarUrl} onDelete={deleteAttachment} /></div>
       </section>
-      <form className="panel form-grid" onSubmit={generateResume}>
-        <h2 className="span">{t("createResumeWithAI")}</h2>
-        <label>{t("targetRole")}<input value={resumeBuilder.targetTitle} onChange={(e) => setResumeBuilder({ ...resumeBuilder, targetTitle: e.target.value })} /></label>
-        <label>{t("education")}<input value={resumeBuilder.education} onChange={(e) => setResumeBuilder({ ...resumeBuilder, education: e.target.value })} /></label>
-        <label className="span">{t("about")}<textarea value={resumeBuilder.summary} onChange={(e) => setResumeBuilder({ ...resumeBuilder, summary: e.target.value })} /></label>
-        <label>{t("achievements")}<input value={resumeBuilder.achievements} onChange={(e) => setResumeBuilder({ ...resumeBuilder, achievements: e.target.value })} /></label>
-        <label>{t("language")}<input value={resumeBuilder.languages} onChange={(e) => setResumeBuilder({ ...resumeBuilder, languages: e.target.value })} /></label>
-        <button className="primary-button loading-button" disabled={buildingResume}>{buildingResume && <span className="spinner" aria-hidden="true"></span>}{t("generateResume")}</button>
-      </form>
+      <SmartResumePanel t={t} me={me} reload={reload} />
       <section className="panel">
         <h2>{t("experience")}</h2>
         <form className="row-fields" onSubmit={addExperience}>
           <input placeholder={t("title")} value={experience.title} onChange={(e) => setExperience({ ...experience, title: e.target.value })} />
           <input placeholder={t("company")} value={experience.company} onChange={(e) => setExperience({ ...experience, company: e.target.value })} />
+          <input placeholder={t("location")} value={experience.location} onChange={(e) => setExperience({ ...experience, location: e.target.value })} />
+          <input type="date" value={experience.startDate} onChange={(e) => setExperience({ ...experience, startDate: e.target.value })} />
+          <input type="date" value={experience.endDate} disabled={experience.isCurrent} onChange={(e) => setExperience({ ...experience, endDate: e.target.value })} />
+          <label className="inline-check"><input type="checkbox" checked={experience.isCurrent} onChange={(e) => setExperience({ ...experience, isCurrent: e.target.checked, endDate: e.target.checked ? "" : experience.endDate })} />{t("current")}</label>
+          <textarea className="span" placeholder={t("description")} value={experience.description} onChange={(e) => setExperience({ ...experience, description: e.target.value })} />
           <button className="secondary-button">{t("addExperience")}</button>
         </form>
-        {me.experiences.map((item) => <div className="timeline-item" key={item.id}><strong>{item.title}</strong><span>{item.company}</span></div>)}
+        {me.experiences.map((item) => <div className="timeline-item" key={item.id}><strong>{item.title}</strong><span>{item.company}{item.start_date || item.end_date ? ` · ${[item.start_date, item.is_current ? "Present" : item.end_date].filter(Boolean).join(" - ")}` : ""}</span></div>)}
       </section>
       <section className="panel">
         <h2>{t("courses")}</h2>
