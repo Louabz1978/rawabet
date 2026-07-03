@@ -14,7 +14,7 @@ import urllib.request
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, EmailStr
 
 from .auth import admin_user, agent_user, create_token, current_user, hash_password, is_master_admin, public_user, verify_password
@@ -147,6 +147,11 @@ def delete_user_uploads(user_id: UUID | str, kind: str):
                 path.unlink(missing_ok=True)
 
 
+def resume_count_for(user_id: UUID | str) -> int:
+    row = fetch_one("SELECT COUNT(*)::int AS count FROM documents WHERE user_id = %s AND kind = 'resume'", (user_id,))
+    return int((row or {}).get("count") or 0)
+
+
 def looks_like_allowed_file(content: bytes, suffix: str) -> bool:
     if suffix == ".pdf":
         return content.startswith(b"%PDF")
@@ -226,8 +231,38 @@ def ensure_runtime_schema():
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_job_number ON jobs(job_number)",
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS screening_questions JSONB NOT NULL DEFAULT '[]'::jsonb",
         "ALTER TABLE applications ADD COLUMN IF NOT EXISTS screening_answers JSONB NOT NULL DEFAULT '[]'::jsonb",
+        "ALTER TABLE applications ADD COLUMN IF NOT EXISTS resume_document_id UUID REFERENCES documents(id) ON DELETE SET NULL",
+        "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS agency_name TEXT",
+        "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS agency_about TEXT",
+        "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS website TEXT",
         "ALTER TABLE interviews DROP CONSTRAINT IF EXISTS interviews_status_check",
         "ALTER TABLE interviews ADD CONSTRAINT interviews_status_check CHECK (status IN ('scheduled', 'completed', 'cancelled', 'accepted', 'rejected'))",
+        """
+        CREATE TABLE IF NOT EXISTS courses (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          added_by UUID REFERENCES users(id) ON DELETE SET NULL,
+          title TEXT NOT NULL,
+          provider TEXT,
+          completion_date DATE,
+          certificate_url TEXT,
+          notes TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_courses_user ON courses(user_id)",
+        """
+        CREATE TABLE IF NOT EXISTS agent_job_assignments (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          agent_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+          assigned_by UUID REFERENCES users(id) ON DELETE SET NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE(agent_id, job_id)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_agent_job_assignments_agent ON agent_job_assignments(agent_id)",
+        "CREATE INDEX IF NOT EXISTS idx_agent_job_assignments_job ON agent_job_assignments(job_id)",
         """
         CREATE TABLE IF NOT EXISTS agent_profile_shares (
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -385,6 +420,33 @@ class JobBody(BaseModel):
 
 class ApplyBody(BaseModel):
     answers: list[dict[str, str]] = []
+    resumeDocumentId: UUID | None = None
+
+
+class ResumeBuilderBody(BaseModel):
+    targetTitle: str | None = None
+    summary: str | None = None
+    education: str | None = None
+    achievements: str | None = None
+    languages: str | None = None
+
+
+class CourseBody(BaseModel):
+    userId: UUID
+    title: str
+    provider: str | None = None
+    completionDate: str | None = None
+    certificateUrl: str | None = None
+    notes: str | None = None
+
+
+class AgentProfileBody(BaseModel):
+    headline: str | None = None
+    location: str | None = None
+    about: str | None = None
+    agencyName: str | None = None
+    agencyAbout: str | None = None
+    website: str | None = None
 
 
 class InterviewBody(BaseModel):
@@ -410,6 +472,11 @@ class ApplicationShareBody(BaseModel):
 
 class UserShareBody(BaseModel):
     userId: UUID
+    agentId: UUID
+
+
+class JobAgentBody(BaseModel):
+    jobId: UUID
     agentId: UUID
 
 
@@ -522,6 +589,86 @@ def send_interview_email(email: str, full_name: str, job: dict | None, scheduled
             "Rawabet Team"
         ),
     )
+
+
+def pdf_escape(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def make_simple_pdf(title: str, lines: list[str]) -> bytes:
+    clean_lines = []
+    for line in lines:
+        encoded = line.encode("latin-1", "replace").decode("latin-1")
+        clean_lines.append(encoded[:110])
+    stream_lines = ["BT", "/F1 16 Tf", "50 790 Td", f"({pdf_escape(title.encode('latin-1', 'replace').decode('latin-1'))}) Tj", "/F1 10 Tf", "0 -28 Td"]
+    for line in clean_lines:
+        stream_lines.append(f"({pdf_escape(line)}) Tj")
+        stream_lines.append("0 -15 Td")
+    stream_lines.append("ET")
+    stream = "\n".join(stream_lines).encode("latin-1")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream",
+    ]
+    pdf = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(len(pdf))
+        pdf.extend(f"{index} 0 obj\n".encode("ascii"))
+        pdf.extend(obj)
+        pdf.extend(b"\nendobj\n")
+    xref_at = len(pdf)
+    pdf.extend(f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode("ascii"))
+    for offset in offsets[1:]:
+        pdf.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
+    pdf.extend(f"trailer << /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF\n".encode("ascii"))
+    return bytes(pdf)
+
+
+def openai_resume_lines(user: dict, profile: dict, experiences: list[dict], body: ResumeBuilderBody, fallback_lines: list[str]) -> list[str]:
+    if not OPENAI_API_KEY:
+        return fallback_lines
+    prompt = {
+        "name": user.get("full_name"),
+        "email": user.get("email"),
+        "phone": user.get("phone"),
+        "location": user.get("location"),
+        "headline": user.get("headline"),
+        "about": profile.get("about"),
+        "skills": profile.get("skills"),
+        "targetTitle": body.targetTitle,
+        "summaryNotes": body.summary,
+        "education": body.education,
+        "achievements": body.achievements,
+        "languages": body.languages,
+        "experiences": experiences,
+    }
+    payload = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {"role": "system", "content": "Create a concise professional resume from the provided Rawabet profile. Return only plain text lines. No markdown tables. Keep it under 45 lines."},
+            {"role": "user", "content": json.dumps(prompt, default=str, ensure_ascii=False)},
+        ],
+        "temperature": 0.25,
+        "max_tokens": 900,
+    }
+    request = urllib.request.Request(
+        "https://api.openai.com/v1/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=16) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            text = data["choices"][0]["message"]["content"].strip()
+            lines = [line.strip(" -") for line in text.splitlines() if line.strip()]
+            return lines[:60] or fallback_lines
+    except (urllib.error.URLError, KeyError, IndexError, json.JSONDecodeError):
+        return fallback_lines
 
 
 RAWABET_CONTEXT = """
@@ -972,11 +1119,18 @@ def list_jobs_with_number(active_only: bool = False):
     if jobs_have_job_number_column():
         return fetch_all(
             f"""
-            SELECT id, job_number, company_name, title, category, location, type, salary_range, description, status, created_at,
-                   COALESCE(screening_questions, '[]'::jsonb) AS screening_questions
-            FROM jobs
+            SELECT j.id, j.job_number, j.company_name, j.title, j.category, j.location, j.type, j.salary_range, j.description, j.status, j.created_at,
+                   COALESCE(j.screening_questions, '[]'::jsonb) AS screening_questions,
+                   COALESCE(assignments.agents, '[]'::jsonb) AS assigned_agents
+            FROM jobs j
+            LEFT JOIN LATERAL (
+              SELECT jsonb_agg(jsonb_build_object('id', u.id, 'full_name', u.full_name) ORDER BY u.full_name) AS agents
+              FROM agent_job_assignments aja
+              JOIN users u ON u.id = aja.agent_id
+              WHERE aja.job_id = j.id
+            ) assignments ON true
             {outer_where}
-            ORDER BY created_at DESC
+            ORDER BY j.created_at DESC
             """
         )
     return fetch_all(
@@ -986,7 +1140,8 @@ def list_jobs_with_number(active_only: bool = False):
           SELECT id,
             (1000 + ROW_NUMBER() OVER (ORDER BY created_at ASC))::int AS job_number,
             company_name, title, category, location, type, salary_range, description, status, created_at,
-            COALESCE(screening_questions, '[]'::jsonb) AS screening_questions
+            COALESCE(screening_questions, '[]'::jsonb) AS screening_questions,
+            '[]'::jsonb AS assigned_agents
           FROM jobs
         ) numbered_jobs
         {outer_where}
@@ -1210,9 +1365,10 @@ def login_get_hint():
 @app.get("/api/account")
 def me(user: Annotated[dict, Depends(current_user)]):
     sync_profile_strength(user["id"])
-    profile = fetch_one("SELECT about, skills, languages, profile_strength FROM profiles WHERE user_id = %s", (user["id"],))
+    profile = fetch_one("SELECT about, skills, languages, profile_strength, agency_name, agency_about, website FROM profiles WHERE user_id = %s", (user["id"],))
     experiences = fetch_all("SELECT * FROM experiences WHERE user_id = %s ORDER BY start_date DESC NULLS LAST", (user["id"],))
     education = fetch_all("SELECT * FROM education WHERE user_id = %s ORDER BY end_year DESC NULLS LAST", (user["id"],))
+    courses = fetch_all("SELECT * FROM courses WHERE user_id = %s ORDER BY completion_date DESC NULLS LAST, created_at DESC", (user["id"],))
     documents = fetch_all(
         """
         SELECT id, kind, file_name, mime_type, file_size, verification_status, created_at,
@@ -1227,10 +1383,13 @@ def me(user: Annotated[dict, Depends(current_user)]):
     applications = fetch_all(
         f"""
         SELECT a.id, a.status, a.created_at, COALESCE(a.screening_answers, '[]'::jsonb) AS screening_answers,
+          a.resume_document_id, rd.file_name AS resume_file_name,
+          CASE WHEN rd.file_path IS NULL THEN NULL ELSE '/uploads/' || split_part(rd.file_path, '/', array_length(string_to_array(rd.file_path, '/'), 1)) END AS resume_file_url,
           j.id AS job_id, {job_number_select}, j.company_name, j.title, j.category, j.location, j.type, j.salary_range, j.description,
           j.status AS job_status, COALESCE(j.screening_questions, '[]'::jsonb) AS screening_questions
         FROM applications a
         JOIN jobs j ON j.id = a.job_id
+        LEFT JOIN documents rd ON rd.id = a.resume_document_id
         WHERE a.user_id = %s
         ORDER BY a.created_at DESC
         """,
@@ -1261,7 +1420,7 @@ def me(user: Annotated[dict, Depends(current_user)]):
         """,
         (user["id"], user["id"], user["id"]),
     )
-    return {"user": public_user(user), "profile": profile, "experiences": experiences, "education": education, "documents": documents, "applications": applications, "interviews": interviews, "stats": stats}
+    return {"user": public_user(user), "profile": profile, "experiences": experiences, "education": education, "courses": courses, "documents": documents, "applications": applications, "interviews": interviews, "stats": stats}
 
 
 @app.put("/api/account/profile")
@@ -1298,6 +1457,53 @@ def add_experience(body: ExperienceBody, user: Annotated[dict, Depends(current_u
     return experience
 
 
+@app.post("/api/account/resume-builder", status_code=201)
+def build_resume_pdf(body: ResumeBuilderBody, user: Annotated[dict, Depends(current_user)]):
+    if resume_count_for(user["id"]) >= 2:
+        raise HTTPException(status_code=400, detail="You can upload up to 2 resumes. Remove one resume before creating a new one.")
+    profile = fetch_one("SELECT about, skills FROM profiles WHERE user_id = %s", (user["id"],)) or {}
+    experiences = fetch_all("SELECT title, company, location, description FROM experiences WHERE user_id = %s ORDER BY start_date DESC NULLS LAST LIMIT 6", (user["id"],))
+    skills = profile.get("skills") if isinstance(profile.get("skills"), list) else []
+    lines = [
+        user.get("full_name") or "Rawabet profile",
+        user.get("email") or "",
+        user.get("phone") or "",
+        user.get("location") or "",
+        "",
+        "Professional Summary",
+        body.summary or profile.get("about") or "Experienced professional using Rawabet to present verified career information.",
+        "",
+        "Target Role",
+        body.targetTitle or user.get("headline") or "",
+        "",
+        "Skills",
+        ", ".join(skills) or "-",
+        "",
+        "Experience",
+    ]
+    for item in experiences:
+        lines.append(f"{item.get('title') or '-'} - {item.get('company') or '-'}")
+        if item.get("description"):
+            lines.append(item["description"])
+    lines.extend(["", "Education", body.education or "-", "", "Achievements", body.achievements or "-", "", "Languages", body.languages or ", ".join(profile.get("languages") or []) or "-"])
+
+    lines = openai_resume_lines(user, profile, experiences, body, lines)
+    pdf = make_simple_pdf(f"{user.get('full_name') or 'Rawabet'} Resume", lines)
+    target = UPLOAD_DIR / f"{user['id']}_resume_generated_{uuid4().hex}.pdf"
+    target.write_bytes(pdf)
+    file_url = f"/uploads/{target.name}"
+    document = execute(
+        """
+        INSERT INTO documents (user_id, kind, file_name, file_path, mime_type, file_size, verification_status)
+        VALUES (%s,'resume',%s,%s,'application/pdf',%s,'pending')
+        RETURNING id, kind, file_name, mime_type, file_size, verification_status, created_at, %s AS file_url
+        """,
+        (user["id"], "rawabet-generated-resume.pdf", str(target), len(pdf), file_url),
+    )
+    sync_profile_strength(user["id"])
+    return document
+
+
 @app.post("/api/account/documents", status_code=201)
 async def upload_document(
     user: Annotated[dict, Depends(current_user)],
@@ -1306,11 +1512,8 @@ async def upload_document(
 ):
     safe_kind = "certificate" if kind == "certificate" else "resume"
     if safe_kind == "resume":
-        old_documents = fetch_all("SELECT id, file_path FROM documents WHERE user_id = %s AND kind = 'resume'", (user["id"],))
-        for old_document in old_documents:
-            delete_upload_file(old_document.get("file_path"))
-        execute("DELETE FROM documents WHERE user_id = %s AND kind = 'resume'", (user["id"],))
-        delete_user_uploads(user["id"], "resume")
+        if resume_count_for(user["id"]) >= 2:
+            raise HTTPException(status_code=400, detail="You can upload up to 2 resumes")
     else:
         certificate_count = fetch_one("SELECT COUNT(*)::int AS count FROM documents WHERE user_id = %s AND kind = 'certificate'", (user["id"],))["count"]
         if certificate_count >= 5:
@@ -1366,9 +1569,91 @@ def list_jobs(user: Annotated[dict, Depends(current_user)]):
     return list_jobs_with_number(active_only=True)
 
 
+@app.get("/api/agents")
+def list_public_agents(user: Annotated[dict, Depends(current_user)], search: str = ""):
+    query = f"%{search.strip()}%"
+    return fetch_all(
+        """
+        SELECT u.id, u.full_name, u.email, u.headline, u.location, u.avatar_url,
+               p.about, p.agency_name, p.agency_about, p.website,
+               (
+                 SELECT COUNT(*)::int
+                 FROM jobs j
+                 WHERE j.status = 'active'
+                   AND (
+                     j.company_name ILIKE ('%%' || COALESCE(NULLIF(p.agency_name, ''), u.full_name) || '%%')
+                     OR j.company_name ILIKE ('%%' || u.full_name || '%%')
+                     OR j.id IN (SELECT job_id FROM agent_job_assignments WHERE agent_id = u.id)
+                   )
+               ) AS open_jobs
+        FROM users u
+        LEFT JOIN profiles p ON p.user_id = u.id
+        WHERE u.role = 'agent'
+          AND u.status IN ('active', 'verified')
+          AND (%s = '%%' OR u.full_name ILIKE %s OR COALESCE(p.agency_name, '') ILIKE %s)
+        ORDER BY open_jobs DESC, u.full_name
+        LIMIT 50
+        """,
+        (query, query, query),
+    )
+
+
+@app.get("/api/agents/{agent_id}")
+def get_public_agent(agent_id: UUID, user: Annotated[dict, Depends(current_user)]):
+    agent = fetch_one(
+        """
+        SELECT u.id, u.full_name, u.email, u.headline, u.location, u.avatar_url,
+               p.about, p.agency_name, p.agency_about, p.website
+        FROM users u
+        LEFT JOIN profiles p ON p.user_id = u.id
+        WHERE u.id = %s AND u.role = 'agent' AND u.status IN ('active', 'verified')
+        """,
+        (agent_id,),
+    )
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    company_terms = [f"%{agent.get('agency_name') or agent.get('full_name')}%", f"%{agent.get('full_name')}%"]
+    jobs = fetch_all(
+        """
+        SELECT id, job_number, company_name, title, category, location, type, salary_range, description, status, created_at,
+               COALESCE(screening_questions, '[]'::jsonb) AS screening_questions
+        FROM jobs
+        WHERE status = 'active'
+          AND (
+            company_name ILIKE %s
+            OR company_name ILIKE %s
+            OR id IN (SELECT job_id FROM agent_job_assignments WHERE agent_id = %s)
+          )
+        ORDER BY created_at DESC
+        """,
+        (company_terms[0] or company_terms[1], company_terms[1], agent_id),
+    )
+    return {"agent": agent, "jobs": jobs}
+
+
 @app.get("/api/admin/jobs")
 def list_admin_jobs(user: Annotated[dict, Depends(admin_user)]):
     return list_jobs_with_number()
+
+
+@app.post("/api/admin/job-assignments", status_code=201)
+def assign_job_to_agent(body: JobAgentBody, user: Annotated[dict, Depends(admin_user)]):
+    agent = fetch_one("SELECT id FROM users WHERE id = %s AND role = 'agent'", (body.agentId,))
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    job = fetch_one("SELECT id FROM jobs WHERE id = %s", (body.jobId,))
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return execute(
+        """
+        INSERT INTO agent_job_assignments (agent_id, job_id, assigned_by)
+        VALUES (%s,%s,%s)
+        ON CONFLICT (agent_id, job_id) DO UPDATE
+        SET assigned_by = EXCLUDED.assigned_by, created_at = NOW()
+        RETURNING *
+        """,
+        (body.agentId, body.jobId, user["id"]),
+    )
 
 
 @app.post("/api/jobs/{job_id}/apply", status_code=201)
@@ -1376,6 +1661,10 @@ def apply_to_job(job_id: UUID, body: ApplyBody, user: Annotated[dict, Depends(cu
     job = fetch_one("SELECT id, COALESCE(screening_questions, '[]'::jsonb) AS screening_questions FROM jobs WHERE id = %s AND status = 'active'", (job_id,))
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    if body.resumeDocumentId:
+        resume = fetch_one("SELECT id FROM documents WHERE id = %s AND user_id = %s AND kind = 'resume'", (body.resumeDocumentId, user["id"]))
+        if not resume:
+            raise HTTPException(status_code=400, detail="Selected resume was not found")
     questions = job.get("screening_questions") or []
     answers_by_question = {str(item.get("question", "")).strip(): str(item.get("answer", "")).strip() for item in body.answers}
     missing = [question for question in questions if not answers_by_question.get(str(question).strip())]
@@ -1384,12 +1673,13 @@ def apply_to_job(job_id: UUID, body: ApplyBody, user: Annotated[dict, Depends(cu
     answers = [{"question": str(question), "answer": answers_by_question.get(str(question).strip(), "")} for question in questions]
     execute(
         """
-        INSERT INTO applications (job_id, user_id, screening_answers)
-        VALUES (%s,%s,%s::jsonb)
+        INSERT INTO applications (job_id, user_id, screening_answers, resume_document_id)
+        VALUES (%s,%s,%s::jsonb,%s)
         ON CONFLICT (job_id, user_id) DO UPDATE
-        SET screening_answers = EXCLUDED.screening_answers
+        SET screening_answers = EXCLUDED.screening_answers,
+            resume_document_id = EXCLUDED.resume_document_id
         """,
-        (job_id, user["id"], json.dumps(answers)),
+        (job_id, user["id"], json.dumps(answers), body.resumeDocumentId),
     )
     return {"ok": True}
 
@@ -1400,12 +1690,15 @@ def list_admin_applications(user: Annotated[dict, Depends(admin_user)]):
         """
         SELECT
           a.id, a.status, a.created_at, COALESCE(a.screening_answers, '[]'::jsonb) AS screening_answers,
+          a.resume_document_id, rd.file_name AS resume_file_name,
+          CASE WHEN rd.file_path IS NULL THEN NULL ELSE '/uploads/' || split_part(rd.file_path, '/', array_length(string_to_array(rd.file_path, '/'), 1)) END AS resume_file_url,
           u.id AS user_id, u.full_name, u.email, u.headline, u.avatar_url,
           j.id AS job_id, j.title AS job_title, j.company_name, j.location,
           COALESCE(j.screening_questions, '[]'::jsonb) AS screening_questions
         FROM applications a
         JOIN users u ON u.id = a.user_id
         JOIN jobs j ON j.id = a.job_id
+        LEFT JOIN documents rd ON rd.id = a.resume_document_id
         ORDER BY a.created_at DESC
         """
     )
@@ -1486,6 +1779,9 @@ def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
           a.status AS application_status,
           a.created_at AS applied_at,
           COALESCE(a.screening_answers, '[]'::jsonb) AS screening_answers,
+          a.resume_document_id,
+          rd.file_name AS resume_file_name,
+          CASE WHEN rd.file_path IS NULL THEN NULL ELSE '/uploads/' || split_part(rd.file_path, '/', array_length(string_to_array(rd.file_path, '/'), 1)) END AS resume_file_url,
           u.id AS user_id,
           u.full_name,
           u.email,
@@ -1511,6 +1807,7 @@ def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
         JOIN users u ON u.id = a.user_id
         LEFT JOIN profiles p ON p.user_id = u.id
         JOIN jobs j ON j.id = a.job_id
+        LEFT JOIN documents rd ON rd.id = a.resume_document_id
         LEFT JOIN LATERAL (
           SELECT jsonb_agg(jsonb_build_object(
             'id', d.id,
@@ -1609,6 +1906,40 @@ def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
             (user["id"],),
         )
     return sorted([*application_shares, *user_shares], key=lambda item: item["shared_at"], reverse=True)
+
+
+@app.put("/api/agent/profile")
+def update_agent_profile(body: AgentProfileBody, user: Annotated[dict, Depends(agent_user)]):
+    execute(
+        "UPDATE users SET headline = COALESCE(%s, headline), location = COALESCE(%s, location) WHERE id = %s",
+        (body.headline, body.location, user["id"]),
+    )
+    current = fetch_one("SELECT about, skills, languages FROM profiles WHERE user_id = %s", (user["id"],)) or {}
+    execute(
+        """
+        INSERT INTO profiles (user_id, about, skills, languages, agency_name, agency_about, website, profile_strength, updated_at)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+        ON CONFLICT (user_id) DO UPDATE
+        SET about = EXCLUDED.about,
+            skills = EXCLUDED.skills,
+            languages = EXCLUDED.languages,
+            agency_name = EXCLUDED.agency_name,
+            agency_about = EXCLUDED.agency_about,
+            website = EXCLUDED.website,
+            updated_at = NOW()
+        """,
+        (
+            user["id"],
+            body.about if body.about is not None else current.get("about", ""),
+            current.get("skills", []),
+            current.get("languages", ["English", "Arabic"]),
+            body.agencyName,
+            body.agencyAbout,
+            body.website,
+            calculate_profile_strength(user["id"]),
+        ),
+    )
+    return {"ok": True}
 
 
 def agent_can_access_application(agent_id: UUID, application_id: UUID):
@@ -1944,6 +2275,7 @@ def admin_user_profile(user_id: UUID, user: Annotated[dict, Depends(admin_user)]
     profile = fetch_one("SELECT about, skills, languages, profile_strength FROM profiles WHERE user_id = %s", (user_id,))
     experiences = fetch_all("SELECT * FROM experiences WHERE user_id = %s ORDER BY start_date DESC NULLS LAST", (user_id,))
     education = fetch_all("SELECT * FROM education WHERE user_id = %s ORDER BY end_year DESC NULLS LAST", (user_id,))
+    courses = fetch_all("SELECT * FROM courses WHERE user_id = %s ORDER BY completion_date DESC NULLS LAST, created_at DESC", (user_id,))
     documents = fetch_all(
         """
         SELECT id, kind, file_name, mime_type, file_size, verification_status, created_at,
@@ -1954,7 +2286,7 @@ def admin_user_profile(user_id: UUID, user: Annotated[dict, Depends(admin_user)]
         """,
         (user_id,),
     )
-    return {"user": target_user, "profile": profile, "experiences": experiences, "education": education, "documents": documents}
+    return {"user": target_user, "profile": profile, "experiences": experiences, "education": education, "courses": courses, "documents": documents}
 
 
 @app.patch("/api/admin/users/{user_id}/profile")
@@ -2020,11 +2352,8 @@ async def upload_admin_document(
         raise HTTPException(status_code=404, detail="User not found")
     safe_kind = "certificate" if kind == "certificate" else "resume"
     if safe_kind == "resume":
-        old_documents = fetch_all("SELECT file_path FROM documents WHERE user_id = %s AND kind = 'resume'", (user_id,))
-        for old_document in old_documents:
-            delete_upload_file(old_document.get("file_path"))
-        execute("DELETE FROM documents WHERE user_id = %s AND kind = 'resume'", (user_id,))
-        delete_user_uploads(user_id, "resume")
+        if resume_count_for(user_id) >= 2:
+            raise HTTPException(status_code=400, detail="You can upload up to 2 resumes")
     else:
         certificate_count = fetch_one("SELECT COUNT(*)::int AS count FROM documents WHERE user_id = %s AND kind = 'certificate'", (user_id,))["count"]
         if certificate_count >= 5:
@@ -2067,6 +2396,24 @@ async def upload_admin_avatar(user_id: UUID, user: Annotated[dict, Depends(admin
     execute("UPDATE users SET avatar_url = %s WHERE id = %s", (avatar_url, user_id))
     sync_profile_strength(user_id)
     return {"avatarUrl": avatar_url}
+
+
+@app.post("/api/courses", status_code=201)
+def add_course(body: CourseBody, user: Annotated[dict, Depends(current_user)]):
+    if user["role"] not in {"admin", "master_admin", "agent"}:
+        raise HTTPException(status_code=403, detail="Only admin or agent can add courses")
+    if user["role"] == "agent" and not agent_can_access_user_job(user["id"], body.userId):
+        raise HTTPException(status_code=403, detail="This user is not shared with this agent")
+    if not fetch_one("SELECT id FROM users WHERE id = %s", (body.userId,)):
+        raise HTTPException(status_code=404, detail="User not found")
+    return execute(
+        """
+        INSERT INTO courses (user_id, added_by, title, provider, completion_date, certificate_url, notes)
+        VALUES (%s,%s,%s,%s,%s,%s,%s)
+        RETURNING *
+        """,
+        (body.userId, user["id"], body.title, body.provider, body.completionDate or None, body.certificateUrl, body.notes),
+    )
 
 
 @app.delete("/api/admin/documents/{document_id}")

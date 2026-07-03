@@ -92,7 +92,9 @@ button:disabled { cursor: not-allowed; opacity: 0.68; }
 }
 
 .mobile-main-actions,
-.mobile-home-search {
+.mobile-home-search,
+.mobile-chat-button,
+.mobile-bottom-nav {
   display: none;
 }
 
@@ -571,6 +573,37 @@ button.feature-card:hover {
   background: var(--border);
 }
 
+.agency-list,
+.agency-page,
+.job-detail-page {
+  display: grid;
+  gap: 10px;
+}
+
+.agency-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--ink);
+  text-align: start;
+}
+
+.agency-row span {
+  display: grid;
+  gap: 2px;
+}
+
+.agency-row small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
 .side-stat {
   display: block;
   margin-bottom: 8px;
@@ -609,6 +642,10 @@ button.feature-card:hover {
 .admin-post:hover {
   border-color: rgba(16, 183, 167, 0.42);
   background: #fff;
+}
+
+.mobile-chat-button {
+  display: none;
 }
 
 .admin-post strong {
@@ -2550,50 +2587,55 @@ td span {
 }
 
 @media (max-width: 760px) {
-  .app-shell { padding-bottom: 76px; }
+  .app-shell { padding-bottom: 82px; }
   .topbar {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: auto 1fr auto;
     gap: 8px 10px;
     padding: 8px 12px 10px;
   }
   .brand {
     grid-column: 1 / 2;
+    grid-row: 1;
+    min-width: 0;
   }
   .brand small, .desktop-nav, .top-actions .primary-button { display: none; }
+  .brand-mark {
+    width: 40px;
+    height: 40px;
+  }
+  .brand-wordmark {
+    width: 106px;
+  }
+  .topbar > .search {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: flex;
+    height: 38px;
+    width: 100%;
+  }
+  .topbar > .search input {
+    font-size: 0.72rem;
+  }
+  .topbar > .search input::placeholder {
+    font-size: 0.66rem;
+  }
   .top-actions {
-    grid-column: 2;
+    grid-column: 3;
     grid-row: 1;
     align-self: start;
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
   }
   .top-actions .notify-button,
   .top-actions .secondary-button:not(.icon-button) {
     display: none;
   }
-  .mobile-main-actions {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 7px;
-  }
-  .mobile-main-actions button {
+  .mobile-chat-button {
+    display: inline-grid;
     position: relative;
-    min-width: 0;
-    min-height: 34px;
-    padding: 0 8px;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    background: #fff;
-    color: var(--brand);
-    font-size: 0.72rem;
-    font-weight: 800;
-    white-space: nowrap;
   }
-  .mobile-main-actions button.active {
-    background: var(--brand);
-    border-color: var(--brand);
-    color: #fff;
-  }
-  .mobile-main-actions span {
+  .mobile-chat-button span {
     position: absolute;
     top: -7px;
     inset-inline-end: 6px;
@@ -2606,10 +2648,43 @@ td span {
     font-size: 0.6rem;
     line-height: 16px;
   }
+  .mobile-bottom-nav {
+    position: fixed;
+    right: 10px;
+    bottom: 10px;
+    left: 10px;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 4px;
+    padding: 7px;
+    border: 1px solid rgba(9, 42, 83, 0.1);
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 18px 45px rgba(9, 42, 83, 0.16);
+    backdrop-filter: blur(14px);
+  }
+  .mobile-bottom-nav button {
+    display: grid;
+    place-items: center;
+    min-width: 0;
+    min-height: 40px;
+    border: 0;
+    border-radius: 16px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 1rem;
+    font-weight: 900;
+  }
+  .mobile-bottom-nav button.active {
+    background: var(--brand);
+    color: #fff;
+  }
+  .mobile-bottom-nav span {
+    line-height: 1;
+  }
   .post-card .mobile-home-search {
-    display: flex;
-    width: 100%;
-    margin: 10px 0 4px;
+    display: none;
   }
   main { margin: 14px auto; padding: 0 12px; }
   .layout-grid, .admin-console, .admin-layout, .admin-profile-grid, .job-admin-grid, .form-grid, .upload-grid, .metric-grid, .login-stage, .profile-hero {
@@ -2684,6 +2759,27 @@ td span {
   .support-thread-actions { grid-column: 1 / -1; justify-content: flex-end; }
   .job-actions { justify-content: start; }
   .job-details dl { grid-template-columns: 1fr; }
+  .interviews-page {
+    display: grid;
+    gap: 10px;
+  }
+  .mobile-page-head {
+    align-items: center;
+  }
+  .interview-page-card {
+    display: grid;
+    gap: 8px;
+  }
+  .interview-page-card h2 {
+    margin: 0;
+    font-size: 1rem;
+  }
+  .interview-page-card p,
+  .interview-page-card span,
+  .interview-page-card small {
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
   .row-fields { grid-template-columns: 1fr; }
   .builder-grid { grid-template-columns: 1fr; max-height: calc(100vh - 190px); padding: 14px; }
   .builder-panel.span { grid-column: auto; }
