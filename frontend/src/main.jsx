@@ -807,7 +807,7 @@ function App() {
       {!isAgent && <MobileBottomNav t={t} view={view} setView={setView} openAllJobs={openAllJobs} openComingInterviews={openComingInterviews} />}
       {!isAgent && builderOpen && <ProfileBuilder t={t} me={me} reload={loadApp} close={() => setBuilderOpen(false)} />}
       {!isAgent && supportOpen && <SupportWindow t={t} me={me} users={adminUsers} initialUserId={supportTarget} onUpdate={loadSupportThreads} close={() => { setSupportOpen(false); setSupportTarget(""); }} />}
-      <footer className="app-version">v1.1.0</footer>
+      <AppFooter />
     </div>
   );
 }
@@ -1046,8 +1046,20 @@ function Login({ lang, setLang, t, login, verifyAndLoad, error, setError }) {
           </div>
         </div>
       </section>
-      <footer className="app-version">v1.1.0</footer>
+      <AppFooter />
     </main>
+  );
+}
+
+function AppFooter() {
+  return (
+    <footer className="app-footer">
+      <span className="app-version">v1.1.0</span>
+      <span className="footer-brand">
+        <img src="/brand/rawabet-mark.png" alt="" />
+        <span>© 2026 Rawabet. All rights reserved.</span>
+      </span>
+    </footer>
   );
 }
 

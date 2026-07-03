@@ -216,12 +216,34 @@ main.admin-main {
   max-width: min(1540px, calc(100vw - 36px));
 }
 
-.app-version {
+.app-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: min(1180px, calc(100vw - 36px));
   margin: 18px auto 10px;
+  padding: 10px 2px;
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 700;
-  text-align: center;
+}
+
+.app-version {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.footer-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.footer-brand img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
 }
 
 .panel, .profile-card, .metric-card, .login-card {
