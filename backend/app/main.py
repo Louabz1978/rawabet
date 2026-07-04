@@ -761,6 +761,24 @@ def pdf_text(value: object) -> str:
     return text
 
 
+def wrap_resume_arabic_line(text: str, limit: int = 68) -> list[str]:
+    words = re.sub(r"\s+", " ", str(text or "")).strip().split()
+    if not words:
+        return []
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if current and len(candidate) > limit:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return lines
+
+
 def split_lines(value: str | None) -> list[str]:
     return [line.strip(" •-\t") for line in str(value or "").splitlines() if line.strip(" •-\t")]
 
@@ -796,6 +814,8 @@ def normalize_resume_description_lines(value: str | None) -> list[str]:
 def polish_arabic_bullet(line: str, title: str = "", company: str = "") -> str:
     text = trim_resume_line(line, 260).strip(" .،")
     replacements = [
+        (r"^قمت\s+بأتمتة", "أتمتت"),
+        (r"^قمت\s+باتمتة", "أتمتت"),
         (r"^قمت\s+ب", ""),
         (r"^قمت\s+", ""),
         (r"^عملت\s+على\s+", ""),
@@ -807,6 +827,8 @@ def polish_arabic_bullet(line: str, title: str = "", company: str = "") -> str:
     text = re.sub(r"^اسست\b", "أسست", text)
     text = re.sub(r"^ادرت\b", "أدرت", text)
     text = re.sub(r"^اشرفت\b", "أشرفت", text)
+    text = re.sub(r"^اقود\b", "قدت", text)
+    text = re.sub(r"^أقود\b", "قدت", text)
     if not text:
         text = f"إدارة مسؤوليات {title or 'الدور'} لدى {company or 'الجهة'}"
     normalized = normalize_arabic_text(text)
@@ -876,6 +898,25 @@ def weak_arabic_resume_bullet(value: str) -> bool:
         "دعمت مخرجات العمل من خلال تنظيم المهام",
     ]
     return len(normalized) < 18 or any(term in normalized for term in weak_terms)
+
+
+def clean_arabic_resume_bullet(value: str) -> str:
+    text = trim_resume_line(value, 260).strip(" .،")
+    replacements = [
+        (r"^أنجزت\s+اقود\b", "قدت"),
+        (r"^أنجزت\s+أقود\b", "قدت"),
+        (r"^أنجزت\s+قمت\s+بأتمتة", "أتمتت"),
+        (r"^أنجزت\s+قمت\s+باتمتة", "أتمتت"),
+        (r"^أنجزت\s+قمت\s+ب", "أنجزت"),
+        (r"^انجزت\s+اقود\b", "قدت"),
+        (r"^قمت\s+بأتمتة", "أتمتت"),
+        (r"^قمت\s+باتمتة", "أتمتت"),
+        (r"^اقود\b", "قدت"),
+        (r"^أقود\b", "قدت"),
+    ]
+    for pattern, replacement in replacements:
+        text = re.sub(pattern, replacement, text).strip()
+    return text
 
 
 def date_range(start: object = None, end: object = None, is_current: bool = False, current_text: str = "Present") -> str:
@@ -1025,6 +1066,10 @@ def paragraph(text: object, style):
     return Paragraph(pdf_text(text).replace("\n", "<br/>"), style)
 
 
+def pre_shaped_paragraph(lines: list[str], style):
+    return Paragraph("<br/>".join(lines), style)
+
+
 def underlined_paragraph(text: object, style):
     return Paragraph(f"<u>{pdf_text(text).replace(chr(10), '<br/>')}</u>", style)
 
@@ -1032,7 +1077,15 @@ def underlined_paragraph(text: object, style):
 def bullet_rows(items: list[str], style, rtl: bool):
     rows = []
     for item in items:
-        rows.append([paragraph(f"• {item}", style)])
+        if rtl and has_arabic(item):
+            logical_lines = wrap_resume_arabic_line(item, 62)
+            shaped_lines = []
+            for index, line in enumerate(logical_lines):
+                prefix = "• " if index == 0 else "  "
+                shaped_lines.append(pdf_text(f"{prefix}{line}"))
+            rows.append([pre_shaped_paragraph(shaped_lines, style)])
+        else:
+            rows.append([paragraph(f"• {item}", style)])
     return rows
 
 
@@ -1063,8 +1116,9 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
             if rtl:
                 source_item = original_experiences[index] if index < len(original_experiences) else item
                 stronger_bullets = role_specific_arabic_bullets({**source_item, **item}, profile, minimum=4)
-                bullets = [bullet for bullet in bullets if has_arabic(bullet) and not weak_arabic_resume_bullet(bullet)]
+                bullets = [clean_arabic_resume_bullet(bullet) for bullet in bullets if has_arabic(bullet) and not weak_arabic_resume_bullet(bullet)]
                 for bullet in stronger_bullets:
+                    bullet = clean_arabic_resume_bullet(bullet)
                     if len(bullets) >= 6:
                         break
                     if normalize_arabic_text(bullet) not in {normalize_arabic_text(existing) for existing in bullets}:
