@@ -488,6 +488,7 @@ class ResumeBuilderBody(BaseModel):
 
 class CourseBody(BaseModel):
     userId: UUID
+    addedById: UUID | None = None
     title: str
     provider: str | None = None
     completionDate: str | None = None
@@ -3244,13 +3245,19 @@ def add_course(body: CourseBody, user: Annotated[dict, Depends(current_user)]):
         raise HTTPException(status_code=403, detail="This user is not shared with this agent")
     if not fetch_one("SELECT id FROM users WHERE id = %s", (body.userId,)):
         raise HTTPException(status_code=404, detail="User not found")
+    added_by = user["id"]
+    if user["role"] in {"admin", "master_admin"} and body.addedById:
+        owner = fetch_one("SELECT id, role FROM users WHERE id = %s", (body.addedById,))
+        if not owner or owner["role"] not in {"agent", "admin", "master_admin"}:
+            raise HTTPException(status_code=400, detail="Course owner must be an agent or admin")
+        added_by = owner["id"]
     return execute(
         """
         INSERT INTO courses (user_id, added_by, title, provider, completion_date, certificate_url, notes)
         VALUES (%s,%s,%s,%s,%s,%s,%s)
         RETURNING *
         """,
-        (body.userId, user["id"], body.title, body.provider, body.completionDate or None, body.certificateUrl, body.notes),
+        (body.userId, added_by, body.title, body.provider, body.completionDate or None, body.certificateUrl, body.notes),
     )
 
 

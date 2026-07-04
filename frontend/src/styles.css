@@ -101,6 +101,10 @@ button:disabled { cursor: not-allowed; opacity: 0.68; }
   display: none;
 }
 
+.desktop-only-workspace-link {
+  display: flex;
+}
+
 .search {
   display: flex;
   align-items: center;
@@ -2953,6 +2957,9 @@ td span {
     width: 24px;
     height: 24px;
     stroke-width: 2;
+  }
+  .desktop-only-workspace-link {
+    display: none;
   }
   .post-card .mobile-home-search {
     display: none;

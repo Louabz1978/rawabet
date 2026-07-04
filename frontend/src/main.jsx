@@ -96,6 +96,8 @@ const text = {
     generateResume: "Generate resume PDF",
     courses: "Courses",
     addCourse: "Add course",
+    courseOwner: "Course owner",
+    adminDefault: "Admin default",
     provider: "Provider",
     completionDate: "Completion date",
     agentDirectory: "Agencies",
@@ -352,6 +354,8 @@ const text = {
     generateResume: "إنشاء PDF للسيرة",
     courses: "الدورات",
     addCourse: "إضافة دورة",
+    courseOwner: "مالك الدورة",
+    adminDefault: "الإدارة الافتراضية",
     provider: "الجهة المقدمة",
     completionDate: "تاريخ الإكمال",
     agentDirectory: "الجهات",
@@ -1151,6 +1155,7 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
           <h2>{t("workspace")}</h2>
           <button className="panel-link" onClick={() => setView("profile")}><span>↗</span>{t("publicProfile")}</button>
           {canUseSmartResume && <button className="panel-link" onClick={openSmartResume}><span>◈</span>{t("smartResume")}</button>}
+          <button className="panel-link desktop-only-workspace-link" onClick={() => setView("courses")}><span>▤</span>{t("courses")}</button>
           <button className="panel-link" onClick={() => setView("allJobs")}><span>▦</span>{t("savedJobs")}</button>
           {["admin", "master_admin"].includes(me.user.role) && <button className="panel-link" onClick={() => setView("admin")}><span>▥</span>{t("adminDashboard")}</button>}
         </section>
@@ -2017,7 +2022,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, applications, s
   const emptyUserForm = { fullName: "", email: "", password: "", phone: "", dob: "", headline: "", location: "", role: "member", plan: "free", status: "active" };
   const [newUser, setNewUser] = useState(emptyUserForm);
   const [selectedProfile, setSelectedProfile] = useState(null);
-  const [adminCourseForm, setAdminCourseForm] = useState({ title: "", provider: "", completionDate: "", certificateUrl: "", notes: "" });
+  const [adminCourseForm, setAdminCourseForm] = useState({ addedById: "", title: "", provider: "", completionDate: "", certificateUrl: "", notes: "" });
   const [jobAdminSearch, setJobAdminSearch] = useState("");
   const emptyJobForm = { companyName: "مختبرات روابط", title: "", category: "General", location: "عن بعد", type: "دوام كامل", salaryRange: "", description: "", questionsText: "" };
   const [jobForm, setJobForm] = useState(emptyJobForm);
@@ -2135,7 +2140,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, applications, s
     event.preventDefault();
     if (!selectedProfile?.user?.id || !adminCourseForm.title) return;
     await api("/courses", { method: "POST", body: JSON.stringify({ ...adminCourseForm, userId: selectedProfile.user.id }) });
-    setAdminCourseForm({ title: "", provider: "", completionDate: "", certificateUrl: "", notes: "" });
+    setAdminCourseForm({ addedById: "", title: "", provider: "", completionDate: "", certificateUrl: "", notes: "" });
     await refreshSelectedProfile();
   }
   async function saveUser(event) {
@@ -2378,6 +2383,10 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, applications, s
               </section>
               <form className="panel admin-form" onSubmit={addSelectedCourse}>
                 <h2>{t("courses")}</h2>
+                <select value={adminCourseForm.addedById} onChange={(e) => setAdminCourseForm({ ...adminCourseForm, addedById: e.target.value })}>
+                  <option value="">{t("adminDefault")}</option>
+                  {agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}
+                </select>
                 <input placeholder={t("title")} value={adminCourseForm.title} onChange={(e) => setAdminCourseForm({ ...adminCourseForm, title: e.target.value })} />
                 <input placeholder={t("provider")} value={adminCourseForm.provider} onChange={(e) => setAdminCourseForm({ ...adminCourseForm, provider: e.target.value })} />
                 <input type="date" value={adminCourseForm.completionDate} onChange={(e) => setAdminCourseForm({ ...adminCourseForm, completionDate: e.target.value })} />
