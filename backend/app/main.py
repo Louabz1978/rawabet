@@ -232,10 +232,6 @@ def ensure_runtime_schema():
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS dob DATE",
         "ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check",
         "ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('member', 'recruiter', 'company', 'admin', 'agent', 'master_admin'))",
-        "ALTER TABLE pending_registrations ADD COLUMN IF NOT EXISTS phone TEXT",
-        "ALTER TABLE pending_registrations ADD COLUMN IF NOT EXISTS dob DATE",
-        "ALTER TABLE pending_registrations DROP CONSTRAINT IF EXISTS pending_registrations_role_check",
-        "ALTER TABLE pending_registrations ADD CONSTRAINT pending_registrations_role_check CHECK (role IN ('member', 'recruiter', 'company', 'admin', 'agent', 'master_admin'))",
         """
         CREATE TABLE IF NOT EXISTS mfa_challenges (
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -341,9 +337,6 @@ def resume_profile_select_sql() -> str:
 ensure_runtime_schema()
 
 
-PENDING_META_SEPARATOR = "\nRAWABET_PENDING_META:"
-
-
 def has_table_column(table_name: str, column_name: str) -> bool:
     row = fetch_one(
         """
@@ -381,23 +374,6 @@ def fetch_courses_for_user(user: dict) -> list[dict]:
         """,
         (user["id"], audiences),
     )
-
-
-def pack_pending_otp_hash(otp_hash: str, phone: str, dob: str | None) -> str:
-    metadata = json.dumps({"phone": phone, "dob": dob}, separators=(",", ":"))
-    return f"{otp_hash}{PENDING_META_SEPARATOR}{metadata}"
-
-
-def unpack_pending_otp_hash(value: str | None) -> tuple[str, dict]:
-    if not value:
-        return "", {}
-    otp_hash, separator, metadata = value.partition(PENDING_META_SEPARATOR)
-    if not separator:
-        return value, {}
-    try:
-        return otp_hash, json.loads(metadata)
-    except json.JSONDecodeError:
-        return otp_hash, {}
 
 
 class RegisterBody(BaseModel):
@@ -515,8 +491,8 @@ class ResumeBuilderBody(BaseModel):
 
 
 class CourseBody(BaseModel):
-    userId: UUID | None = None
-    addedById: UUID | None = None
+    userId: str | None = None
+    addedById: str | None = None
     targetAudience: str = "user"
     title: str
     provider: str | None = None
@@ -1888,43 +1864,45 @@ def register(body: RegisterBody):
     if body.role != "member":
         raise HTTPException(status_code=403, detail="Privileged accounts must be created by an administrator")
     existing = fetch_one("SELECT id, email_verified, status FROM users WHERE email = %s", (body.email.lower(),))
-    if existing:
+    if existing and existing.get("email_verified"):
         raise HTTPException(status_code=409, detail="Email already registered")
     otp = f"{secrets.randbelow(1000000):06d}"
-    pending_has_contact_columns = has_table_column("pending_registrations", "phone") and has_table_column("pending_registrations", "dob")
-    otp_hash = hash_password(otp)
-    if pending_has_contact_columns:
-        execute(
+    if existing:
+        registered_user = execute(
             """
-            INSERT INTO pending_registrations (full_name, email, phone, dob, password_hash, role, otp_hash, expires_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,NOW() + interval '15 minutes')
-            ON CONFLICT (email) DO UPDATE
-            SET full_name = EXCLUDED.full_name,
-                phone = EXCLUDED.phone,
-                dob = EXCLUDED.dob,
-                password_hash = EXCLUDED.password_hash,
-                role = EXCLUDED.role,
-                otp_hash = EXCLUDED.otp_hash,
-                expires_at = EXCLUDED.expires_at,
-                created_at = NOW()
+            UPDATE users
+            SET full_name = %s,
+                phone = %s,
+                dob = %s,
+                password_hash = %s,
+                role = %s,
+                status = 'active',
+                email_verified = false
+            WHERE id = %s
+            RETURNING id
             """,
-            (body.fullName, body.email.lower(), body.phone, body.dob or None, hash_password(body.password), body.role, otp_hash),
+            (body.fullName, body.phone, body.dob or None, hash_password(body.password), body.role, existing["id"]),
         )
     else:
-        execute(
+        registered_user = execute(
             """
-            INSERT INTO pending_registrations (full_name, email, password_hash, role, otp_hash, expires_at)
-            VALUES (%s,%s,%s,%s,%s,NOW() + interval '15 minutes')
-            ON CONFLICT (email) DO UPDATE
-            SET full_name = EXCLUDED.full_name,
-                password_hash = EXCLUDED.password_hash,
-                role = EXCLUDED.role,
-                otp_hash = EXCLUDED.otp_hash,
-                expires_at = EXCLUDED.expires_at,
-                created_at = NOW()
+            INSERT INTO users (full_name, email, phone, dob, password_hash, role, status, email_verified)
+            VALUES (%s,%s,%s,%s,%s,%s,'active',false)
+            RETURNING id
             """,
-            (body.fullName, body.email.lower(), hash_password(body.password), body.role, pack_pending_otp_hash(otp_hash, body.phone, body.dob or None)),
+            (body.fullName, body.email.lower(), body.phone, body.dob or None, hash_password(body.password), body.role),
         )
+    execute(
+        "INSERT INTO profiles (user_id, about, skills, profile_strength) VALUES (%s, '', '{}', 0) ON CONFLICT (user_id) DO NOTHING",
+        (registered_user["id"],),
+    )
+    execute(
+        """
+        INSERT INTO mfa_challenges (user_id, otp_hash, expires_at)
+        VALUES (%s,%s,NOW() + interval '15 minutes')
+        """,
+        (registered_user["id"], hash_password(otp)),
+    )
     email_sent, email_error = send_verification_email(body.email.lower(), otp)
     response = {"ok": True, "needsVerification": True, "emailSent": email_sent, "message": "Check your email for the verification code."}
     if not email_sent:
@@ -1937,38 +1915,47 @@ def register(body: RegisterBody):
 def verify_registration(body: VerifyRegistrationBody):
     pending = fetch_one(
         """
-        SELECT *
-        FROM pending_registrations
-        WHERE email = %s AND expires_at > NOW()
-        ORDER BY created_at DESC
+        SELECT
+          m.id AS challenge_id,
+          m.otp_hash,
+          u.id,
+          u.full_name,
+          u.email,
+          u.phone,
+          u.dob,
+          u.role,
+          u.plan,
+          u.status,
+          u.headline,
+          u.location,
+          u.avatar_url
+        FROM users u
+        JOIN mfa_challenges m ON m.user_id = u.id
+        WHERE u.email = %s
+          AND u.email_verified = false
+          AND m.used_at IS NULL
+          AND m.expires_at > NOW()
+        ORDER BY m.created_at DESC
         LIMIT 1
         """,
         (body.email.lower(),),
     )
-    otp_hash, pending_metadata = unpack_pending_otp_hash(pending["otp_hash"] if pending else None)
-    if not pending or not verify_password(body.otp, otp_hash):
+    if not pending or not verify_password(body.otp, pending["otp_hash"]):
         raise HTTPException(status_code=400, detail="Invalid or expired verification code")
-    if fetch_one("SELECT id FROM users WHERE email = %s", (pending["email"],)):
-        execute("DELETE FROM pending_registrations WHERE id = %s", (pending["id"],))
-        raise HTTPException(status_code=409, detail="Email already registered")
     verified_user = execute(
         """
-        INSERT INTO users (full_name, email, phone, dob, password_hash, role, status, email_verified)
-        VALUES (%s,%s,%s,%s,%s,%s,'active',true)
+        UPDATE users
+        SET email_verified = true,
+            status = CASE WHEN status = 'suspended' THEN status ELSE 'active' END,
+            last_active_at = NOW()
+        WHERE id = %s
         RETURNING id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url
         """,
-        (
-            pending["full_name"],
-            pending["email"],
-            pending.get("phone") or pending_metadata.get("phone"),
-            pending.get("dob") or pending_metadata.get("dob"),
-            pending["password_hash"],
-            pending["role"],
-        ),
+        (pending["id"],),
     )
-    execute("INSERT INTO profiles (user_id, about, skills, profile_strength) VALUES (%s, '', '{}', 0)", (verified_user["id"],))
+    execute("UPDATE mfa_challenges SET used_at = NOW() WHERE id = %s", (pending["challenge_id"],))
+    execute("INSERT INTO profiles (user_id, about, skills, profile_strength) VALUES (%s, '', '{}', 0) ON CONFLICT (user_id) DO NOTHING", (verified_user["id"],))
     sync_profile_strength(verified_user["id"])
-    execute("DELETE FROM pending_registrations WHERE id = %s", (pending["id"],))
     return {"user": public_user(verified_user), "token": create_token(verified_user)}
 
 

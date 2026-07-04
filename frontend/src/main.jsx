@@ -675,6 +675,7 @@ function App() {
       } catch {
         setJobs(await api("/jobs"));
       }
+      setAgents(await api("/agents"));
     } else if (data.user.role === "agent") {
       setJobs([]);
       setView("agent");
@@ -2147,17 +2148,24 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, applications, s
     await api(`/admin/documents/${documentId}`, { method: "DELETE" });
     await refreshSelectedProfile();
   }
+  function coursePayload(extra = {}) {
+    const payload = { ...adminCourseForm, ...extra };
+    if (!payload.addedById) delete payload.addedById;
+    if (!payload.userId) delete payload.userId;
+    if (!payload.completionDate) delete payload.completionDate;
+    return payload;
+  }
   async function addSelectedCourse(event) {
     event.preventDefault();
     if (!selectedProfile?.user?.id || !adminCourseForm.title) return;
-    await api("/courses", { method: "POST", body: JSON.stringify({ ...adminCourseForm, targetAudience: "user", userId: selectedProfile.user.id }) });
+    await api("/courses", { method: "POST", body: JSON.stringify(coursePayload({ targetAudience: "user", userId: selectedProfile.user.id })) });
     setAdminCourseForm({ targetAudience: "all", addedById: "", title: "", provider: "", completionDate: "", certificateUrl: "", notes: "" });
     await refreshSelectedProfile();
   }
   async function addAdminCourse(event) {
     event.preventDefault();
     if (!adminCourseForm.title) return;
-    await api("/courses", { method: "POST", body: JSON.stringify(adminCourseForm) });
+    await api("/courses", { method: "POST", body: JSON.stringify(coursePayload()) });
     setAdminCourseForm({ targetAudience: "all", addedById: "", title: "", provider: "", completionDate: "", certificateUrl: "", notes: "" });
     await reload();
   }
