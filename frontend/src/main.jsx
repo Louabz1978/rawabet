@@ -1326,7 +1326,7 @@ function AgentsPage({ t, agents = [], selectedAgent, setSelectedAgent, openJob }
         <div className="section-head"><div><h2>{agent.agency_name || agent.full_name}</h2><p>{agent.agency_about || agent.about || agent.headline || "-"}</p></div><button className="secondary-button compact" onClick={() => { setSelectedAgent(null); setDetail(null); }}>{t("backToUsers")}</button></div>
         <section className="profile-hero panel">
           <Avatar user={{ full_name: agent.full_name, avatar_url: agent.avatar_url }} size="large" />
-          <div><h1>{agent.agency_name || agent.full_name}</h1><p>{agent.full_name}</p><span>{agent.location || "-"}</span>{agent.website && <a href={assetUrl(agent.website)} target="_blank" rel="noreferrer">{agent.website}</a>}</div>
+          <div><h1>{agent.agency_name || agent.full_name}</h1><p>{agent.full_name}</p><span>{agent.location || "-"}</span>{agent.website && <a href={assetUrl(agent.website)} target="_blank" rel="noreferrer">{agent.website}</a>}<p className="agency-about-detail">{agent.agency_about || agent.about || agent.headline || "-"}</p></div>
         </section>
         <section className="panel">
           <div className="section-head"><h2>{t("activeJobs")}</h2><span className="status">{jobs.length}</span></div>
@@ -1342,7 +1342,7 @@ function AgentsPage({ t, agents = [], selectedAgent, setSelectedAgent, openJob }
       <section className="panel">
         <div className="section-head"><h2>{t("agentDirectory")}</h2><input placeholder={t("searchAgents")} value={search} onChange={(e) => setSearch(e.target.value)} /></div>
         <div className="agent-profile-grid-list">
-          {visibleAgents.map((agent) => <button className="agent-profile-tile company-profile-tile" type="button" key={agent.id} onClick={() => setSelectedAgent(agent)}><Avatar user={{ full_name: agent.full_name, avatar_url: agent.avatar_url }} size="large" /><strong>{agent.agency_name || agent.full_name}</strong><span>{agent.headline || agent.location || "-"}</span><p>{agent.agency_about || agent.about || "-"}</p><small>{agent.open_jobs || 0} {t("activeJobs")}</small></button>)}
+          {visibleAgents.map((agent) => <button className="agent-profile-tile" type="button" key={agent.id} onClick={() => setSelectedAgent(agent)}><Avatar user={{ full_name: agent.full_name, avatar_url: agent.avatar_url }} size="large" /><strong>{agent.agency_name || agent.full_name}</strong><span>{agent.headline || agent.location || "-"}</span><small>{agent.open_jobs || 0} {t("activeJobs")}</small></button>)}
         </div>
       </section>
     </section>
@@ -2462,7 +2462,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
             <section className="panel">
               <h2>{t("about")}</h2>
               <p>{selectedProfile.profile?.about || "-"}</p>
-              <div className="chips">{(selectedProfile.profile?.skills || []).map((skill) => <span key={skill}>{skill}</span>)}</div>
+              <div className="chips">{(Array.isArray(selectedProfile.profile?.skills) ? selectedProfile.profile.skills : String(selectedProfile.profile?.skills || "").split(",").map((item) => item.trim()).filter(Boolean)).map((skill) => <span key={skill}>{skill}</span>)}</div>
             </section>
             <section className="panel">
               <h2>{t("experience")}</h2>

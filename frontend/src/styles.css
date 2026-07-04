@@ -2732,29 +2732,18 @@ td span {
   white-space: nowrap;
 }
 
-.company-profile-tile {
-  min-height: 220px;
-  align-content: start;
-}
-
-.company-profile-tile p {
-  display: -webkit-box;
-  max-width: 100%;
-  min-height: 42px;
-  margin: 0;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 0.74rem;
-  font-weight: 650;
-  line-height: 1.45;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
 .agent-profile-tile small {
   color: var(--brand);
   font-size: 0.72rem;
   font-weight: 800;
+}
+
+.agency-about-detail {
+  max-width: 760px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.6;
 }
 
 .agent-tool-list {
