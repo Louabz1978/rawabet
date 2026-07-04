@@ -39,6 +39,7 @@ def public_user(user: dict) -> dict:
         "headline": user.get("headline"),
         "location": user.get("location"),
         "avatarUrl": user.get("avatar_url"),
+        "lastActiveAt": user.get("last_active_at").isoformat() if user.get("last_active_at") else None,
     }
 
 
@@ -50,7 +51,7 @@ def current_user(credentials: Annotated[HTTPAuthorizationCredentials, Depends(se
         raise HTTPException(status_code=401, detail="Invalid session") from exc
 
     user = fetch_one(
-        "SELECT id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url FROM users WHERE id = %s",
+        "SELECT id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url, last_active_at FROM users WHERE id = %s",
         (user_id,),
     )
     if not user:

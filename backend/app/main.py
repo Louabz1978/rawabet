@@ -2048,6 +2048,8 @@ def login_get_hint():
 
 @app.get("/api/account")
 def me(user: Annotated[dict, Depends(current_user)]):
+    execute("UPDATE users SET last_active_at = NOW() WHERE id = %s", (user["id"],))
+    user = fetch_one("SELECT id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url, last_active_at FROM users WHERE id = %s", (user["id"],))
     sync_profile_strength(user["id"])
     resume_profile_columns = resume_profile_select_sql()
     profile = fetch_one(
@@ -2413,7 +2415,7 @@ def list_public_agents(user: Annotated[dict, Depends(current_user)], search: str
     query = f"%{search.strip()}%"
     return fetch_all(
         """
-        SELECT u.id, u.full_name, u.email, u.headline, u.location, u.avatar_url,
+        SELECT u.id, u.full_name, u.email, u.headline, u.location, u.avatar_url, u.plan, u.last_active_at,
                p.about, p.agency_name, p.agency_about, p.website,
                (
                  SELECT COUNT(*)::int
@@ -2441,7 +2443,7 @@ def list_public_agents(user: Annotated[dict, Depends(current_user)], search: str
 def get_public_agent(agent_id: UUID, user: Annotated[dict, Depends(current_user)]):
     agent = fetch_one(
         """
-        SELECT u.id, u.full_name, u.email, u.headline, u.location, u.avatar_url,
+        SELECT u.id, u.full_name, u.email, u.headline, u.location, u.avatar_url, u.plan, u.last_active_at,
                p.about, p.agency_name, p.agency_about, p.website
         FROM users u
         LEFT JOIN profiles p ON p.user_id = u.id
@@ -2531,7 +2533,7 @@ def list_admin_applications(user: Annotated[dict, Depends(admin_user)]):
           a.id, a.status, a.created_at, COALESCE(a.screening_answers, '[]'::jsonb) AS screening_answers,
           a.resume_document_id, rd.file_name AS resume_file_name,
           CASE WHEN rd.file_path IS NULL THEN NULL ELSE '/uploads/' || split_part(rd.file_path, '/', array_length(string_to_array(rd.file_path, '/'), 1)) END AS resume_file_url,
-          u.id AS user_id, u.full_name, u.email, u.headline, u.avatar_url,
+          u.id AS user_id, u.full_name, u.email, u.headline, u.avatar_url, u.plan, u.last_active_at,
           j.id AS job_id, j.title AS job_title, j.company_name, j.location,
           COALESCE(j.screening_questions, '[]'::jsonb) AS screening_questions
         FROM applications a
@@ -2629,6 +2631,8 @@ def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
           u.headline,
           u.location AS user_location,
           u.avatar_url,
+          u.plan,
+          u.last_active_at,
           p.about,
           COALESCE(p.skills, '{{}}') AS skills,
           j.id AS job_id,
@@ -2698,6 +2702,8 @@ def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
               u.headline,
               u.location AS user_location,
               u.avatar_url,
+              u.plan,
+              u.last_active_at,
               p.about,
               COALESCE(p.skills, '{}') AS skills,
               NULL::uuid AS job_id,
@@ -2874,7 +2880,7 @@ def update_agent_application(application_id: UUID, body: ApplicationStatusBody, 
 def list_agent_interviews(user: Annotated[dict, Depends(agent_user)]):
     return fetch_all(
         """
-        SELECT i.*, u.full_name, u.email, u.headline, u.avatar_url,
+        SELECT i.*, u.full_name, u.email, u.headline, u.avatar_url, u.plan, u.last_active_at,
           j.title AS job_title, j.company_name, j.location AS job_location
         FROM interviews i
         JOIN users u ON u.id = i.user_id
@@ -3521,6 +3527,9 @@ def list_support_threads(user: Annotated[dict, Depends(admin_user)]):
           u.id AS user_id,
           u.full_name,
           u.email,
+          u.avatar_url,
+          u.plan,
+          u.last_active_at,
           latest.sender_role AS last_sender_role,
           latest.message AS last_message,
           latest.created_at AS last_message_at,
@@ -3532,7 +3541,7 @@ def list_support_threads(user: Annotated[dict, Depends(admin_user)]):
         JOIN latest ON latest.user_id = u.id
         LEFT JOIN support_messages sm ON sm.user_id = u.id
         LEFT JOIN last_admin ON last_admin.user_id = u.id
-        GROUP BY u.id, u.full_name, u.email, latest.sender_role, latest.message, latest.created_at
+        GROUP BY u.id, u.full_name, u.email, u.avatar_url, u.plan, u.last_active_at, latest.sender_role, latest.message, latest.created_at
         ORDER BY unread_count DESC, latest.created_at DESC
         """
     )

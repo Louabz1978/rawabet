@@ -665,6 +665,8 @@ function App() {
   const [builderOpen, setBuilderOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const supportUnreadRef = useRef(0);
+  const supportUnreadReadyRef = useRef(false);
   const t = (key) => text[lang][key] || key;
   const isAdminRole = (role) => ["admin", "master_admin"].includes(role);
 
@@ -698,7 +700,10 @@ function App() {
       setAdminApplications(await api("/admin/applications"));
       setAdminInterviews(await api("/admin/interviews"));
       setAdminCourses(await api("/admin/courses"));
-      setSupportThreads(await api("/admin/support/threads"));
+      const threads = await api("/admin/support/threads");
+      supportUnreadRef.current = threads.filter((thread) => Number(thread.unread_count || 0) > 0).length;
+      supportUnreadReadyRef.current = true;
+      setSupportThreads(threads);
     }
     if (data.user.role === "agent") {
       setAgentShares(await api("/agent/shares"));
@@ -710,7 +715,12 @@ function App() {
 
   async function loadSupportThreads() {
     if (isAdminRole(session?.role)) {
-      setSupportThreads(await api("/admin/support/threads"));
+      const threads = await api("/admin/support/threads");
+      const nextUnread = threads.filter((thread) => Number(thread.unread_count || 0) > 0).length;
+      if (supportUnreadReadyRef.current && nextUnread > supportUnreadRef.current) playNotificationBeep();
+      supportUnreadRef.current = nextUnread;
+      supportUnreadReadyRef.current = true;
+      setSupportThreads(threads);
     }
   }
 
@@ -773,6 +783,8 @@ function App() {
     setAgentInterviews([]);
     setAgentJobs([]);
     setSupportThreads([]);
+    supportUnreadRef.current = 0;
+    supportUnreadReadyRef.current = false;
     setMobileMenuOpen(false);
   }
 
@@ -1164,7 +1176,7 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
       <aside className="profile-rail">
         <section className="profile-card">
           <div className="cover-strip" />
-          <div className="avatar-wrap"><Avatar user={me.user} /><span className="online-dot" /></div>
+          <div className="avatar-wrap"><Avatar user={me.user} /></div>
           <h2>{me.user.fullName}</h2>
           <p>{me.user.headline}</p>
           <button className="secondary-button" onClick={() => setView("profile")}>{t("editProfileAction")}</button>
@@ -1204,7 +1216,7 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
           <div className="agency-list">
             {agents.slice(0, 5).map((agent) => (
               <button className="agency-row" type="button" key={agent.id} onClick={() => { setSelectedAgent(agent); setView("agents"); }}>
-                <Avatar user={{ full_name: agent.full_name, avatar_url: agent.avatar_url }} size="small" />
+                <Avatar user={{ full_name: agent.full_name, avatar_url: agent.avatar_url, plan: agent.plan, last_active_at: agent.last_active_at }} size="small" />
                 <span><strong>{agent.agency_name || agent.full_name}</strong><small>{agent.open_jobs || 0} {t("activeJobs")}</small></span>
               </button>
             ))}
@@ -1327,7 +1339,7 @@ function AgentsPage({ t, agents = [], selectedAgent, setSelectedAgent, openJob }
       <section className="agency-page">
         <div className="section-head"><button className="secondary-button compact" onClick={() => { setSelectedAgent(null); setDetail(null); }}>{t("backToCompanies")}</button></div>
         <section className="profile-hero panel">
-          <Avatar user={{ full_name: agent.full_name, avatar_url: agent.avatar_url }} size="large" />
+          <Avatar user={{ full_name: agent.full_name, avatar_url: agent.avatar_url, plan: agent.plan, last_active_at: agent.last_active_at }} size="large" />
           <div><h1>{agent.agency_name || agent.full_name}</h1><p>{agent.full_name}</p><span>{agent.location || "-"}</span>{agent.website && <a href={assetUrl(agent.website)} target="_blank" rel="noreferrer">{agent.website}</a>}<p className="agency-about-detail">{agent.agency_about || agent.about || agent.headline || "-"}</p></div>
         </section>
         <section className="panel">
@@ -1344,7 +1356,7 @@ function AgentsPage({ t, agents = [], selectedAgent, setSelectedAgent, openJob }
       <section className="panel">
         <div className="section-head"><h2>{t("agentDirectory")}</h2><input placeholder={t("searchAgents")} value={search} onChange={(e) => setSearch(e.target.value)} /></div>
         <div className="agent-profile-grid-list">
-          {visibleAgents.map((agent) => <button className="agent-profile-tile" type="button" key={agent.id} onClick={() => setSelectedAgent(agent)}><Avatar user={{ full_name: agent.full_name, avatar_url: agent.avatar_url }} size="large" /><strong>{agent.agency_name || agent.full_name}</strong><span>{agent.headline || agent.location || "-"}</span><small>{agent.open_jobs || 0} {t("activeJobs")}</small></button>)}
+          {visibleAgents.map((agent) => <button className="agent-profile-tile" type="button" key={agent.id} onClick={() => setSelectedAgent(agent)}><Avatar user={{ full_name: agent.full_name, avatar_url: agent.avatar_url, plan: agent.plan, last_active_at: agent.last_active_at }} size="large" /><strong>{agent.agency_name || agent.full_name}</strong><span>{agent.headline || agent.location || "-"}</span><small>{agent.open_jobs || 0} {t("activeJobs")}</small></button>)}
         </div>
       </section>
     </section>
@@ -2587,7 +2599,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
             <div className="table-wrap">
               <table>
                 <thead><tr><th>{t("applicant")}</th><th>{t("job")}</th><th>{t("location")}</th><th>{t("resume")}</th><th>{t("submittedAnswers")}</th><th>{t("applicationStatus")}</th><th>{t("shareWithAgent")}</th><th>{t("actions")}</th></tr></thead>
-                <tbody>{applications.map((application) => <tr key={application.id}><td><div className="table-user"><Avatar user={{ full_name: application.full_name, avatar_url: application.avatar_url }} size="small" /><div><strong>{application.full_name}</strong><span>{application.email}</span></div></div></td><td><strong>{application.job_title}</strong><span>{application.company_name}</span></td><td>{application.location}</td><td>{application.resume_file_url ? <a href={assetUrl(application.resume_file_url)} target="_blank" rel="noreferrer">{application.resume_file_name || t("resume")}</a> : "-"}</td><td><ApplicationAnswers t={t} answers={application.screening_answers} /></td><td><span className={`status ${application.status}`}>{statusLabel(application.status, lang)}</span></td><td><select className="action-select" defaultValue="" disabled={!agents.length} onChange={async (e) => { await shareApplication(application, e.target.value); e.target.value = ""; }}><option value="">{agents.length ? t("shareWithAgent") : t("agent")}</option>{agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}</select></td><td><select className="action-select" defaultValue="" onChange={(e) => { updateApplicationStatus(application, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option>{APPLICATION_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select></td></tr>)}</tbody>
+                <tbody>{applications.map((application) => <tr key={application.id}><td><div className="table-user"><Avatar user={{ full_name: application.full_name, avatar_url: application.avatar_url, plan: application.plan, last_active_at: application.last_active_at }} size="small" /><div><strong>{application.full_name}</strong><span>{application.email}</span></div></div></td><td><strong>{application.job_title}</strong><span>{application.company_name}</span></td><td>{application.location}</td><td>{application.resume_file_url ? <a href={assetUrl(application.resume_file_url)} target="_blank" rel="noreferrer">{application.resume_file_name || t("resume")}</a> : "-"}</td><td><ApplicationAnswers t={t} answers={application.screening_answers} /></td><td><span className={`status ${application.status}`}>{statusLabel(application.status, lang)}</span></td><td><select className="action-select" defaultValue="" disabled={!agents.length} onChange={async (e) => { await shareApplication(application, e.target.value); e.target.value = ""; }}><option value="">{agents.length ? t("shareWithAgent") : t("agent")}</option>{agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}</select></td><td><select className="action-select" defaultValue="" onChange={(e) => { updateApplicationStatus(application, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option>{APPLICATION_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select></td></tr>)}</tbody>
               </table>
             </div>
           </section>}
@@ -2622,7 +2634,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
             <div className="section-head"><h2>{t("supportInbox")}</h2><span className="status">{unreadTotal} {t("unreadMessages")}</span></div>
             <div className="support-thread-list">
               {supportThreads.map((thread) => <article className={Number(thread.unread_count) > 0 ? "support-thread unread" : "support-thread"} key={thread.user_id}>
-                <Avatar user={{ fullName: thread.full_name }} size="small" />
+                <Avatar user={{ full_name: thread.full_name, avatar_url: thread.avatar_url, plan: thread.plan, last_active_at: thread.last_active_at }} size="small" />
                 <div><strong>{thread.full_name}</strong><span>{thread.email}</span><p>{thread.last_message}</p></div>
                 <div className="support-thread-actions">{Number(thread.unread_count) > 0 && <b>{thread.unread_count}</b>}<button className="secondary-button compact" onClick={() => openSupport(thread.user_id)}>{t("openChat")}</button></div>
               </article>)}
@@ -2756,7 +2768,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], interviews 
         </div>
         <article className="panel agent-share-card">
           <header className="agent-profile-head">
-            <Avatar user={{ full_name: selectedShare.full_name, avatar_url: selectedShare.avatar_url }} size="large" />
+            <Avatar user={{ full_name: selectedShare.full_name, avatar_url: selectedShare.avatar_url, plan: selectedShare.plan, last_active_at: selectedShare.last_active_at }} size="large" />
             <div>
               <h2>{selectedShare.full_name}</h2>
               <p>{selectedShare.headline || "-"}</p>
@@ -2878,7 +2890,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], interviews 
             {uniqueCandidates.length ? <div className="agent-profile-grid-list">
               {uniqueCandidates.map((share) => (
                 <button className="agent-profile-tile" type="button" key={share.share_id} onClick={() => setSelectedShareId(share.share_id)}>
-                  <Avatar user={{ full_name: share.full_name, avatar_url: share.avatar_url }} size="large" />
+                  <Avatar user={{ full_name: share.full_name, avatar_url: share.avatar_url, plan: share.plan, last_active_at: share.last_active_at }} size="large" />
                   <strong>{share.full_name}</strong>
                   <span>{share.headline || share.job_title || "-"}</span>
                   <small>{t("openProfile")}</small>
@@ -2894,7 +2906,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], interviews 
                 <thead><tr><th>{t("applicant")}</th><th>{t("job")}</th><th>{t("submittedAnswers")}</th><th>{t("applicationStatus")}</th><th>{t("actions")}</th></tr></thead>
                 <tbody>{applicationShares.map((application) => (
                   <tr key={application.share_id}>
-                    <td><div className="table-user"><Avatar user={{ full_name: application.full_name, avatar_url: application.avatar_url }} size="small" /><div><button className="link-button" type="button" onClick={() => setSelectedShareId(application.share_id)}>{application.full_name}</button><span>{application.email}</span></div></div></td>
+                    <td><div className="table-user"><Avatar user={{ full_name: application.full_name, avatar_url: application.avatar_url, plan: application.plan, last_active_at: application.last_active_at }} size="small" /><div><button className="link-button" type="button" onClick={() => setSelectedShareId(application.share_id)}>{application.full_name}</button><span>{application.email}</span></div></div></td>
                     <td><strong>{application.job_title}</strong><span>#{application.job_number || "-"} · {application.company_name}</span></td>
                     <td><ApplicationAnswers t={t} answers={application.screening_answers} /></td>
                     <td><span className={`status ${application.application_status}`}>{statusLabel(application.application_status, lang)}</span></td>
@@ -3187,17 +3199,28 @@ function AnalyticsList({ title, data = [] }) {
 
 function Avatar({ user, size = "" }) {
   const [failed, setFailed] = useState(false);
-  const className = `avatar ${size}`.trim();
-  const avatarUrl = user.avatarUrl || user.avatar_url;
+  const online = isUserOnline(user);
+  const premium = user?.plan === "premium";
+  const className = `avatar ${size} ${premium ? "premium" : ""}`.trim();
+  const avatarUrl = user?.avatarUrl || user?.avatar_url;
   const src = avatarUrl ? assetUrl(avatarUrl) : "";
-  const name = user.fullName || user.full_name || "";
+  const name = user?.fullName || user?.full_name || "";
   useEffect(() => setFailed(false), [src]);
-  if (src && !failed) return <img className={className} src={src} alt={name || "Profile"} onError={() => setFailed(true)} />;
-  return <div className={className}>{initials(name)}</div>;
+  const avatar = src && !failed ? <img className={className} src={src} alt={name || "Profile"} onError={() => setFailed(true)} /> : <div className={className}>{initials(name)}</div>;
+  if (!online) return avatar;
+  return <span className={`avatar-status-wrap ${size}`.trim()}>{avatar}<span className="online-dot" /></span>;
 }
 
 function initials(name = "") {
   return name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+}
+
+function isUserOnline(user = {}) {
+  const value = user.lastActiveAt || user.last_active_at;
+  if (!value) return false;
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return false;
+  return Date.now() - timestamp < 5 * 60 * 1000;
 }
 
 function formatNumber(value = 0) {

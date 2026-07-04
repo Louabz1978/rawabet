@@ -290,6 +290,13 @@ main.admin-main {
 
 .avatar-wrap { position: relative; width: max-content; margin: -38px auto 0; }
 
+.avatar-status-wrap {
+  position: relative;
+  display: inline-grid;
+  width: max-content;
+  vertical-align: middle;
+}
+
 .avatar {
   display: grid;
   width: 82px;
@@ -306,8 +313,13 @@ main.admin-main {
 }
 
 .avatar-wrap .avatar { margin: 0; }
+.avatar-status-wrap .avatar { margin: 0; }
 .avatar.small { width: 48px; height: 48px; margin: 0; border-width: 2px; font-size: 0.78rem; }
 .avatar.large { width: 128px; height: 128px; margin: 0; font-size: 1.2rem; }
+.avatar.premium {
+  border-color: #d5a321;
+  box-shadow: 0 0 0 3px rgba(213, 163, 33, 0.22);
+}
 
 .online-dot {
   position: absolute;
@@ -320,7 +332,23 @@ main.admin-main {
   border-radius: 50%;
 }
 
+.avatar-status-wrap.small .online-dot {
+  right: 1px;
+  bottom: 1px;
+  width: 11px;
+  height: 11px;
+}
+
+.avatar-status-wrap.large .online-dot {
+  right: 12px;
+  bottom: 10px;
+  width: 17px;
+  height: 17px;
+}
+
 html[dir="rtl"] .online-dot { right: auto; left: 8px; }
+html[dir="rtl"] .avatar-status-wrap.small .online-dot { right: auto; left: 1px; }
+html[dir="rtl"] .avatar-status-wrap.large .online-dot { right: auto; left: 12px; }
 
 .profile-card h2 {
   margin: 14px 18px 4px;
