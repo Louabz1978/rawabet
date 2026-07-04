@@ -42,6 +42,7 @@ const text = {
     profile: "Profile",
     jobs: "Jobs",
     companies: "Companies",
+    backToCompanies: "Back to companies",
     admin: "Admin",
     search: "Search job, company, or job number",
     completeProfile: "Complete profile",
@@ -308,6 +309,7 @@ const text = {
     profile: "الملف",
     jobs: "الوظائف",
     companies: "الشركات",
+    backToCompanies: "العودة للشركات",
     admin: "الإدارة",
     search: "ابحث عن الوظيفة أو الشركة أو رقم الوظيفة",
     completeProfile: "أكمل الملف",
@@ -1323,7 +1325,7 @@ function AgentsPage({ t, agents = [], selectedAgent, setSelectedAgent, openJob }
     const jobs = detail?.jobs || [];
     return (
       <section className="agency-page">
-        <div className="section-head"><div><h2>{agent.agency_name || agent.full_name}</h2><p>{agent.agency_about || agent.about || agent.headline || "-"}</p></div><button className="secondary-button compact" onClick={() => { setSelectedAgent(null); setDetail(null); }}>{t("backToUsers")}</button></div>
+        <div className="section-head"><button className="secondary-button compact" onClick={() => { setSelectedAgent(null); setDetail(null); }}>{t("backToCompanies")}</button></div>
         <section className="profile-hero panel">
           <Avatar user={{ full_name: agent.full_name, avatar_url: agent.avatar_url }} size="large" />
           <div><h1>{agent.agency_name || agent.full_name}</h1><p>{agent.full_name}</p><span>{agent.location || "-"}</span>{agent.website && <a href={assetUrl(agent.website)} target="_blank" rel="noreferrer">{agent.website}</a>}<p className="agency-about-detail">{agent.agency_about || agent.about || agent.headline || "-"}</p></div>
