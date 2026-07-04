@@ -421,6 +421,14 @@ class ExperienceBody(BaseModel):
     description: str | None = None
 
 
+class EducationBody(BaseModel):
+    school: str
+    degree: str
+    field: str | None = None
+    startYear: int | str | None = None
+    endYear: int | str | None = None
+
+
 class AdminUserPatch(BaseModel):
     fullName: str | None = None
     email: EmailStr | None = None
@@ -764,12 +772,136 @@ def trim_resume_line(value: object, limit: int = 520) -> str:
     return f"{text[:limit].rstrip()}..."
 
 
+def normalize_resume_description_lines(value: str | None) -> list[str]:
+    raw_lines = split_lines(value)
+    merged: list[str] = []
+    pending = ""
+    dangling_arabic_starts = {"قمت", "عملت", "اشرفت", "أشرفت", "اسست", "أسست", "قدت", "طورت", "ادرت", "أدرت"}
+    dangling_norms = {normalize_arabic_text(item) for item in dangling_arabic_starts}
+    for line in raw_lines:
+        compact = line.strip(" .،")
+        if pending:
+            merged.append(trim_resume_line(f"{pending} {line}", 360))
+            pending = ""
+            continue
+        if normalize_arabic_text(compact) in dangling_norms:
+            pending = line
+        else:
+            merged.append(trim_resume_line(line, 360))
+    if pending:
+        merged.append(pending)
+    return merged
+
+
+def polish_arabic_bullet(line: str, title: str = "", company: str = "") -> str:
+    text = trim_resume_line(line, 260).strip(" .،")
+    replacements = [
+        (r"^قمت\s+ب", ""),
+        (r"^قمت\s+", ""),
+        (r"^عملت\s+على\s+", ""),
+        (r"^انا\s+", ""),
+        (r"^أنا\s+", ""),
+    ]
+    for pattern, replacement in replacements:
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE).strip()
+    text = re.sub(r"^اسست\b", "أسست", text)
+    text = re.sub(r"^ادرت\b", "أدرت", text)
+    text = re.sub(r"^اشرفت\b", "أشرفت", text)
+    if not text:
+        text = f"إدارة مسؤوليات {title or 'الدور'} لدى {company or 'الجهة'}"
+    normalized = normalize_arabic_text(text)
+    if normalized.startswith(("اسست", "ادرت", "قدت", "طورت", "صممت", "بنيت", "اشرفت", "حسنت", "نفذت")):
+        return text
+    if normalized.startswith(("بناء", "تطوير", "اداره", "قياده", "تصميم", "تشغيل", "تحسين", "متابعه")):
+        return f"توليت {text}"
+    return f"أنجزت {text}"
+
+
+def role_specific_arabic_bullets(item: dict, profile: dict | None = None, minimum: int = 4) -> list[str]:
+    title = item.get("title") or "الدور الوظيفي"
+    company = item.get("company") or "الجهة"
+    ignored_norms = {normalize_arabic_text(title), normalize_arabic_text(company)}
+    description_lines = []
+    for line in normalize_resume_description_lines(item.get("description")):
+        normalized_line = normalize_arabic_text(line)
+        if not normalized_line or normalized_line in ignored_norms or len(normalized_line) < 12:
+            continue
+        description_lines.append(line)
+    bullets = [polish_arabic_bullet(line, title, company) for line in description_lines if line.strip()]
+    title_norm = normalize_arabic_text(title)
+    company_norm = normalize_arabic_text(company)
+    if any(term in title_norm for term in ["ذكاء", "ai", "تحليل", "بيانات"]):
+        bullets.extend([
+            "قدت مبادرات ذكاء اصطناعي لتحويل الاحتياجات التشغيلية إلى حلول عملية قابلة للاستخدام.",
+            "حللت المتطلبات وربطت مخرجات النماذج بمؤشرات أداء تساعد على اتخاذ القرار.",
+            "نسقت مع الفرق الفنية وأصحاب المصلحة لضمان جودة الحلول واستقرارها."
+        ])
+    if any(term in title_norm for term in ["مؤسس", "founder", "صاحب"]) or any(term in company_norm for term in ["اتصالات", "انترنت", "internet"]):
+        bullets.extend([
+            "أسست نموذج عمل يخدم الأفراد والشركات مع بناء عمليات تشغيل ومتابعة للعملاء.",
+            "طورت بنية تشغيلية وسيرفرات قادرة على استيعاب نمو الاتصالات وحجم الاستخدام.",
+            "أدرت العلاقات التجارية والتقنية لضمان استمرارية الخدمة وتحسين تجربة العملاء."
+        ])
+    if any(term in title_norm for term in ["مدير", "مشرف", "رئيس"]):
+        bullets.extend([
+            "أدرت فريق العمل ووزعت المسؤوليات بما يضمن وضوح الأولويات وسرعة الإنجاز.",
+            "تابعت جودة المخرجات اليومية وراجعت المخاطر التشغيلية قبل تأثيرها على العمل.",
+            "حسنت آليات التواصل والتوثيق بين الفرق لرفع كفاءة التنفيذ."
+        ])
+    if not bullets:
+        bullets = [
+            f"أدرت مسؤوليات {title} لدى {company} من خلال تنظيم المهام ومتابعة جودة التنفيذ.",
+            "طورت أسلوب العمل اليومي عبر تحسين الإجراءات وتوثيق المتطلبات والمخرجات.",
+            "حللت احتياجات العمل وربطتها بأولويات واضحة تساعد الإدارة على اتخاذ قرارات أفضل.",
+            "نسقت المتابعة بين أصحاب العلاقة لضمان سرعة الاستجابة وتقليل التعطيل التشغيلي."
+        ]
+    deduped = []
+    seen = set()
+    for bullet in bullets:
+        cleaned = trim_resume_line(bullet, 260).strip(" .،")
+        key = normalize_arabic_text(cleaned)
+        if cleaned and key not in seen:
+            seen.add(key)
+            deduped.append(cleaned)
+    return deduped[: max(minimum, min(6, len(deduped)))]
+
+
+def weak_arabic_resume_bullet(value: str) -> bool:
+    normalized = normalize_arabic_text(value)
+    weak_terms = [
+        "نفذت مهام",
+        "مع التركيز علي الجوده والموثوقيه",
+        "تحقيق نتائج قابله للقياس",
+        "تعاونت مع فرق العمل واصحاب المصلحه",
+        "دعمت مخرجات العمل من خلال تنظيم المهام",
+    ]
+    return len(normalized) < 18 or any(term in normalized for term in weak_terms)
+
+
 def date_range(start: object = None, end: object = None, is_current: bool = False, current_text: str = "Present") -> str:
     start_text = str(start or "").strip()
     end_text = current_text if is_current else str(end or "").strip()
     if start_text and end_text:
         return f"{start_text} - {end_text}"
     return start_text or end_text
+
+
+def empty_to_none(value: object):
+    if value is None:
+        return None
+    if isinstance(value, str) and not value.strip():
+        return None
+    return value
+
+
+def optional_year(value: object):
+    value = empty_to_none(value)
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid year")
 
 
 def default_resume_sections(user: dict, profile: dict, experiences: list[dict], education: list[dict], courses: list[dict], body: ResumeBuilderBody) -> dict:
@@ -792,15 +924,9 @@ def default_resume_sections(user: dict, profile: dict, experiences: list[dict], 
     ])
     experience_items = []
     for item in experiences:
-        description_lines = split_lines(item.get("description"))
-        if rtl and description_lines and any(has_arabic(line) for line in description_lines):
-            fallback_bullets = description_lines
-        elif rtl:
-            fallback_bullets = [
-                f"نفذت مهام {item.get('title') or 'الدور الوظيفي'} لدى {item.get('company') or 'الجهة'} مع التركيز على الجودة والموثوقية وتحقيق نتائج قابلة للقياس.",
-                "تعاونت مع فرق العمل وأصحاب المصلحة لتحسين الإجراءات، التوثيق، وسرعة التنفيذ.",
-                "استخدمت الخبرات والأدوات المتاحة لدعم العمل اليومي ورفع كفاءة المخرجات."
-            ]
+        description_lines = normalize_resume_description_lines(item.get("description"))
+        if rtl:
+            fallback_bullets = role_specific_arabic_bullets(item, profile, minimum=4)
         else:
             fallback_bullets = description_lines or [
                 f"Delivered work for {item.get('company') or 'the organization'} with focus on quality, reliability, and measurable outcomes.",
@@ -811,7 +937,7 @@ def default_resume_sections(user: dict, profile: dict, experiences: list[dict], 
             "company": item.get("company") or "-",
             "location": item.get("location") or "",
             "dates": date_range(item.get("start_date"), item.get("end_date"), item.get("is_current"), current_text=current_text),
-            "bullets": fallback_bullets[:5],
+            "bullets": fallback_bullets[:6],
         })
     return {
         "summary": body.summary or profile.get("about") or ("محترف لديه خبرات ومهارات ومسار عملي موثق." if rtl else f"{user.get('headline') or 'Professional'} with verified experience, skills, and career history."),
@@ -855,11 +981,23 @@ def openai_resume_sections(user: dict, profile: dict, experiences: list[dict], e
     payload = {
         "model": "gpt-4o-mini",
         "messages": [
-            {"role": "system", "content": "Create a concise professional Arabic resume from the provided Rawabet profile. Return strict JSON only with keys: summary, target_title, skills, languages, certifications, education, projects, tools, achievements, additional_info, experiences. experiences must be an array of objects with title, company, location, dates, bullets. Write summary, bullets, achievements, additional_info, and any generated resume wording in Arabic. Keep user-entered English proper nouns, company names, job titles, tools, technologies, emails, and degrees exactly as provided when they are already in English. Improve bullets with strong Arabic action verbs and measurable professional wording. Do not invent companies, dates, degrees, or certifications."},
+            {"role": "system", "content": (
+                "Create a polished professional Arabic resume from the provided Rawabet profile. "
+                "Return strict JSON only with keys: summary, target_title, skills, languages, certifications, education, projects, tools, achievements, additional_info, experiences. "
+                "experiences must be an array of objects with title, company, location, dates, bullets. "
+                "For every experience, write 4 to 6 strong Arabic bullets based on the job title, company, skills, tools, and the user's raw description. "
+                "Do not copy weak raw wording. Rewrite it into executive, measurable, professional Arabic. "
+                "Start bullets with strong verbs such as: أسست، قدت، أدرت، طورت، صممت، بنيت، حسنت، أطلقت، نسقت، حللت، أشرفت. "
+                "Never use generic bullets like: نفذت مهام، تعاونت مع فرق العمل، مع التركيز على الجودة والموثوقية، تحقيق نتائج قابلة للقياس. "
+                "Each bullet should be one clear sentence, 12 to 28 words, with no numbering and no trailing punctuation required. "
+                "If the user gives short notes, infer realistic responsibilities from the role without inventing fake employers, dates, degrees, or certifications. "
+                "Keep user-entered English proper nouns, company names, tools, technologies, emails, and degrees exactly as provided when already in English. "
+                "Write summary, bullets, achievements, additional_info, and generated wording in Arabic by default."
+            )},
             {"role": "user", "content": json.dumps(prompt, default=str, ensure_ascii=False)},
         ],
-        "temperature": 0.25,
-        "max_tokens": 1800,
+        "temperature": 0.35,
+        "max_tokens": 2600,
     }
     request = urllib.request.Request(
         "https://api.openai.com/v1/chat/completions",
@@ -893,11 +1031,8 @@ def underlined_paragraph(text: object, style):
 
 def bullet_rows(items: list[str], style, rtl: bool):
     rows = []
-    for index, item in enumerate(items, start=1):
-        if rtl:
-            rows.append([paragraph(item, style), paragraph(f"{index}.", style)])
-        else:
-            rows.append([paragraph(f"{index}.", style), paragraph(item, style)])
+    for item in items:
+        rows.append([paragraph(f"• {item}", style)])
     return rows
 
 
@@ -921,15 +1056,20 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
         str(sections.get("target_title") or ""),
     ]))
     normalized_experiences = []
-    for item in sections.get("experiences") or []:
+    original_experiences = experiences or []
+    for index, item in enumerate(sections.get("experiences") or []):
         if isinstance(item, dict):
             bullets = [trim_resume_line(bullet) for bullet in listify(item.get("bullets"))[:7]]
-            if rtl and bullets and not any(has_arabic(bullet) for bullet in bullets):
-                bullets = [
-                    f"نفذت مهام {item.get('title') or 'الدور الوظيفي'} لدى {item.get('company') or 'الجهة'} مع التركيز على الجودة والموثوقية وتحقيق نتائج قابلة للقياس.",
-                    "تعاونت مع فرق العمل وأصحاب المصلحة لتحسين الإجراءات، التوثيق، وسرعة التنفيذ.",
-                    "دعمت مخرجات العمل من خلال تنظيم المهام، متابعة التفاصيل، وتطبيق أفضل الممارسات."
-                ]
+            if rtl:
+                source_item = original_experiences[index] if index < len(original_experiences) else item
+                stronger_bullets = role_specific_arabic_bullets({**source_item, **item}, profile, minimum=4)
+                bullets = [bullet for bullet in bullets if has_arabic(bullet) and not weak_arabic_resume_bullet(bullet)]
+                for bullet in stronger_bullets:
+                    if len(bullets) >= 6:
+                        break
+                    if normalize_arabic_text(bullet) not in {normalize_arabic_text(existing) for existing in bullets}:
+                        bullets.append(bullet)
+                bullets = bullets[:6]
             normalized_experiences.append({**item, "bullets": bullets})
     sections["experiences"] = normalized_experiences or fallback["experiences"]
     font = resume_font_name("medium")
@@ -1006,7 +1146,7 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
         bullets = (item.get("bullets") or [])[:7]
         if bullets:
             rows = bullet_rows(bullets, bullet_style, rtl)
-            widths = [310, 18] if rtl else [18, 310]
+            widths = [328]
             bullet_table = Table(rows, colWidths=widths, hAlign="RIGHT" if rtl else "LEFT")
             bullet_table.setStyle(TableStyle([
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -1033,7 +1173,7 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
         if items:
             section_flow = [paragraph(title, section_style)]
             rows = bullet_rows(items, bullet_style, rtl)
-            widths = [310, 18] if rtl else [18, 310]
+            widths = [328]
             item_table = Table(rows, colWidths=widths, hAlign="RIGHT" if rtl else "LEFT")
             item_table.setStyle(TableStyle([
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -1945,7 +2085,16 @@ def add_experience(body: ExperienceBody, user: Annotated[dict, Depends(current_u
         VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
         RETURNING *
         """,
-        (user["id"], body.title, body.company, body.location, body.startDate, body.endDate, body.isCurrent, body.description),
+        (
+            user["id"],
+            body.title,
+            body.company,
+            body.location,
+            empty_to_none(body.startDate),
+            None if body.isCurrent else empty_to_none(body.endDate),
+            body.isCurrent,
+            body.description,
+        ),
     )
     sync_profile_strength(user["id"])
     return experience
@@ -1960,7 +2109,17 @@ def update_experience(experience_id: UUID, body: ExperienceBody, user: Annotated
         WHERE id = %s AND user_id = %s
         RETURNING *
         """,
-        (body.title, body.company, body.location, body.startDate, body.endDate, body.isCurrent, body.description, experience_id, user["id"]),
+        (
+            body.title,
+            body.company,
+            body.location,
+            empty_to_none(body.startDate),
+            None if body.isCurrent else empty_to_none(body.endDate),
+            body.isCurrent,
+            body.description,
+            experience_id,
+            user["id"],
+        ),
     )
     if not experience:
         raise HTTPException(status_code=404, detail="Experience not found")
@@ -1977,8 +2136,65 @@ def delete_experience(experience_id: UUID, user: Annotated[dict, Depends(current
     return {"ok": True}
 
 
+@app.post("/api/account/education", status_code=201)
+def add_education(body: EducationBody, user: Annotated[dict, Depends(current_user)]):
+    education = execute(
+        """
+        INSERT INTO education (user_id, school, degree, field, start_year, end_year)
+        VALUES (%s,%s,%s,%s,%s,%s)
+        RETURNING *
+        """,
+        (
+            user["id"],
+            body.school,
+            body.degree,
+            empty_to_none(body.field),
+            optional_year(body.startYear),
+            optional_year(body.endYear),
+        ),
+    )
+    sync_profile_strength(user["id"])
+    return education
+
+
+@app.put("/api/account/education/{education_id}")
+def update_education(education_id: UUID, body: EducationBody, user: Annotated[dict, Depends(current_user)]):
+    education = execute(
+        """
+        UPDATE education
+        SET school = %s, degree = %s, field = %s, start_year = %s, end_year = %s
+        WHERE id = %s AND user_id = %s
+        RETURNING *
+        """,
+        (
+            body.school,
+            body.degree,
+            empty_to_none(body.field),
+            optional_year(body.startYear),
+            optional_year(body.endYear),
+            education_id,
+            user["id"],
+        ),
+    )
+    if not education:
+        raise HTTPException(status_code=404, detail="Education not found")
+    sync_profile_strength(user["id"])
+    return education
+
+
+@app.delete("/api/account/education/{education_id}")
+def delete_education(education_id: UUID, user: Annotated[dict, Depends(current_user)]):
+    deleted = execute("DELETE FROM education WHERE id = %s AND user_id = %s RETURNING id", (education_id, user["id"]))
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Education not found")
+    sync_profile_strength(user["id"])
+    return {"ok": True}
+
+
 @app.post("/api/account/resume-builder", status_code=201)
 def build_resume_pdf(body: ResumeBuilderBody, user: Annotated[dict, Depends(current_user)]):
+    if user.get("role") in {"admin", "master_admin", "agent"}:
+        raise HTTPException(status_code=403, detail="Smart resume is available for user accounts only")
     resume_profile_columns = resume_profile_select_sql()
     profile = fetch_one(
         f"""
@@ -2006,8 +2222,10 @@ def build_resume_pdf(body: ResumeBuilderBody, user: Annotated[dict, Depends(curr
         """,
         (user["id"],),
     )
+    education = fetch_all("SELECT * FROM education WHERE user_id = %s ORDER BY end_year DESC NULLS LAST", (user["id"],))
+    courses = fetch_all("SELECT * FROM courses WHERE user_id = %s ORDER BY completion_date DESC NULLS LAST, created_at DESC", (user["id"],))
     try:
-        pdf = make_resume_pdf(user, profile, experiences, [], [], body)
+        pdf = make_resume_pdf(user, profile, experiences, education, courses, body)
     except RuntimeError as exc:
         raise HTTPException(
             status_code=500,

@@ -82,6 +82,13 @@ const text = {
     smartResumeIntro: "Review and edit the saved resume information from your profile, then download a polished PDF resume.",
     resumeUsesProfile: "Uses saved profile resume fields and work history",
     education: "Education",
+    school: "School",
+    degree: "Degree",
+    field: "Field",
+    startYear: "Start year",
+    endYear: "End year",
+    addEducation: "Add education",
+    editEducation: "Edit education",
     certifications: "Certifications",
     tools: "Tools",
     additionalInfo: "Additional information",
@@ -331,6 +338,13 @@ const text = {
     smartResumeIntro: "راجع وعدّل بيانات السيرة المحفوظة في ملفك، ثم حمّل ملف PDF احترافي.",
     resumeUsesProfile: "يستخدم حقول السيرة المحفوظة وتاريخ العمل",
     education: "التعليم",
+    school: "الجامعة أو المدرسة",
+    degree: "الشهادة",
+    field: "التخصص",
+    startYear: "سنة البداية",
+    endYear: "سنة النهاية",
+    addEducation: "إضافة تعليم",
+    editEducation: "تعديل التعليم",
     certifications: "الشهادات",
     tools: "الأدوات",
     additionalInfo: "معلومات إضافية",
@@ -774,6 +788,12 @@ function App() {
 
   if (!session || !me) return <Login lang={lang} setLang={setLang} t={t} login={login} verifyAndLoad={verifyAndLoad} error={error} setError={setError} />;
   const isAgent = session.role === "agent";
+  const canUseSmartResume = !isAgent && !isAdminRole(session.role);
+
+  function openSmartResumeForUser() {
+    if (!canUseSmartResume) return;
+    openSmartResume();
+  }
 
   return (
     <div className="app-shell">
@@ -808,16 +828,16 @@ function App() {
         <button type="button" onClick={openAppliedJobs}><span>{t("appliedJobs")}</span><b>{formatNumber(me.applications?.length || 0)}</b></button>
         <button type="button" onClick={openAllJobs}>{t("findJob")}</button>
         <button type="button" onClick={() => { setView("agents"); setMobileMenuOpen(false); }}>{t("findCompany")}</button>
-        <button type="button" onClick={openSmartResume}>{t("smartResume")}</button>
+        {canUseSmartResume && <button type="button" onClick={openSmartResumeForUser}>{t("smartResume")}</button>}
         <button type="button" onClick={openComingInterviews}>{t("upcomingInterviews")}</button>
         <button type="button" onClick={logout}>{t("logout")}</button>
       </nav>}
 
       <main className={view === "admin" || isAgent ? "admin-main" : ""}>
         {isAgent ? <AgentWorkspace t={t} lang={lang} agent={me.user} profile={me.profile || {}} shares={agentShares} interviews={agentInterviews} jobs={agentJobs} reload={loadApp} /> : <>
-          {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} agents={agents} setSelectedAgent={setSelectedAgent} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} openSmartResume={openSmartResume} jobSearch={jobSearch} setJobSearch={setJobSearch} setJobMode={setJobMode} />}
+          {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} agents={agents} setSelectedAgent={setSelectedAgent} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} openSmartResume={openSmartResumeForUser} canUseSmartResume={canUseSmartResume} jobSearch={jobSearch} setJobSearch={setJobSearch} setJobMode={setJobMode} />}
           {view === "profile" && <Profile t={t} me={me} reload={loadApp} />}
-          {view === "smartResume" && <SmartResumePage t={t} me={me} reload={loadApp} />}
+          {view === "smartResume" && canUseSmartResume && <SmartResumePage t={t} me={me} reload={loadApp} />}
           {view === "courses" && <CoursesPage t={t} courses={me.courses || []} />}
           {view === "agents" && <AgentsPage t={t} agents={agents} selectedAgent={selectedAgent} setSelectedAgent={setSelectedAgent} openJob={openJob} />}
           {view === "jobs" && <Jobs t={t} lang={lang} jobs={jobs} documents={me.documents || []} applications={me.applications || []} interviews={me.interviews || []} search={jobSearch} mode={jobMode} setMode={setJobMode} selectedJobId={selectedJobId} clearSelectedJob={() => setSelectedJobId("")} reload={loadApp} />}
@@ -1084,7 +1104,7 @@ function AppFooter() {
   );
 }
 
-function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJob, openAppliedJobs, openBuilder, openSmartResume, jobSearch, setJobSearch, setJobMode }) {
+function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJob, openAppliedJobs, openBuilder, openSmartResume, canUseSmartResume = true, jobSearch, setJobSearch, setJobMode }) {
   const strength = Number(me.profile?.profile_strength ?? 0);
   const applications = me.applications || [];
   const priorityApplications = applications.filter((item) => ["interview", "review"].includes(normalizeStatusValue(item.status)));
@@ -1130,7 +1150,7 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
         <section className="panel side-panel workspace-panel">
           <h2>{t("workspace")}</h2>
           <button className="panel-link" onClick={() => setView("profile")}><span>↗</span>{t("publicProfile")}</button>
-          <button className="panel-link" onClick={openSmartResume}><span>◈</span>{t("smartResume")}</button>
+          {canUseSmartResume && <button className="panel-link" onClick={openSmartResume}><span>◈</span>{t("smartResume")}</button>}
           <button className="panel-link" onClick={() => setView("allJobs")}><span>▦</span>{t("savedJobs")}</button>
           {["admin", "master_admin"].includes(me.user.role) && <button className="panel-link" onClick={() => setView("admin")}><span>▥</span>{t("adminDashboard")}</button>}
         </section>
@@ -1443,7 +1463,7 @@ function SmartResumePage({ t, me, reload }) {
 function SmartResumePanel({ t, me, reload }) {
   const [resumeBuilder, setResumeBuilder] = useState({
     summary: me.profile?.about || "",
-    education: me.profile?.resume_education || "",
+    education: "",
     certifications: me.profile?.resume_certifications || "",
     tools: me.profile?.resume_tools || "",
     languages: Array.isArray(me.profile?.languages) ? me.profile.languages.join("\n") : "Arabic\nEnglish",
@@ -1470,17 +1490,28 @@ function SmartResumePanel({ t, me, reload }) {
     if (!Capacitor.isNativePlatform()) return false;
     const fileName = `rawabet-smart-resume-${Date.now()}.pdf`;
     const data = await blobToBase64(blob);
-    const saved = await Filesystem.writeFile({
-      path: fileName,
-      data,
-      directory: Directory.Documents,
-      recursive: true
-    });
+    let saved;
+    try {
+      saved = await Filesystem.writeFile({
+        path: fileName,
+        data,
+        directory: Directory.Documents,
+        recursive: true
+      });
+    } catch {
+      saved = await Filesystem.writeFile({
+        path: fileName,
+        data,
+        directory: Directory.Cache,
+        recursive: true
+      });
+    }
+    const fileUri = saved.uri || (await Filesystem.getUri({ path: fileName, directory: Directory.Documents }).catch(() => null))?.uri;
     await Share.share({
       title: "Rawabet smart resume",
       text: "Rawabet smart resume PDF",
-      url: saved.uri,
-      dialogTitle: "Save or share resume"
+      url: fileUri,
+      dialogTitle: "Download or share resume"
     });
     return true;
   }
@@ -1544,11 +1575,14 @@ function SmartResumePanel({ t, me, reload }) {
           <strong>{t("workTimeline")}</strong>
           {(me.experiences || []).length ? me.experiences.map((item) => <div className="timeline-item compact-timeline" key={item.id}><strong>{item.title}</strong><span>{item.company}{item.start_date || item.end_date ? ` · ${[item.start_date, item.is_current ? "Present" : item.end_date].filter(Boolean).join(" - ")}` : ""}</span></div>) : <p>{t("addExperience")}</p>}
         </article>
+        <article>
+          <strong>{t("education")}</strong>
+          {(me.education || []).length ? me.education.map((item) => <div className="timeline-item compact-timeline" key={item.id}><strong>{item.degree}</strong><span>{[item.field, item.school, [item.start_year, item.end_year].filter(Boolean).join(" - ")].filter(Boolean).join(" · ")}</span></div>) : <p>{t("addEducation")}</p>}
+        </article>
       </div>
       <form className="form-grid smart-resume-form" onSubmit={generateResume}>
         <label>{t("language")}<textarea rows="3" value={resumeBuilder.languages} onChange={(e) => setResumeBuilder({ ...resumeBuilder, languages: e.target.value })} /></label>
         <label className="span">{t("about")}<textarea rows="4" value={resumeBuilder.summary} onChange={(e) => setResumeBuilder({ ...resumeBuilder, summary: e.target.value })} /></label>
-        <label>{t("education")}<textarea rows="5" value={resumeBuilder.education} onChange={(e) => setResumeBuilder({ ...resumeBuilder, education: e.target.value })} /></label>
         <label>{t("certifications")}<textarea rows="5" value={resumeBuilder.certifications} onChange={(e) => setResumeBuilder({ ...resumeBuilder, certifications: e.target.value })} /></label>
         <label>{t("tools")}<textarea rows="5" value={resumeBuilder.tools} onChange={(e) => setResumeBuilder({ ...resumeBuilder, tools: e.target.value })} /></label>
         <label>{t("additionalInfo")}<textarea rows="5" value={resumeBuilder.additionalInfo} onChange={(e) => setResumeBuilder({ ...resumeBuilder, additionalInfo: e.target.value })} /></label>
@@ -1575,6 +1609,8 @@ function Profile({ t, me, reload }) {
   const [newSkill, setNewSkill] = useState("");
   const [experience, setExperience] = useState({ title: "", company: "", location: "", startDate: "", endDate: "", isCurrent: false, description: "" });
   const [editingExperienceId, setEditingExperienceId] = useState("");
+  const [education, setEducation] = useState({ school: "", degree: "", field: "", startYear: "", endYear: "" });
+  const [editingEducationId, setEditingEducationId] = useState("");
 
   async function saveProfile(event) {
     event.preventDefault();
@@ -1623,14 +1659,19 @@ function Profile({ t, me, reload }) {
 
   async function addExperience(event) {
     event.preventDefault();
-    if (editingExperienceId) {
-      await api(`/account/experience/${editingExperienceId}`, { method: "PUT", body: JSON.stringify(experience) });
-    } else {
-      await api("/account/experience", { method: "POST", body: JSON.stringify(experience) });
+    if (!experience.title.trim() || !experience.company.trim()) return;
+    try {
+      if (editingExperienceId) {
+        await api(`/account/experience/${editingExperienceId}`, { method: "PUT", body: JSON.stringify(experience) });
+      } else {
+        await api("/account/experience", { method: "POST", body: JSON.stringify(experience) });
+      }
+      setExperience({ title: "", company: "", location: "", startDate: "", endDate: "", isCurrent: false, description: "" });
+      setEditingExperienceId("");
+      await reload();
+    } catch (err) {
+      alert(err.message);
     }
-    setExperience({ title: "", company: "", location: "", startDate: "", endDate: "", isCurrent: false, description: "" });
-    setEditingExperienceId("");
-    await reload();
   }
 
   function startEditExperience(item) {
@@ -1652,9 +1693,56 @@ function Profile({ t, me, reload }) {
   }
 
   async function removeExperience(id) {
-    await api(`/account/experience/${id}`, { method: "DELETE" });
-    if (editingExperienceId === id) cancelEditExperience();
-    await reload();
+    try {
+      await api(`/account/experience/${id}`, { method: "DELETE" });
+      if (editingExperienceId === id) cancelEditExperience();
+      await reload();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  async function saveEducation(event) {
+    event.preventDefault();
+    if (!education.school.trim() || !education.degree.trim()) return;
+    try {
+      if (editingEducationId) {
+        await api(`/account/education/${editingEducationId}`, { method: "PUT", body: JSON.stringify(education) });
+      } else {
+        await api("/account/education", { method: "POST", body: JSON.stringify(education) });
+      }
+      setEducation({ school: "", degree: "", field: "", startYear: "", endYear: "" });
+      setEditingEducationId("");
+      await reload();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  function startEditEducation(item) {
+    setEditingEducationId(item.id);
+    setEducation({
+      school: item.school || "",
+      degree: item.degree || "",
+      field: item.field || "",
+      startYear: item.start_year || "",
+      endYear: item.end_year || ""
+    });
+  }
+
+  function cancelEditEducation() {
+    setEditingEducationId("");
+    setEducation({ school: "", degree: "", field: "", startYear: "", endYear: "" });
+  }
+
+  async function removeEducation(id) {
+    try {
+      await api(`/account/education/${id}`, { method: "DELETE" });
+      if (editingEducationId === id) cancelEditEducation();
+      await reload();
+    } catch (err) {
+      alert(err.message);
+    }
   }
 
   async function deleteAttachment(documentId) {
@@ -1687,7 +1775,6 @@ function Profile({ t, me, reload }) {
             <button className="secondary-button compact" type="button" onClick={addSkill}>+</button>
           </div>
         </div>
-        <label>{t("education")}<textarea rows="5" value={form.resumeEducation} onChange={(e) => setForm({ ...form, resumeEducation: e.target.value })} /></label>
         <label>{t("certifications")}<textarea rows="5" value={form.resumeCertifications} onChange={(e) => setForm({ ...form, resumeCertifications: e.target.value })} /></label>
         <label>{t("tools")}<textarea rows="5" value={form.resumeTools} onChange={(e) => setForm({ ...form, resumeTools: e.target.value })} /></label>
         <label>{t("additionalInfo")}<textarea rows="5" value={form.resumeAdditionalInfo} onChange={(e) => setForm({ ...form, resumeAdditionalInfo: e.target.value })} /></label>
@@ -1714,6 +1801,32 @@ function Profile({ t, me, reload }) {
         </form>
         <div className="experience-edit-list">
           {me.experiences.map((item) => <div className="timeline-item experience-edit-item" key={item.id}><div><strong>{item.title}</strong><span>{item.company}{item.start_date || item.end_date ? ` · ${[item.start_date, item.is_current ? "Present" : item.end_date].filter(Boolean).join(" - ")}` : ""}</span>{item.description && <p>{item.description}</p>}</div><div className="experience-actions"><button className="secondary-button compact" type="button" onClick={() => startEditExperience(item)}>{t("editUser")}</button><button className="secondary-button compact danger-button" type="button" onClick={() => removeExperience(item.id)}>{t("delete")}</button></div></div>)}
+        </div>
+      </section>
+      <section className="panel">
+        <h2>{t("education")}</h2>
+        <form className="row-fields" onSubmit={saveEducation}>
+          <input placeholder={t("degree")} value={education.degree} onChange={(e) => setEducation({ ...education, degree: e.target.value })} />
+          <input placeholder={t("school")} value={education.school} onChange={(e) => setEducation({ ...education, school: e.target.value })} />
+          <input placeholder={t("field")} value={education.field} onChange={(e) => setEducation({ ...education, field: e.target.value })} />
+          <input inputMode="numeric" placeholder={t("startYear")} value={education.startYear} onChange={(e) => setEducation({ ...education, startYear: e.target.value })} />
+          <input inputMode="numeric" placeholder={t("endYear")} value={education.endYear} onChange={(e) => setEducation({ ...education, endYear: e.target.value })} />
+          <button className="secondary-button">{editingEducationId ? t("save") : t("addEducation")}</button>
+          {editingEducationId && <button className="secondary-button" type="button" onClick={cancelEditEducation}>{t("cancel")}</button>}
+        </form>
+        <div className="experience-edit-list">
+          {(me.education || []).map((item) => (
+            <div className="timeline-item experience-edit-item" key={item.id}>
+              <div>
+                <strong>{item.degree}</strong>
+                <span>{[item.field, item.school, [item.start_year, item.end_year].filter(Boolean).join(" - ")].filter(Boolean).join(" · ")}</span>
+              </div>
+              <div className="experience-actions">
+                <button className="secondary-button compact" type="button" onClick={() => startEditEducation(item)}>{t("editEducation")}</button>
+                <button className="secondary-button compact danger-button" type="button" onClick={() => removeEducation(item.id)}>{t("delete")}</button>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
       <section className="panel">

@@ -10,6 +10,7 @@
     "android:init": "npm run build:android && cap add android",
     "android:sync": "npm run build:android && cap sync android",
     "android:apk": "npm run android:sync && cd android && ./gradlew assembleDebug",
+    "android:release": "npm run android:sync && cd android && ./gradlew assembleRelease && mkdir -p ../dist-apk && cp app/build/outputs/apk/release/app-release.apk ../dist-apk/rawabt_v1.1.0.apk",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
