@@ -97,7 +97,11 @@ const text = {
     courses: "Courses",
     addCourse: "Add course",
     courseOwner: "Course owner",
+    courseAudience: "Course audience",
     adminDefault: "Admin default",
+    courseLink: "Course link",
+    allUsers: "All users",
+    premiumUsers: "Premium users",
     provider: "Provider",
     completionDate: "Completion date",
     agentDirectory: "Agencies",
@@ -153,6 +157,7 @@ const text = {
     verifiedProfiles: "Verified profiles",
     applications: "Applications",
     agent: "Agent",
+    agents: "Agents",
     agentWorkspace: "Agent workspace",
     sharedProfiles: "Shared profiles",
     candidates: "Candidates",
@@ -355,7 +360,11 @@ const text = {
     courses: "الدورات",
     addCourse: "إضافة دورة",
     courseOwner: "مالك الدورة",
+    courseAudience: "جمهور الدورة",
     adminDefault: "الإدارة الافتراضية",
+    courseLink: "رابط الدورة",
+    allUsers: "الجميع",
+    premiumUsers: "المستخدمون المميزون",
     provider: "الجهة المقدمة",
     completionDate: "تاريخ الإكمال",
     agentDirectory: "الجهات",
@@ -411,6 +420,7 @@ const text = {
     verifiedProfiles: "الملفات الموثقة",
     applications: "طلبات التقديم",
     agent: "وكيل",
+    agents: "الوكلاء",
     agentWorkspace: "مساحة الوكيل",
     sharedProfiles: "الملفات المشاركة",
     candidates: "المرشحون",
@@ -2022,7 +2032,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, applications, s
   const emptyUserForm = { fullName: "", email: "", password: "", phone: "", dob: "", headline: "", location: "", role: "member", plan: "free", status: "active" };
   const [newUser, setNewUser] = useState(emptyUserForm);
   const [selectedProfile, setSelectedProfile] = useState(null);
-  const [adminCourseForm, setAdminCourseForm] = useState({ addedById: "", title: "", provider: "", completionDate: "", certificateUrl: "", notes: "" });
+  const [adminCourseForm, setAdminCourseForm] = useState({ targetAudience: "all", addedById: "", title: "", provider: "", completionDate: "", certificateUrl: "", notes: "" });
   const [jobAdminSearch, setJobAdminSearch] = useState("");
   const emptyJobForm = { companyName: "مختبرات روابط", title: "", category: "General", location: "عن بعد", type: "دوام كامل", salaryRange: "", description: "", questionsText: "" };
   const [jobForm, setJobForm] = useState(emptyJobForm);
@@ -2036,6 +2046,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, applications, s
     ["overview", t("overview"), "▦"],
     ["users", t("userManagement"), "◎"],
     ["jobs", t("jobManagement"), "▣"],
+    ["courses", t("courses"), "▤"],
     ["applications", t("applicationManagement"), "◈"],
     ["interviews", t("interviews"), "◌"],
     ["support", t("supportInbox"), "✉"]
@@ -2139,9 +2150,16 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, applications, s
   async function addSelectedCourse(event) {
     event.preventDefault();
     if (!selectedProfile?.user?.id || !adminCourseForm.title) return;
-    await api("/courses", { method: "POST", body: JSON.stringify({ ...adminCourseForm, userId: selectedProfile.user.id }) });
-    setAdminCourseForm({ addedById: "", title: "", provider: "", completionDate: "", certificateUrl: "", notes: "" });
+    await api("/courses", { method: "POST", body: JSON.stringify({ ...adminCourseForm, targetAudience: "user", userId: selectedProfile.user.id }) });
+    setAdminCourseForm({ targetAudience: "all", addedById: "", title: "", provider: "", completionDate: "", certificateUrl: "", notes: "" });
     await refreshSelectedProfile();
+  }
+  async function addAdminCourse(event) {
+    event.preventDefault();
+    if (!adminCourseForm.title) return;
+    await api("/courses", { method: "POST", body: JSON.stringify(adminCourseForm) });
+    setAdminCourseForm({ targetAudience: "all", addedById: "", title: "", provider: "", completionDate: "", certificateUrl: "", notes: "" });
+    await reload();
   }
   async function saveUser(event) {
     event.preventDefault();
@@ -2405,6 +2423,32 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, applications, s
               <h2>{t("experience")}</h2>
               {(selectedProfile.experiences || []).map((item) => <div className="timeline-item" key={item.id}><strong>{item.title}</strong><span>{item.company}</span></div>)}
             </section>
+          </section>}
+
+          {tab === "courses" && <section className="panel course-admin-panel">
+            <div className="section-head">
+              <div>
+                <h2>{t("addCourse")}</h2>
+                <p>{t("courseAudience")} · {t("courseOwner")}: {t("adminDefault")}</p>
+              </div>
+            </div>
+            <form className="admin-form course-admin-form" onSubmit={addAdminCourse}>
+              <select value={adminCourseForm.targetAudience} onChange={(e) => setAdminCourseForm({ ...adminCourseForm, targetAudience: e.target.value })}>
+                <option value="all">{t("allUsers")}</option>
+                <option value="premium">{t("premiumUsers")}</option>
+                <option value="agents">{t("agents")}</option>
+              </select>
+              <select value={adminCourseForm.addedById} onChange={(e) => setAdminCourseForm({ ...adminCourseForm, addedById: e.target.value })}>
+                <option value="">{t("adminDefault")}</option>
+                {agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}
+              </select>
+              <input placeholder={t("title")} value={adminCourseForm.title} onChange={(e) => setAdminCourseForm({ ...adminCourseForm, title: e.target.value })} required />
+              <input placeholder={t("provider")} value={adminCourseForm.provider} onChange={(e) => setAdminCourseForm({ ...adminCourseForm, provider: e.target.value })} />
+              <input type="date" value={adminCourseForm.completionDate} onChange={(e) => setAdminCourseForm({ ...adminCourseForm, completionDate: e.target.value })} />
+              <input placeholder={t("courseLink")} value={adminCourseForm.certificateUrl} onChange={(e) => setAdminCourseForm({ ...adminCourseForm, certificateUrl: e.target.value })} />
+              <textarea className="span" placeholder={t("notes")} value={adminCourseForm.notes} onChange={(e) => setAdminCourseForm({ ...adminCourseForm, notes: e.target.value })} />
+              <button className="primary-button">{t("addCourse")}</button>
+            </form>
           </section>}
 
           {tab === "jobs" && <section className="job-admin-grid">

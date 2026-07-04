@@ -269,8 +269,9 @@ def ensure_runtime_schema():
         """
         CREATE TABLE IF NOT EXISTS courses (
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          user_id UUID REFERENCES users(id) ON DELETE CASCADE,
           added_by UUID REFERENCES users(id) ON DELETE SET NULL,
+          target_audience TEXT NOT NULL DEFAULT 'user',
           title TEXT NOT NULL,
           provider TEXT,
           completion_date DATE,
@@ -279,7 +280,12 @@ def ensure_runtime_schema():
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
         """,
+        "ALTER TABLE courses ADD COLUMN IF NOT EXISTS target_audience TEXT NOT NULL DEFAULT 'user'",
+        "ALTER TABLE courses ALTER COLUMN user_id DROP NOT NULL",
+        "ALTER TABLE courses DROP CONSTRAINT IF EXISTS courses_target_audience_check",
+        "ALTER TABLE courses ADD CONSTRAINT courses_target_audience_check CHECK (target_audience IN ('user', 'all', 'premium', 'agents'))",
         "CREATE INDEX IF NOT EXISTS idx_courses_user ON courses(user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_courses_target_audience ON courses(target_audience)",
         """
         CREATE TABLE IF NOT EXISTS agent_job_assignments (
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -353,6 +359,28 @@ def has_table_column(table_name: str, column_name: str) -> bool:
 def has_table(table_name: str) -> bool:
     row = fetch_one("SELECT to_regclass(%s) AS table_name", (f"public.{table_name}",))
     return bool(row and row.get("table_name"))
+
+
+def fetch_courses_for_user(user: dict) -> list[dict]:
+    if not has_table_column("courses", "target_audience"):
+        return fetch_all(
+            "SELECT * FROM courses WHERE user_id = %s ORDER BY completion_date DESC NULLS LAST, created_at DESC",
+            (user["id"],),
+        )
+    audiences = ["all"]
+    if user.get("plan") == "premium":
+        audiences.append("premium")
+    if user.get("role") == "agent":
+        audiences.append("agents")
+    return fetch_all(
+        """
+        SELECT *
+        FROM courses
+        WHERE user_id = %s OR target_audience = ANY(%s::text[])
+        ORDER BY completion_date DESC NULLS LAST, created_at DESC
+        """,
+        (user["id"], audiences),
+    )
 
 
 def pack_pending_otp_hash(otp_hash: str, phone: str, dob: str | None) -> str:
@@ -487,8 +515,9 @@ class ResumeBuilderBody(BaseModel):
 
 
 class CourseBody(BaseModel):
-    userId: UUID
+    userId: UUID | None = None
     addedById: UUID | None = None
+    targetAudience: str = "user"
     title: str
     provider: str | None = None
     completionDate: str | None = None
@@ -2034,7 +2063,7 @@ def me(user: Annotated[dict, Depends(current_user)]):
     )
     experiences = fetch_all("SELECT * FROM experiences WHERE user_id = %s ORDER BY start_date DESC NULLS LAST", (user["id"],))
     education = fetch_all("SELECT * FROM education WHERE user_id = %s ORDER BY end_year DESC NULLS LAST", (user["id"],))
-    courses = fetch_all("SELECT * FROM courses WHERE user_id = %s ORDER BY completion_date DESC NULLS LAST, created_at DESC", (user["id"],))
+    courses = fetch_courses_for_user(user)
     documents = fetch_all(
         """
         SELECT id, kind, file_name, mime_type, file_size, verification_status, created_at,
@@ -2278,7 +2307,7 @@ def build_resume_pdf(body: ResumeBuilderBody, user: Annotated[dict, Depends(curr
         (user["id"],),
     )
     education = fetch_all("SELECT * FROM education WHERE user_id = %s ORDER BY end_year DESC NULLS LAST", (user["id"],))
-    courses = fetch_all("SELECT * FROM courses WHERE user_id = %s ORDER BY completion_date DESC NULLS LAST, created_at DESC", (user["id"],))
+    courses = fetch_courses_for_user(user)
     try:
         pdf = make_resume_pdf(user, profile, experiences, education, courses, body)
     except RuntimeError as exc:
@@ -3114,7 +3143,7 @@ def admin_user_profile(user_id: UUID, user: Annotated[dict, Depends(admin_user)]
     profile = fetch_one("SELECT about, skills, languages, profile_strength FROM profiles WHERE user_id = %s", (user_id,))
     experiences = fetch_all("SELECT * FROM experiences WHERE user_id = %s ORDER BY start_date DESC NULLS LAST", (user_id,))
     education = fetch_all("SELECT * FROM education WHERE user_id = %s ORDER BY end_year DESC NULLS LAST", (user_id,))
-    courses = fetch_all("SELECT * FROM courses WHERE user_id = %s ORDER BY completion_date DESC NULLS LAST, created_at DESC", (user_id,))
+    courses = fetch_courses_for_user(target_user)
     documents = fetch_all(
         """
         SELECT id, kind, file_name, mime_type, file_size, verification_status, created_at,
@@ -3241,9 +3270,14 @@ async def upload_admin_avatar(user_id: UUID, user: Annotated[dict, Depends(admin
 def add_course(body: CourseBody, user: Annotated[dict, Depends(current_user)]):
     if user["role"] not in {"admin", "master_admin", "agent"}:
         raise HTTPException(status_code=403, detail="Only admin or agent can add courses")
-    if user["role"] == "agent" and not agent_can_access_user_job(user["id"], body.userId):
-        raise HTTPException(status_code=403, detail="This user is not shared with this agent")
-    if not fetch_one("SELECT id FROM users WHERE id = %s", (body.userId,)):
+    target_audience = body.targetAudience if body.targetAudience in {"user", "all", "premium", "agents"} else "user"
+    if user["role"] == "agent":
+        target_audience = "user"
+        if not body.userId or not agent_can_access_user_job(user["id"], body.userId):
+            raise HTTPException(status_code=403, detail="This user is not shared with this agent")
+    if target_audience == "user" and not body.userId:
+        raise HTTPException(status_code=400, detail="User is required for a user course")
+    if body.userId and not fetch_one("SELECT id FROM users WHERE id = %s", (body.userId,)):
         raise HTTPException(status_code=404, detail="User not found")
     added_by = user["id"]
     if user["role"] in {"admin", "master_admin"} and body.addedById:
@@ -3253,11 +3287,11 @@ def add_course(body: CourseBody, user: Annotated[dict, Depends(current_user)]):
         added_by = owner["id"]
     return execute(
         """
-        INSERT INTO courses (user_id, added_by, title, provider, completion_date, certificate_url, notes)
-        VALUES (%s,%s,%s,%s,%s,%s,%s)
+        INSERT INTO courses (user_id, added_by, target_audience, title, provider, completion_date, certificate_url, notes)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
         RETURNING *
         """,
-        (body.userId, added_by, body.title, body.provider, body.completionDate or None, body.certificateUrl, body.notes),
+        (body.userId if target_audience == "user" else None, added_by, target_audience, body.title, body.provider, body.completionDate or None, body.certificateUrl, body.notes),
     )
 
 

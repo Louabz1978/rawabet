@@ -2597,6 +2597,26 @@ td span {
   margin-bottom: 0;
 }
 
+.course-admin-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.course-admin-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.course-admin-form textarea {
+  min-height: 92px;
+}
+
+.course-admin-form .primary-button {
+  min-height: 38px;
+  font-size: 0.86rem;
+}
+
 .agent-page {
   display: grid;
   gap: 14px;
@@ -2965,7 +2985,7 @@ td span {
     display: none;
   }
   main { margin: 14px auto; padding: 0 12px; }
-  .layout-grid, .admin-console, .admin-layout, .admin-profile-grid, .job-admin-grid, .form-grid, .upload-grid, .metric-grid, .login-stage, .profile-hero {
+  .layout-grid, .admin-console, .admin-layout, .admin-profile-grid, .job-admin-grid, .course-admin-form, .form-grid, .upload-grid, .metric-grid, .login-stage, .profile-hero {
     grid-template-columns: 1fr;
   }
   .layout-grid {
