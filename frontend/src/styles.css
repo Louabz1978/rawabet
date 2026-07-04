@@ -897,6 +897,57 @@ input, textarea, select {
 textarea { min-height: 110px; resize: vertical; }
 .span { grid-column: 1 / -1; }
 
+.profile-save-button {
+  justify-self: center;
+  align-self: end;
+  width: min(260px, 100%);
+  min-height: 42px;
+  padding: 0 28px;
+  border-radius: 999px;
+}
+
+.skill-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.skill-editor > strong {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.skill-edit-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.skill-edit-row,
+.skill-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.skill-edit-row .icon-button {
+  width: 38px;
+  height: 38px;
+  border-color: var(--line);
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+.skill-add-row {
+  width: min(460px, 100%);
+}
+
+@media (max-width: 720px) {
+  .skill-edit-list {
+    grid-template-columns: 1fr;
+  }
+}
+
 .smart-resume-panel {
   display: grid;
   gap: 14px;

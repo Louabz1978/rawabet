@@ -1540,17 +1540,37 @@ function Profile({ t, me, reload }) {
     headline: me.user.headline || "",
     location: me.user.location || "",
     about: me.profile?.about || "",
-    skills: (me.profile?.skills || []).join(", ")
+    skills: Array.isArray(me.profile?.skills) ? me.profile.skills : [],
+    resumeEducation: me.profile?.resume_education || "",
+    resumeCertifications: me.profile?.resume_certifications || "",
+    resumeTools: me.profile?.resume_tools || "",
+    resumeAdditionalInfo: me.profile?.resume_additional_info || ""
   });
+  const [newSkill, setNewSkill] = useState("");
   const [experience, setExperience] = useState({ title: "", company: "", location: "", startDate: "", endDate: "", isCurrent: false, description: "" });
 
   async function saveProfile(event) {
     event.preventDefault();
     await api("/account/profile", {
       method: "PUT",
-      body: JSON.stringify({ ...form, skills: form.skills.split(",").map((item) => item.trim()).filter(Boolean) })
+      body: JSON.stringify({ ...form, skills: form.skills.map((item) => item.trim()).filter(Boolean) })
     });
     await reload();
+  }
+
+  function updateSkill(index, value) {
+    setForm({ ...form, skills: form.skills.map((skill, skillIndex) => skillIndex === index ? value : skill) });
+  }
+
+  function removeSkill(index) {
+    setForm({ ...form, skills: form.skills.filter((_, skillIndex) => skillIndex !== index) });
+  }
+
+  function addSkill() {
+    const skill = newSkill.trim();
+    if (!skill) return;
+    setForm({ ...form, skills: [...form.skills, skill] });
+    setNewSkill("");
   }
 
   async function upload(kind, file) {
@@ -1596,12 +1616,26 @@ function Profile({ t, me, reload }) {
         {["fullName", "phone", "headline", "location"].map((key) => <label key={key}>{t(key)}<input value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} /></label>)}
         <label>{t("dob")}<input type="date" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} /></label>
         <label className="span">{t("about")}<textarea value={form.about} onChange={(e) => setForm({ ...form, about: e.target.value })} /></label>
-        <label className="span">{t("skills")}<input value={form.skills} onChange={(e) => setForm({ ...form, skills: e.target.value })} /></label>
+        <div className="span skill-editor">
+          <strong>{t("skills")}</strong>
+          <div className="skill-edit-list">
+            {form.skills.map((skill, index) => (
+              <div className="skill-edit-row" key={`${skill}-${index}`}>
+                <input value={skill} onChange={(e) => updateSkill(index, e.target.value)} />
+                <button className="icon-button" type="button" aria-label={t("removeAttachment")} onClick={() => removeSkill(index)}>×</button>
+              </div>
+            ))}
+          </div>
+          <div className="skill-add-row">
+            <input value={newSkill} placeholder={t("skills")} onChange={(e) => setNewSkill(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSkill(); } }} />
+            <button className="secondary-button compact" type="button" onClick={addSkill}>+</button>
+          </div>
+        </div>
         <label>{t("education")}<textarea rows="5" value={form.resumeEducation} onChange={(e) => setForm({ ...form, resumeEducation: e.target.value })} /></label>
         <label>{t("certifications")}<textarea rows="5" value={form.resumeCertifications} onChange={(e) => setForm({ ...form, resumeCertifications: e.target.value })} /></label>
         <label>{t("tools")}<textarea rows="5" value={form.resumeTools} onChange={(e) => setForm({ ...form, resumeTools: e.target.value })} /></label>
         <label>{t("additionalInfo")}<textarea rows="5" value={form.resumeAdditionalInfo} onChange={(e) => setForm({ ...form, resumeAdditionalInfo: e.target.value })} /></label>
-        <button className="primary-button">{t("editProfile")}</button>
+        <button className="primary-button profile-save-button">{t("editProfile")}</button>
       </form>
       <section className="panel upload-grid">
         <label>{t("profilePicture")}<input type="file" accept="image/*" onChange={(e) => uploadAvatar(e.target.files[0])} /></label>
