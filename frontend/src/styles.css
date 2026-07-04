@@ -147,7 +147,17 @@ button:disabled { cursor: not-allowed; opacity: 0.68; }
   border-radius: 0;
 }
 
-.nav-link span { font-size: 1.15rem; line-height: 1; }
+.nav-link span {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  line-height: 1;
+}
+.nav-link svg {
+  width: 20px;
+  height: 20px;
+}
 .nav-link b { font-size: 0.72rem; font-weight: 600; }
 .nav-link.active { color: var(--ink); border-color: var(--ink); }
 
@@ -942,9 +952,45 @@ textarea { min-height: 110px; resize: vertical; }
   width: min(460px, 100%);
 }
 
+.experience-edit-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.experience-edit-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+}
+
+.experience-edit-item p {
+  margin: 6px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.experience-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.danger-button {
+  color: #9f1d1d;
+  border-color: #efc6c6;
+}
+
 @media (max-width: 720px) {
   .skill-edit-list {
     grid-template-columns: 1fr;
+  }
+  .experience-edit-item {
+    grid-template-columns: 1fr;
+  }
+  .experience-actions {
+    justify-content: flex-start;
   }
 }
 
@@ -2887,28 +2933,24 @@ td span {
     min-width: 0;
     min-height: 40px;
     border: 0;
-    border-radius: 16px;
+    border-radius: 14px;
     background: transparent;
     color: #111827;
-    font-size: 1.05rem;
-    font-weight: 900;
   }
   .mobile-bottom-nav button.active {
     background: #f3f6f8;
-    color: #111827;
+    color: var(--brand);
   }
   .mobile-bottom-nav span {
     display: grid;
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     place-items: center;
-    border: 1.5px solid currentColor;
-    border-radius: 999px;
     line-height: 1;
   }
   .mobile-bottom-nav svg {
-    width: 18px;
-    height: 18px;
+    width: 24px;
+    height: 24px;
   }
   .post-card .mobile-home-search {
     display: none;

@@ -1951,6 +1951,32 @@ def add_experience(body: ExperienceBody, user: Annotated[dict, Depends(current_u
     return experience
 
 
+@app.put("/api/account/experience/{experience_id}")
+def update_experience(experience_id: UUID, body: ExperienceBody, user: Annotated[dict, Depends(current_user)]):
+    experience = execute(
+        """
+        UPDATE experiences
+        SET title = %s, company = %s, location = %s, start_date = %s, end_date = %s, is_current = %s, description = %s
+        WHERE id = %s AND user_id = %s
+        RETURNING *
+        """,
+        (body.title, body.company, body.location, body.startDate, body.endDate, body.isCurrent, body.description, experience_id, user["id"]),
+    )
+    if not experience:
+        raise HTTPException(status_code=404, detail="Experience not found")
+    sync_profile_strength(user["id"])
+    return experience
+
+
+@app.delete("/api/account/experience/{experience_id}")
+def delete_experience(experience_id: UUID, user: Annotated[dict, Depends(current_user)]):
+    deleted = execute("DELETE FROM experiences WHERE id = %s AND user_id = %s RETURNING id", (experience_id, user["id"]))
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Experience not found")
+    sync_profile_strength(user["id"])
+    return {"ok": True}
+
+
 @app.post("/api/account/resume-builder", status_code=201)
 def build_resume_pdf(body: ResumeBuilderBody, user: Annotated[dict, Depends(current_user)]):
     resume_profile_columns = resume_profile_select_sql()

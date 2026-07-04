@@ -471,7 +471,7 @@ const text = {
     liveAgentRequest: "أريد التحدث مع موظف دعم مباشر.",
     liveSupportStarted: "تم تحويلك إلى الدعم المباشر. اكتب رسالتك وسيقوم المدير بالرد هنا.",
     clearFailed: "تعذر مسح المحادثة.",
-    editUser: "تعديل المستخدم",
+    editUser: "تعديل العمل",
     addUser: "إضافة مستخدم",
     masterAdmin: "المدير الرئيسي",
     delete: "حذف",
@@ -789,13 +789,13 @@ function App() {
         </label>}
         <nav className="desktop-nav">
           {!isAgent && [
-            ["home", "⌂"],
-            ["profile", "◉"],
-            ["jobs", "▣"],
-            ["agents", "🏢", "companies"]
-          ].map(([item, icon, label]) => <button className={`nav-link ${view === item ? "active" : ""}`} onClick={() => setView(item)} key={item}><span>{icon}</span><b>{t(label || item)}</b></button>)}
-          {isAdminRole(session.role) && <button className={`nav-link ${view === "admin" ? "active" : ""}`} onClick={() => setView("admin")}><span>▥</span><b>{t("admin")}</b></button>}
-          {isAgent && <button className="nav-link active" onClick={() => setView("agent")}><span>◈</span><b>{t("agentWorkspace")}</b></button>}
+            ["home", "home"],
+            ["profile", "profile"],
+            ["jobs", "jobs"],
+            ["agents", "agents", "companies"]
+          ].map(([item, icon, label]) => <button className={`nav-link ${view === item ? "active" : ""}`} onClick={() => setView(item)} key={item}><span><NavIcon name={icon} /></span><b>{t(label || item)}</b></button>)}
+          {isAdminRole(session.role) && <button className={`nav-link ${view === "admin" ? "active" : ""}`} onClick={() => setView("admin")}><span><NavIcon name="admin" /></span><b>{t("admin")}</b></button>}
+          {isAgent && <button className="nav-link active" onClick={() => setView("agent")}><span><NavIcon name="agents" /></span><b>{t("agentWorkspace")}</b></button>}
         </nav>
         <div className="top-actions">
           {!isAgent && <button className="icon-button mobile-chat-button" type="button" aria-label={t("support")} onClick={() => isAdminRole(session.role) ? (setAdminStartTab("support"), setView("admin")) : setSupportOpen(true)}>💬{supportUnread > 0 && <span>{supportUnread}</span>}</button>}
@@ -1193,14 +1193,15 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
 }
 
 function NavIcon({ name }) {
-  const common = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" };
+  const common = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.15", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" };
   const paths = {
-    home: <><path d="M3 10.8 12 3l9 7.8" /><path d="M5.5 10.5V21h13V10.5" /><path d="M9.5 21v-6h5v6" /></>,
-    profile: <><circle cx="12" cy="8" r="4" /><path d="M4.5 21c1.5-4 4-6 7.5-6s6 2 7.5 6" /></>,
-    jobs: <><rect x="4" y="7" width="16" height="13" rx="2" /><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7" /><path d="M4 12h16" /></>,
-    interviews: <><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M8 3v4M16 3v4M4 10h16" /><path d="M8 14h3M8 17h6" /></>,
-    courses: <><path d="M4 6.5 12 3l8 3.5-8 3.5L4 6.5Z" /><path d="M6.5 9v4.5c2.8 2 8.2 2 11 0V9" /><path d="M20 7v6" /></>,
-    agents: <><path d="M4 21V7l8-4 8 4v14" /><path d="M9 21v-6h6v6" /><path d="M8 9h.01M12 9h.01M16 9h.01M8 12h.01M12 12h.01M16 12h.01" /></>
+    home: <><path d="M3.5 10.5 12 3.25l8.5 7.25" /><path d="M5.25 9.75V20.5h13.5V9.75" /><path d="M9.5 20.5v-6h5v6" /></>,
+    profile: <><circle cx="12" cy="7.75" r="3.75" /><path d="M4.75 20.25c1.35-4.1 3.8-6.15 7.25-6.15s5.9 2.05 7.25 6.15" /></>,
+    jobs: <><rect x="4" y="7.5" width="16" height="12.5" rx="2.2" /><path d="M9 7.5V5.8A1.8 1.8 0 0 1 10.8 4h2.4A1.8 1.8 0 0 1 15 5.8v1.7" /><path d="M4 12.25h16" /><path d="M10.5 15h3" /></>,
+    interviews: <><rect x="4.25" y="5.25" width="15.5" height="15" rx="2.2" /><path d="M8 3.5v4M16 3.5v4M4.25 10h15.5" /><path d="M8 14h4.5M8 17h7.5" /></>,
+    courses: <><path d="M3.5 6.75 12 3.25l8.5 3.5-8.5 3.5-8.5-3.5Z" /><path d="M6.5 9.1v4.4c2.9 2.15 8.1 2.15 11 0V9.1" /><path d="M20.5 7v6.25" /></>,
+    agents: <><rect x="4.25" y="6.75" width="15.5" height="13.5" rx="2" /><path d="M8 6.75V4.5h8v2.25" /><path d="M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01" /></>,
+    admin: <><rect x="4" y="4" width="16" height="16" rx="2.5" /><path d="M8 9h8M8 12h8M8 15h5" /></>
   };
   return <svg {...common}>{paths[name]}</svg>;
 }
@@ -1451,6 +1452,39 @@ function SmartResumePanel({ t, me, reload }) {
   const [buildingResume, setBuildingResume] = useState(false);
   const skills = Array.isArray(me.profile?.skills) ? me.profile.skills : [];
 
+  function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function saveResumeOnMobile(blob) {
+    const [{ Capacitor }, { Filesystem, Directory }, { Share }] = await Promise.all([
+      import("@capacitor/core"),
+      import("@capacitor/filesystem"),
+      import("@capacitor/share")
+    ]);
+    if (!Capacitor.isNativePlatform()) return false;
+    const fileName = `rawabet-smart-resume-${Date.now()}.pdf`;
+    const data = await blobToBase64(blob);
+    const saved = await Filesystem.writeFile({
+      path: fileName,
+      data,
+      directory: Directory.Documents,
+      recursive: true
+    });
+    await Share.share({
+      title: "Rawabet smart resume",
+      text: "Rawabet smart resume PDF",
+      url: saved.uri,
+      dialogTitle: "Save or share resume"
+    });
+    return true;
+  }
+
   async function generateResume(event) {
     event.preventDefault();
     setBuildingResume(true);
@@ -1473,15 +1507,7 @@ function SmartResumePanel({ t, me, reload }) {
         const message = await blob.text().catch(() => "");
         throw new Error(message || "Resume PDF could not be generated.");
       }
-      if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          window.location.href = reader.result;
-        };
-        reader.onerror = () => {
-          alert("Resume PDF was generated, but the mobile app could not open it.");
-        };
-        reader.readAsDataURL(blob);
+      if (await saveResumeOnMobile(blob)) {
         return;
       }
       const url = URL.createObjectURL(blob);
@@ -1548,6 +1574,7 @@ function Profile({ t, me, reload }) {
   });
   const [newSkill, setNewSkill] = useState("");
   const [experience, setExperience] = useState({ title: "", company: "", location: "", startDate: "", endDate: "", isCurrent: false, description: "" });
+  const [editingExperienceId, setEditingExperienceId] = useState("");
 
   async function saveProfile(event) {
     event.preventDefault();
@@ -1596,8 +1623,37 @@ function Profile({ t, me, reload }) {
 
   async function addExperience(event) {
     event.preventDefault();
-    await api("/account/experience", { method: "POST", body: JSON.stringify(experience) });
+    if (editingExperienceId) {
+      await api(`/account/experience/${editingExperienceId}`, { method: "PUT", body: JSON.stringify(experience) });
+    } else {
+      await api("/account/experience", { method: "POST", body: JSON.stringify(experience) });
+    }
     setExperience({ title: "", company: "", location: "", startDate: "", endDate: "", isCurrent: false, description: "" });
+    setEditingExperienceId("");
+    await reload();
+  }
+
+  function startEditExperience(item) {
+    setEditingExperienceId(item.id);
+    setExperience({
+      title: item.title || "",
+      company: item.company || "",
+      location: item.location || "",
+      startDate: item.start_date || "",
+      endDate: item.end_date || "",
+      isCurrent: !!item.is_current,
+      description: item.description || ""
+    });
+  }
+
+  function cancelEditExperience() {
+    setEditingExperienceId("");
+    setExperience({ title: "", company: "", location: "", startDate: "", endDate: "", isCurrent: false, description: "" });
+  }
+
+  async function removeExperience(id) {
+    await api(`/account/experience/${id}`, { method: "DELETE" });
+    if (editingExperienceId === id) cancelEditExperience();
     await reload();
   }
 
@@ -1653,9 +1709,12 @@ function Profile({ t, me, reload }) {
           <input type="date" value={experience.endDate} disabled={experience.isCurrent} onChange={(e) => setExperience({ ...experience, endDate: e.target.value })} />
           <label className="inline-check"><input type="checkbox" checked={experience.isCurrent} onChange={(e) => setExperience({ ...experience, isCurrent: e.target.checked, endDate: e.target.checked ? "" : experience.endDate })} />{t("current")}</label>
           <textarea className="span" placeholder={t("description")} value={experience.description} onChange={(e) => setExperience({ ...experience, description: e.target.value })} />
-          <button className="secondary-button">{t("addExperience")}</button>
+          <button className="secondary-button">{editingExperienceId ? t("save") : t("addExperience")}</button>
+          {editingExperienceId && <button className="secondary-button" type="button" onClick={cancelEditExperience}>{t("cancel")}</button>}
         </form>
-        {me.experiences.map((item) => <div className="timeline-item" key={item.id}><strong>{item.title}</strong><span>{item.company}{item.start_date || item.end_date ? ` · ${[item.start_date, item.is_current ? "Present" : item.end_date].filter(Boolean).join(" - ")}` : ""}</span></div>)}
+        <div className="experience-edit-list">
+          {me.experiences.map((item) => <div className="timeline-item experience-edit-item" key={item.id}><div><strong>{item.title}</strong><span>{item.company}{item.start_date || item.end_date ? ` · ${[item.start_date, item.is_current ? "Present" : item.end_date].filter(Boolean).join(" - ")}` : ""}</span>{item.description && <p>{item.description}</p>}</div><div className="experience-actions"><button className="secondary-button compact" type="button" onClick={() => startEditExperience(item)}>{t("editUser")}</button><button className="secondary-button compact danger-button" type="button" onClick={() => removeExperience(item.id)}>{t("delete")}</button></div></div>)}
+        </div>
       </section>
       <section className="panel">
         <h2>{t("courses")}</h2>
