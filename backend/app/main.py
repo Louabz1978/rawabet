@@ -260,6 +260,10 @@ def ensure_runtime_schema():
         "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS agency_name TEXT",
         "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS agency_about TEXT",
         "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS website TEXT",
+        "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS resume_education TEXT",
+        "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS resume_certifications TEXT",
+        "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS resume_tools TEXT",
+        "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS resume_additional_info TEXT",
         "ALTER TABLE interviews DROP CONSTRAINT IF EXISTS interviews_status_check",
         "ALTER TABLE interviews ADD CONSTRAINT interviews_status_check CHECK (status IN ('scheduled', 'completed', 'cancelled', 'accepted', 'rejected'))",
         """
@@ -313,6 +317,19 @@ def ensure_runtime_schema():
             execute(sql)
         except Exception:
             pass
+
+
+def resume_profile_columns_available() -> bool:
+    return all(
+        has_table_column("profiles", column)
+        for column in ("resume_education", "resume_certifications", "resume_tools", "resume_additional_info")
+    )
+
+
+def resume_profile_select_sql() -> str:
+    if resume_profile_columns_available():
+        return "resume_education, resume_certifications, resume_tools, resume_additional_info"
+    return "NULL::text AS resume_education, NULL::text AS resume_certifications, NULL::text AS resume_tools, NULL::text AS resume_additional_info"
 
 
 ensure_runtime_schema()
@@ -388,6 +405,10 @@ class ProfileBody(BaseModel):
     about: str | None = None
     skills: list[str] = []
     languages: list[str] = ["English", "Arabic"]
+    resumeEducation: str | None = None
+    resumeCertifications: str | None = None
+    resumeTools: str | None = None
+    resumeAdditionalInfo: str | None = None
 
 
 class ExperienceBody(BaseModel):
@@ -449,13 +470,10 @@ class ApplyBody(BaseModel):
 
 
 class ResumeBuilderBody(BaseModel):
-    targetTitle: str | None = None
     summary: str | None = None
     education: str | None = None
     certifications: str | None = None
-    projects: str | None = None
     tools: str | None = None
-    achievements: str | None = None
     languages: str | None = None
     additionalInfo: str | None = None
 
@@ -760,7 +778,7 @@ def default_resume_sections(user: dict, profile: dict, experiences: list[dict], 
         str(user.get("headline") or ""),
         str(profile.get("about") or ""),
         str(body.summary or ""),
-        str(body.targetTitle or ""),
+        str(user.get("headline") or ""),
     ]))
     current_text = "حتى الآن" if rtl else "Present"
     skills = profile.get("skills") if isinstance(profile.get("skills"), list) else []
@@ -797,14 +815,14 @@ def default_resume_sections(user: dict, profile: dict, experiences: list[dict], 
         })
     return {
         "summary": body.summary or profile.get("about") or ("محترف لديه خبرات ومهارات ومسار عملي موثق." if rtl else f"{user.get('headline') or 'Professional'} with verified experience, skills, and career history."),
-        "target_title": body.targetTitle or user.get("headline") or "",
+        "target_title": user.get("headline") or "",
         "skills": skills,
         "languages": languages,
         "certifications": certs,
         "education": education_lines,
-        "projects": split_lines(body.projects),
+        "projects": [],
         "tools": split_lines(body.tools),
-        "achievements": split_lines(body.achievements),
+        "achievements": [],
         "additional_info": split_lines(body.additionalInfo),
         "experiences": experience_items,
     }
@@ -821,15 +839,15 @@ def openai_resume_sections(user: dict, profile: dict, experiences: list[dict], e
         "headline": user.get("headline"),
         "about": profile.get("about"),
         "skills": profile.get("skills"),
-        "targetTitle": body.targetTitle,
+        "targetTitle": user.get("headline"),
         "summaryNotes": body.summary,
         "education": body.education,
         "educationFromProfile": education,
         "certifications": body.certifications,
         "coursesFromProfile": courses,
-        "projects": body.projects,
+        "projects": "",
         "tools": body.tools,
-        "achievements": body.achievements,
+        "achievements": "",
         "languages": body.languages,
         "additionalInfo": body.additionalInfo,
         "experiences": experiences,
@@ -1809,7 +1827,16 @@ def login_get_hint():
 @app.get("/api/account")
 def me(user: Annotated[dict, Depends(current_user)]):
     sync_profile_strength(user["id"])
-    profile = fetch_one("SELECT about, skills, languages, profile_strength, agency_name, agency_about, website FROM profiles WHERE user_id = %s", (user["id"],))
+    resume_profile_columns = resume_profile_select_sql()
+    profile = fetch_one(
+        f"""
+        SELECT about, skills, languages, profile_strength, agency_name, agency_about, website,
+               {resume_profile_columns}
+        FROM profiles
+        WHERE user_id = %s
+        """,
+        (user["id"],),
+    )
     experiences = fetch_all("SELECT * FROM experiences WHERE user_id = %s ORDER BY start_date DESC NULLS LAST", (user["id"],))
     education = fetch_all("SELECT * FROM education WHERE user_id = %s ORDER BY end_year DESC NULLS LAST", (user["id"],))
     courses = fetch_all("SELECT * FROM courses WHERE user_id = %s ORDER BY completion_date DESC NULLS LAST, created_at DESC", (user["id"],))
@@ -1873,16 +1900,39 @@ def update_profile(body: ProfileBody, user: Annotated[dict, Depends(current_user
         "UPDATE users SET full_name = %s, phone = %s, dob = %s, headline = %s, location = %s WHERE id = %s",
         (body.fullName, body.phone, body.dob or None, body.headline, body.location, user["id"]),
     )
-    execute(
-        """
-        INSERT INTO profiles (user_id, about, skills, languages, profile_strength, updated_at)
-        VALUES (%s,%s,%s,%s,%s,NOW())
-        ON CONFLICT (user_id) DO UPDATE
-        SET about = EXCLUDED.about, skills = EXCLUDED.skills, languages = EXCLUDED.languages,
-            profile_strength = EXCLUDED.profile_strength, updated_at = NOW()
-        """,
-        (user["id"], body.about, body.skills, body.languages, calculate_profile_strength(user["id"])),
-    )
+    if resume_profile_columns_available():
+        execute(
+            """
+            INSERT INTO profiles (
+              user_id, about, skills, languages, resume_education, resume_certifications,
+              resume_tools, resume_additional_info, profile_strength, updated_at
+            )
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+            ON CONFLICT (user_id) DO UPDATE
+            SET about = EXCLUDED.about, skills = EXCLUDED.skills, languages = EXCLUDED.languages,
+                resume_education = EXCLUDED.resume_education,
+                resume_certifications = EXCLUDED.resume_certifications,
+                resume_tools = EXCLUDED.resume_tools,
+                resume_additional_info = EXCLUDED.resume_additional_info,
+                profile_strength = EXCLUDED.profile_strength, updated_at = NOW()
+            """,
+            (
+                user["id"], body.about, body.skills, body.languages, body.resumeEducation,
+                body.resumeCertifications, body.resumeTools, body.resumeAdditionalInfo,
+                calculate_profile_strength(user["id"]),
+            ),
+        )
+    else:
+        execute(
+            """
+            INSERT INTO profiles (user_id, about, skills, languages, profile_strength, updated_at)
+            VALUES (%s,%s,%s,%s,%s,NOW())
+            ON CONFLICT (user_id) DO UPDATE
+            SET about = EXCLUDED.about, skills = EXCLUDED.skills, languages = EXCLUDED.languages,
+                profile_strength = EXCLUDED.profile_strength, updated_at = NOW()
+            """,
+            (user["id"], body.about, body.skills, body.languages, calculate_profile_strength(user["id"])),
+        )
     sync_profile_strength(user["id"])
     return {"ok": True}
 
@@ -1903,7 +1953,23 @@ def add_experience(body: ExperienceBody, user: Annotated[dict, Depends(current_u
 
 @app.post("/api/account/resume-builder", status_code=201)
 def build_resume_pdf(body: ResumeBuilderBody, user: Annotated[dict, Depends(current_user)]):
-    profile = fetch_one("SELECT about, skills, languages FROM profiles WHERE user_id = %s", (user["id"],)) or {}
+    resume_profile_columns = resume_profile_select_sql()
+    profile = fetch_one(
+        f"""
+        SELECT about, skills, languages, {resume_profile_columns}
+        FROM profiles
+        WHERE user_id = %s
+        """,
+        (user["id"],),
+    ) or {}
+    body = ResumeBuilderBody(
+        summary=body.summary if body.summary is not None else profile.get("about"),
+        education=body.education if body.education is not None else profile.get("resume_education"),
+        certifications=body.certifications if body.certifications is not None else profile.get("resume_certifications"),
+        tools=body.tools if body.tools is not None else profile.get("resume_tools"),
+        languages=body.languages if body.languages is not None else "\n".join(profile.get("languages") or []),
+        additionalInfo=body.additionalInfo if body.additionalInfo is not None else profile.get("resume_additional_info"),
+    )
     experiences = fetch_all(
         """
         SELECT title, company, location, start_date, end_date, is_current, description
@@ -1914,10 +1980,8 @@ def build_resume_pdf(body: ResumeBuilderBody, user: Annotated[dict, Depends(curr
         """,
         (user["id"],),
     )
-    education = fetch_all("SELECT * FROM education WHERE user_id = %s ORDER BY end_year DESC NULLS LAST", (user["id"],))
-    courses = fetch_all("SELECT * FROM courses WHERE user_id = %s ORDER BY completion_date DESC NULLS LAST, created_at DESC", (user["id"],))
     try:
-        pdf = make_resume_pdf(user, profile, experiences, education, courses, body)
+        pdf = make_resume_pdf(user, profile, experiences, [], [], body)
     except RuntimeError as exc:
         raise HTTPException(
             status_code=500,

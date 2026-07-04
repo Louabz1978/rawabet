@@ -79,15 +79,13 @@ const text = {
     chooseResume: "Choose resume",
     createResumeWithAI: "Create resume with AI",
     smartResume: "Create smart resume",
-    smartResumeIntro: "Rawabet will use your profile, work history, skills, courses, and the details below to create a polished PDF resume.",
-    resumeUsesProfile: "Uses profile skills and work history automatically",
-    targetRole: "Target role",
+    smartResumeIntro: "Review and edit the saved resume information from your profile, then download a polished PDF resume.",
+    resumeUsesProfile: "Uses saved profile resume fields and work history",
     education: "Education",
     certifications: "Certifications",
-    projects: "Projects",
     tools: "Tools",
-    achievements: "Achievements",
     additionalInfo: "Additional information",
+    resumeInfo: "Resume information",
     generateResume: "Generate resume PDF",
     courses: "Courses",
     addCourse: "Add course",
@@ -330,15 +328,13 @@ const text = {
     chooseResume: "اختر السيرة الذاتية",
     createResumeWithAI: "إنشاء سيرة بالذكاء الاصطناعي",
     smartResume: "إنشاء سيرة ذكية",
-    smartResumeIntro: "ستستخدم روابط ملفك وخبراتك ومهاراتك ودوراتك والمعلومات أدناه لإنشاء سيرة PDF احترافية.",
-    resumeUsesProfile: "يستخدم مهارات الملف وتاريخ العمل تلقائيا",
-    targetRole: "الوظيفة المستهدفة",
+    smartResumeIntro: "راجع وعدّل بيانات السيرة المحفوظة في ملفك، ثم حمّل ملف PDF احترافي.",
+    resumeUsesProfile: "يستخدم حقول السيرة المحفوظة وتاريخ العمل",
     education: "التعليم",
     certifications: "الشهادات",
-    projects: "المشاريع",
     tools: "الأدوات",
-    achievements: "الإنجازات",
     additionalInfo: "معلومات إضافية",
+    resumeInfo: "معلومات السيرة",
     generateResume: "إنشاء PDF للسيرة",
     courses: "الدورات",
     addCourse: "إضافة دورة",
@@ -1196,18 +1192,31 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
   );
 }
 
+function NavIcon({ name }) {
+  const common = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" };
+  const paths = {
+    home: <><path d="M3 10.8 12 3l9 7.8" /><path d="M5.5 10.5V21h13V10.5" /><path d="M9.5 21v-6h5v6" /></>,
+    profile: <><circle cx="12" cy="8" r="4" /><path d="M4.5 21c1.5-4 4-6 7.5-6s6 2 7.5 6" /></>,
+    jobs: <><rect x="4" y="7" width="16" height="13" rx="2" /><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7" /><path d="M4 12h16" /></>,
+    interviews: <><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M8 3v4M16 3v4M4 10h16" /><path d="M8 14h3M8 17h6" /></>,
+    courses: <><path d="M4 6.5 12 3l8 3.5-8 3.5L4 6.5Z" /><path d="M6.5 9v4.5c2.8 2 8.2 2 11 0V9" /><path d="M20 7v6" /></>,
+    agents: <><path d="M4 21V7l8-4 8 4v14" /><path d="M9 21v-6h6v6" /><path d="M8 9h.01M12 9h.01M16 9h.01M8 12h.01M12 12h.01M16 12h.01" /></>
+  };
+  return <svg {...common}>{paths[name]}</svg>;
+}
+
 function MobileBottomNav({ t, view, setView, openAllJobs, openComingInterviews }) {
   const items = [
-    { id: "home", icon: "⌂", label: t("home"), action: () => setView("home") },
-    { id: "profile", icon: "○", label: t("profile"), action: () => setView("profile") },
-    { id: "allJobs", icon: "▢", label: t("jobs"), action: openAllJobs },
-    { id: "interviews", icon: "□", label: t("upcomingInterviews"), action: openComingInterviews },
-    { id: "courses", icon: "◇", label: t("courses"), action: () => setView("courses") },
-    { id: "agents", icon: "▥", label: t("companies"), action: () => setView("agents") }
+    { id: "home", icon: "home", label: t("home"), action: () => setView("home") },
+    { id: "profile", icon: "profile", label: t("profile"), action: () => setView("profile") },
+    { id: "allJobs", icon: "jobs", label: t("jobs"), action: openAllJobs },
+    { id: "interviews", icon: "interviews", label: t("upcomingInterviews"), action: openComingInterviews },
+    { id: "courses", icon: "courses", label: t("courses"), action: () => setView("courses") },
+    { id: "agents", icon: "agents", label: t("companies"), action: () => setView("agents") }
   ];
   return (
     <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
-      {items.map((item) => <button className={view === item.id || (item.id === "allJobs" && view === "jobs") ? "active" : ""} type="button" onClick={item.action} aria-label={item.label} title={item.label} key={item.id}><span>{item.icon}</span></button>)}
+      {items.map((item) => <button className={view === item.id || (item.id === "allJobs" && view === "jobs") ? "active" : ""} type="button" onClick={item.action} aria-label={item.label} title={item.label} key={item.id}><span><NavIcon name={item.icon} /></span></button>)}
     </nav>
   );
 }
@@ -1302,7 +1311,11 @@ function ProfileBuilder({ t, me, reload, close }) {
     headline: me.user.headline || "",
     location: me.user.location || "",
     about: me.profile?.about || "",
-    skills: (me.profile?.skills || []).join(", ")
+    skills: (me.profile?.skills || []).join(", "),
+    resumeEducation: me.profile?.resume_education || "",
+    resumeCertifications: me.profile?.resume_certifications || "",
+    resumeTools: me.profile?.resume_tools || "",
+    resumeAdditionalInfo: me.profile?.resume_additional_info || ""
   });
   const [experience, setExperience] = useState({ title: "", company: "", location: "", startDate: "", endDate: "", isCurrent: false, description: "" });
   const [saving, setSaving] = useState(false);
@@ -1428,15 +1441,12 @@ function SmartResumePage({ t, me, reload }) {
 
 function SmartResumePanel({ t, me, reload }) {
   const [resumeBuilder, setResumeBuilder] = useState({
-    targetTitle: me.user.headline || "",
     summary: me.profile?.about || "",
-    education: (me.education || []).map((item) => [item.degree, item.school, [item.start_year, item.end_year].filter(Boolean).join(" - ")].filter(Boolean).join(" - ")).join("\n"),
-    certifications: (me.courses || []).map((course) => [course.title, course.provider, course.completion_date].filter(Boolean).join(" - ")).join("\n"),
-    projects: "",
-    tools: "",
-    achievements: "",
+    education: me.profile?.resume_education || "",
+    certifications: me.profile?.resume_certifications || "",
+    tools: me.profile?.resume_tools || "",
     languages: Array.isArray(me.profile?.languages) ? me.profile.languages.join("\n") : "Arabic\nEnglish",
-    additionalInfo: ""
+    additionalInfo: me.profile?.resume_additional_info || ""
   });
   const [buildingResume, setBuildingResume] = useState(false);
   const skills = Array.isArray(me.profile?.skills) ? me.profile.skills : [];
@@ -1463,6 +1473,17 @@ function SmartResumePanel({ t, me, reload }) {
         const message = await blob.text().catch(() => "");
         throw new Error(message || "Resume PDF could not be generated.");
       }
+      if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          window.location.href = reader.result;
+        };
+        reader.onerror = () => {
+          alert("Resume PDF was generated, but the mobile app could not open it.");
+        };
+        reader.readAsDataURL(blob);
+        return;
+      }
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -1472,9 +1493,6 @@ function SmartResumePanel({ t, me, reload }) {
       link.click();
       link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 30000);
-      if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-        setTimeout(() => window.open(url, "_blank", "noopener,noreferrer"), 600);
-      }
     } catch (err) {
       alert(err.message);
     } finally {
@@ -1502,14 +1520,11 @@ function SmartResumePanel({ t, me, reload }) {
         </article>
       </div>
       <form className="form-grid smart-resume-form" onSubmit={generateResume}>
-        <label>{t("targetRole")}<input value={resumeBuilder.targetTitle} onChange={(e) => setResumeBuilder({ ...resumeBuilder, targetTitle: e.target.value })} /></label>
         <label>{t("language")}<textarea rows="3" value={resumeBuilder.languages} onChange={(e) => setResumeBuilder({ ...resumeBuilder, languages: e.target.value })} /></label>
         <label className="span">{t("about")}<textarea rows="4" value={resumeBuilder.summary} onChange={(e) => setResumeBuilder({ ...resumeBuilder, summary: e.target.value })} /></label>
         <label>{t("education")}<textarea rows="5" value={resumeBuilder.education} onChange={(e) => setResumeBuilder({ ...resumeBuilder, education: e.target.value })} /></label>
         <label>{t("certifications")}<textarea rows="5" value={resumeBuilder.certifications} onChange={(e) => setResumeBuilder({ ...resumeBuilder, certifications: e.target.value })} /></label>
-        <label>{t("projects")}<textarea rows="5" value={resumeBuilder.projects} onChange={(e) => setResumeBuilder({ ...resumeBuilder, projects: e.target.value })} /></label>
         <label>{t("tools")}<textarea rows="5" value={resumeBuilder.tools} onChange={(e) => setResumeBuilder({ ...resumeBuilder, tools: e.target.value })} /></label>
-        <label>{t("achievements")}<textarea rows="5" value={resumeBuilder.achievements} onChange={(e) => setResumeBuilder({ ...resumeBuilder, achievements: e.target.value })} /></label>
         <label>{t("additionalInfo")}<textarea rows="5" value={resumeBuilder.additionalInfo} onChange={(e) => setResumeBuilder({ ...resumeBuilder, additionalInfo: e.target.value })} /></label>
         <button className="primary-button loading-button span" disabled={buildingResume}>{buildingResume && <span className="spinner" aria-hidden="true"></span>}{t("downloadResume")}</button>
       </form>
@@ -1582,6 +1597,10 @@ function Profile({ t, me, reload }) {
         <label>{t("dob")}<input type="date" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} /></label>
         <label className="span">{t("about")}<textarea value={form.about} onChange={(e) => setForm({ ...form, about: e.target.value })} /></label>
         <label className="span">{t("skills")}<input value={form.skills} onChange={(e) => setForm({ ...form, skills: e.target.value })} /></label>
+        <label>{t("education")}<textarea rows="5" value={form.resumeEducation} onChange={(e) => setForm({ ...form, resumeEducation: e.target.value })} /></label>
+        <label>{t("certifications")}<textarea rows="5" value={form.resumeCertifications} onChange={(e) => setForm({ ...form, resumeCertifications: e.target.value })} /></label>
+        <label>{t("tools")}<textarea rows="5" value={form.resumeTools} onChange={(e) => setForm({ ...form, resumeTools: e.target.value })} /></label>
+        <label>{t("additionalInfo")}<textarea rows="5" value={form.resumeAdditionalInfo} onChange={(e) => setForm({ ...form, resumeAdditionalInfo: e.target.value })} /></label>
         <button className="primary-button">{t("editProfile")}</button>
       </form>
       <section className="panel upload-grid">
@@ -1590,7 +1609,6 @@ function Profile({ t, me, reload }) {
         <label>{t("certificate")}<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={(e) => upload("certificate", e.target.files[0])} /><span>{t("maxCertificates")}</span></label>
         <div className="span"><DocumentLinks t={t} documents={me.documents} avatarUrl={me.user.avatarUrl} onDelete={deleteAttachment} /></div>
       </section>
-      <SmartResumePanel t={t} me={me} reload={reload} />
       <section className="panel">
         <h2>{t("experience")}</h2>
         <form className="row-fields" onSubmit={addExperience}>

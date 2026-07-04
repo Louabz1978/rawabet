@@ -2855,6 +2855,10 @@ td span {
     border-radius: 999px;
     line-height: 1;
   }
+  .mobile-bottom-nav svg {
+    width: 18px;
+    height: 18px;
+  }
   .post-card .mobile-home-search {
     display: none;
   }
