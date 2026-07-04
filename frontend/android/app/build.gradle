@@ -3,6 +3,19 @@ apply plugin: 'com.android.application'
 android {
     namespace = "com.rawabet.sy"
     compileSdk = rootProject.ext.compileSdkVersion
+
+    signingConfigs {
+        release {
+            def keystorePath = System.getenv("RAWABET_KEYSTORE_PATH") ?: project.findProperty("RAWABET_KEYSTORE_PATH")
+            if (keystorePath) {
+                storeFile file(keystorePath)
+                storePassword System.getenv("RAWABET_KEYSTORE_PASSWORD") ?: project.findProperty("RAWABET_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("RAWABET_KEY_ALIAS") ?: project.findProperty("RAWABET_KEY_ALIAS")
+                keyPassword System.getenv("RAWABET_KEY_PASSWORD") ?: project.findProperty("RAWABET_KEY_PASSWORD")
+            }
+        }
+    }
+
     defaultConfig {
         applicationId "com.rawabet.sy"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -19,7 +32,7 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
