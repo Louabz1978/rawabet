@@ -96,10 +96,13 @@ const text = {
     generateResume: "Generate resume PDF",
     courses: "Courses",
     addCourse: "Add course",
+    editCourse: "Edit course",
+    deleteCourse: "Delete course",
     courseOwner: "Course owner",
     courseAudience: "Course audience",
     adminDefault: "Admin default",
     courseLink: "Course link",
+    seeCourse: "See course",
     allUsers: "All users",
     premiumUsers: "Premium users",
     provider: "Provider",
@@ -359,10 +362,13 @@ const text = {
     generateResume: "إنشاء PDF للسيرة",
     courses: "الدورات",
     addCourse: "إضافة دورة",
+    editCourse: "تعديل الدورة",
+    deleteCourse: "حذف الدورة",
     courseOwner: "مالك الدورة",
     courseAudience: "جمهور الدورة",
     adminDefault: "الإدارة الافتراضية",
     courseLink: "رابط الدورة",
+    seeCourse: "شاهد الدورة",
     allUsers: "الجميع",
     premiumUsers: "المستخدمون المميزون",
     provider: "الجهة المقدمة",
@@ -641,6 +647,7 @@ function App() {
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminApplications, setAdminApplications] = useState([]);
   const [adminInterviews, setAdminInterviews] = useState([]);
+  const [adminCourses, setAdminCourses] = useState([]);
   const [agents, setAgents] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [agentShares, setAgentShares] = useState([]);
@@ -688,6 +695,7 @@ function App() {
       setAdminUsers(await api("/admin/users"));
       setAdminApplications(await api("/admin/applications"));
       setAdminInterviews(await api("/admin/interviews"));
+      setAdminCourses(await api("/admin/courses"));
       setSupportThreads(await api("/admin/support/threads"));
     }
     if (data.user.role === "agent") {
@@ -756,6 +764,7 @@ function App() {
     setMe(null);
     setAdmin(null);
     setAdminApplications([]);
+    setAdminCourses([]);
     setAgents([]);
     setSelectedAgent(null);
     setAgentShares([]);
@@ -859,7 +868,7 @@ function App() {
           {view === "allJobs" && <Jobs t={t} lang={lang} jobs={jobs} documents={me.documents || []} applications={me.applications || []} interviews={me.interviews || []} search={jobSearch} mode="all" setMode={(mode) => mode === "applied" ? openAppliedJobs() : openAllJobs()} selectedJobId={selectedJobId} clearSelectedJob={() => setSelectedJobId("")} reload={loadApp} />}
           {view === "appliedJobs" && <Jobs t={t} lang={lang} jobs={jobs} documents={me.documents || []} applications={me.applications || []} interviews={me.interviews || []} search={jobSearch} mode="applied" setMode={(mode) => mode === "all" ? openAllJobs() : openAppliedJobs()} selectedJobId={selectedJobId} clearSelectedJob={() => setSelectedJobId("")} reload={loadApp} />}
           {view === "interviews" && <ComingInterviews t={t} interviews={me.interviews || []} openJob={openJob} />}
-          {view === "admin" && isAdminRole(session.role) && <Admin t={t} lang={lang} session={session} admin={admin} users={adminUsers} setUsers={setAdminUsers} jobs={jobs} applications={adminApplications} setApplications={setAdminApplications} interviews={adminInterviews} supportThreads={supportThreads} initialTab={adminStartTab} clearInitialTab={() => setAdminStartTab("")} reload={loadApp} openSupport={(userId) => { setSupportTarget(userId || ""); setSupportOpen(true); }} />}
+          {view === "admin" && isAdminRole(session.role) && <Admin t={t} lang={lang} session={session} admin={admin} users={adminUsers} setUsers={setAdminUsers} jobs={jobs} courses={adminCourses} applications={adminApplications} setApplications={setAdminApplications} interviews={adminInterviews} supportThreads={supportThreads} initialTab={adminStartTab} clearInitialTab={() => setAdminStartTab("")} reload={loadApp} openSupport={(userId) => { setSupportTarget(userId || ""); setSupportOpen(true); }} />}
         </>}
       </main>
       {!isAgent && <MobileBottomNav t={t} view={view} setView={setView} openAllJobs={openAllJobs} openComingInterviews={openComingInterviews} />}
@@ -1271,7 +1280,7 @@ function CoursesPage({ t, courses = [] }) {
           <p>{course.provider || "-"}</p>
           {course.completion_date && <span>{course.completion_date}</span>}
           {course.notes && <small>{course.notes}</small>}
-          {course.certificate_url && <a className="secondary-button compact" href={assetUrl(course.certificate_url)} target="_blank" rel="noreferrer">{t("certificate")}</a>}
+          {course.certificate_url && <a className="secondary-button compact" href={assetUrl(course.certificate_url)} target="_blank" rel="noreferrer">{t("seeCourse")}</a>}
         </article>
       )) : <section className="panel empty-state"><h2>{t("courses")}</h2><p>{t("noAttachments")}</p></section>}
     </section>
@@ -1333,7 +1342,7 @@ function AgentsPage({ t, agents = [], selectedAgent, setSelectedAgent, openJob }
       <section className="panel">
         <div className="section-head"><h2>{t("agentDirectory")}</h2><input placeholder={t("searchAgents")} value={search} onChange={(e) => setSearch(e.target.value)} /></div>
         <div className="agent-profile-grid-list">
-          {visibleAgents.map((agent) => <button className="agent-profile-tile" type="button" key={agent.id} onClick={() => setSelectedAgent(agent)}><Avatar user={{ full_name: agent.full_name, avatar_url: agent.avatar_url }} size="large" /><strong>{agent.agency_name || agent.full_name}</strong><span>{agent.headline || agent.location || "-"}</span><small>{agent.open_jobs || 0} {t("activeJobs")}</small></button>)}
+          {visibleAgents.map((agent) => <button className="agent-profile-tile company-profile-tile" type="button" key={agent.id} onClick={() => setSelectedAgent(agent)}><Avatar user={{ full_name: agent.full_name, avatar_url: agent.avatar_url }} size="large" /><strong>{agent.agency_name || agent.full_name}</strong><span>{agent.headline || agent.location || "-"}</span><p>{agent.agency_about || agent.about || "-"}</p><small>{agent.open_jobs || 0} {t("activeJobs")}</small></button>)}
         </div>
       </section>
     </section>
@@ -1845,10 +1854,6 @@ function Profile({ t, me, reload }) {
           ))}
         </div>
       </section>
-      <section className="panel">
-        <h2>{t("courses")}</h2>
-        {(me.courses || []).length ? me.courses.map((course) => <div className="timeline-item" key={course.id}><strong>{course.title}</strong><span>{course.provider || "-"}{course.completion_date ? ` · ${course.completion_date}` : ""}</span>{course.notes && <p>{course.notes}</p>}</div>) : <p>{t("noAttachments")}</p>}
-      </section>
     </div>
   );
 }
@@ -2026,14 +2031,16 @@ function Jobs({ t, lang, jobs, documents = [], applications, interviews = [], se
   </section>;
 }
 
-function Admin({ t, lang, session, admin, users, setUsers, jobs, applications, setApplications, interviews = [], supportThreads, initialTab, clearInitialTab, reload, openSupport }) {
+function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], applications, setApplications, interviews = [], supportThreads, initialTab, clearInitialTab, reload, openSupport }) {
   const [tab, setTab] = useState("overview");
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState(null);
   const emptyUserForm = { fullName: "", email: "", password: "", phone: "", dob: "", headline: "", location: "", role: "member", plan: "free", status: "active" };
+  const emptyCourseForm = { targetAudience: "all", addedById: "", title: "", provider: "", completionDate: "", certificateUrl: "", notes: "" };
   const [newUser, setNewUser] = useState(emptyUserForm);
   const [selectedProfile, setSelectedProfile] = useState(null);
-  const [adminCourseForm, setAdminCourseForm] = useState({ targetAudience: "all", addedById: "", title: "", provider: "", completionDate: "", certificateUrl: "", notes: "" });
+  const [adminCourseForm, setAdminCourseForm] = useState(emptyCourseForm);
+  const [editingCourse, setEditingCourse] = useState(null);
   const [jobAdminSearch, setJobAdminSearch] = useState("");
   const emptyJobForm = { companyName: "مختبرات روابط", title: "", category: "General", location: "عن بعد", type: "دوام كامل", salaryRange: "", description: "", questionsText: "" };
   const [jobForm, setJobForm] = useState(emptyJobForm);
@@ -2159,14 +2166,44 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, applications, s
     event.preventDefault();
     if (!selectedProfile?.user?.id || !adminCourseForm.title) return;
     await api("/courses", { method: "POST", body: JSON.stringify(coursePayload({ targetAudience: "user", userId: selectedProfile.user.id })) });
-    setAdminCourseForm({ targetAudience: "all", addedById: "", title: "", provider: "", completionDate: "", certificateUrl: "", notes: "" });
+    setAdminCourseForm(emptyCourseForm);
     await refreshSelectedProfile();
   }
   async function addAdminCourse(event) {
     event.preventDefault();
     if (!adminCourseForm.title) return;
     await api("/courses", { method: "POST", body: JSON.stringify(coursePayload()) });
-    setAdminCourseForm({ targetAudience: "all", addedById: "", title: "", provider: "", completionDate: "", certificateUrl: "", notes: "" });
+    setAdminCourseForm(emptyCourseForm);
+    await reload();
+  }
+  async function saveAdminCourse(event) {
+    event.preventDefault();
+    if (!editingCourse || !adminCourseForm.title) return;
+    await api(`/admin/courses/${editingCourse.id}`, { method: "PATCH", body: JSON.stringify(coursePayload()) });
+    setEditingCourse(null);
+    setAdminCourseForm(emptyCourseForm);
+    await reload();
+  }
+  function startEditCourse(course) {
+    setEditingCourse(course);
+    setAdminCourseForm({
+      targetAudience: course.target_audience || "all",
+      addedById: course.added_by || "",
+      title: course.title || "",
+      provider: course.provider || "",
+      completionDate: course.completion_date ? String(course.completion_date).slice(0, 10) : "",
+      certificateUrl: course.certificate_url || "",
+      notes: course.notes || ""
+    });
+  }
+  function cancelEditCourse() {
+    setEditingCourse(null);
+    setAdminCourseForm(emptyCourseForm);
+  }
+  async function deleteCourse(course) {
+    if (!confirm(`${t("deleteCourse")}: ${course.title}?`)) return;
+    await api(`/admin/courses/${course.id}`, { method: "DELETE" });
+    if (editingCourse?.id === course.id) cancelEditCourse();
     await reload();
   }
   async function saveUser(event) {
@@ -2436,11 +2473,11 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, applications, s
           {tab === "courses" && <section className="panel course-admin-panel">
             <div className="section-head">
               <div>
-                <h2>{t("addCourse")}</h2>
+                <h2>{editingCourse ? t("editCourse") : t("addCourse")}</h2>
                 <p>{t("courseAudience")} · {t("courseOwner")}: {t("adminDefault")}</p>
               </div>
             </div>
-            <form className="admin-form course-admin-form" onSubmit={addAdminCourse}>
+            <form className="admin-form course-admin-form" onSubmit={editingCourse ? saveAdminCourse : addAdminCourse}>
               <select value={adminCourseForm.targetAudience} onChange={(e) => setAdminCourseForm({ ...adminCourseForm, targetAudience: e.target.value })}>
                 <option value="all">{t("allUsers")}</option>
                 <option value="premium">{t("premiumUsers")}</option>
@@ -2455,8 +2492,30 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, applications, s
               <input type="date" value={adminCourseForm.completionDate} onChange={(e) => setAdminCourseForm({ ...adminCourseForm, completionDate: e.target.value })} />
               <input placeholder={t("courseLink")} value={adminCourseForm.certificateUrl} onChange={(e) => setAdminCourseForm({ ...adminCourseForm, certificateUrl: e.target.value })} />
               <textarea className="span" placeholder={t("notes")} value={adminCourseForm.notes} onChange={(e) => setAdminCourseForm({ ...adminCourseForm, notes: e.target.value })} />
-              <button className="primary-button">{t("addCourse")}</button>
+              <button className="primary-button">{editingCourse ? t("save") : t("addCourse")}</button>
+              {editingCourse && <button className="secondary-button" type="button" onClick={cancelEditCourse}>{t("cancel")}</button>}
             </form>
+            <section className="course-admin-list">
+              <div className="section-head">
+                <h2>{t("courses")}</h2>
+                <span className="status">{courses.length}</span>
+              </div>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>{t("title")}</th><th>{t("courseAudience")}</th><th>{t("courseOwner")}</th><th>{t("provider")}</th><th>{t("courseLink")}</th><th>{t("actions")}</th></tr></thead>
+                  <tbody>{courses.map((course) => (
+                    <tr key={course.id}>
+                      <td><strong>{course.title}</strong>{course.notes && <span>{course.notes}</span>}</td>
+                      <td>{course.target_audience === "premium" ? t("premiumUsers") : course.target_audience === "agents" ? t("agents") : course.target_audience === "user" ? course.user_name || t("users") : t("allUsers")}</td>
+                      <td>{course.owner_name || t("adminDefault")}</td>
+                      <td>{course.provider || "-"}</td>
+                      <td>{course.certificate_url ? <a href={assetUrl(course.certificate_url)} target="_blank" rel="noreferrer">{t("seeCourse")}</a> : "-"}</td>
+                      <td><select className="action-select" defaultValue="" onChange={(e) => { if (e.target.value === "edit") startEditCourse(course); if (e.target.value === "delete") deleteCourse(course); e.target.value = ""; }}><option value="">{t("chooseAction")}</option><option value="edit">{t("editCourse")}</option><option value="delete">{t("deleteCourse")}</option></select></td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </section>
           </section>}
 
           {tab === "jobs" && <section className="job-admin-grid">
@@ -2725,10 +2784,6 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], interviews 
               <div className="chips">{skills.length ? skills.map((skill) => <span key={skill}>{skill}</span>) : <span>{t("skills")}</span>}</div>
             </section>
             <section>
-              <h3>{t("attachments")}</h3>
-              <DocumentLinks t={t} documents={selectedShare.documents} avatarUrl={selectedShare.avatar_url} />
-            </section>
-            <section>
               <h3>{t("experience")}</h3>
               {experiences.length ? experiences.map((item) => (
                 <div className="timeline-item" key={item.id}>
@@ -2834,12 +2889,11 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], interviews 
             <div className="section-head"><h2>{t("applications")}</h2><span className="status">{applicationShares.length}</span></div>
             <div className="table-wrap">
               <table>
-                <thead><tr><th>{t("applicant")}</th><th>{t("job")}</th><th>{t("resume")}</th><th>{t("submittedAnswers")}</th><th>{t("applicationStatus")}</th><th>{t("actions")}</th></tr></thead>
+                <thead><tr><th>{t("applicant")}</th><th>{t("job")}</th><th>{t("submittedAnswers")}</th><th>{t("applicationStatus")}</th><th>{t("actions")}</th></tr></thead>
                 <tbody>{applicationShares.map((application) => (
                   <tr key={application.share_id}>
                     <td><div className="table-user"><Avatar user={{ full_name: application.full_name, avatar_url: application.avatar_url }} size="small" /><div><button className="link-button" type="button" onClick={() => setSelectedShareId(application.share_id)}>{application.full_name}</button><span>{application.email}</span></div></div></td>
                     <td><strong>{application.job_title}</strong><span>#{application.job_number || "-"} · {application.company_name}</span></td>
-                    <td>{application.resume_file_url ? <a href={assetUrl(application.resume_file_url)} target="_blank" rel="noreferrer">{application.resume_file_name || t("resume")}</a> : "-"}</td>
                     <td><ApplicationAnswers t={t} answers={application.screening_answers} /></td>
                     <td><span className={`status ${application.application_status}`}>{statusLabel(application.application_status, lang)}</span></td>
                     <td><select className="action-select" defaultValue="" onChange={(e) => { updateApplicationStatus(application, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option>{APPLICATION_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select></td>

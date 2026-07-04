@@ -501,6 +501,17 @@ class CourseBody(BaseModel):
     notes: str | None = None
 
 
+class CoursePatch(BaseModel):
+    userId: str | None = None
+    addedById: str | None = None
+    targetAudience: str = "all"
+    title: str
+    provider: str | None = None
+    completionDate: str | None = None
+    certificateUrl: str | None = None
+    notes: str | None = None
+
+
 class AgentProfileBody(BaseModel):
     headline: str | None = None
     location: str | None = None
@@ -3280,6 +3291,62 @@ def add_course(body: CourseBody, user: Annotated[dict, Depends(current_user)]):
         """,
         (body.userId if target_audience == "user" else None, added_by, target_audience, body.title, body.provider, body.completionDate or None, body.certificateUrl, body.notes),
     )
+
+
+@app.get("/api/admin/courses")
+def list_admin_courses(user: Annotated[dict, Depends(admin_user)]):
+    return fetch_all(
+        """
+        SELECT c.*,
+          owner.full_name AS owner_name,
+          target.full_name AS user_name
+        FROM courses c
+        LEFT JOIN users owner ON owner.id = c.added_by
+        LEFT JOIN users target ON target.id = c.user_id
+        ORDER BY c.created_at DESC
+        """
+    )
+
+
+@app.patch("/api/admin/courses/{course_id}")
+def update_admin_course(course_id: UUID, body: CoursePatch, user: Annotated[dict, Depends(admin_user)]):
+    if not fetch_one("SELECT id FROM courses WHERE id = %s", (course_id,)):
+        raise HTTPException(status_code=404, detail="Course not found")
+    target_audience = body.targetAudience if body.targetAudience in {"user", "all", "premium", "agents"} else "all"
+    if target_audience == "user" and not body.userId:
+        raise HTTPException(status_code=400, detail="User is required for a user course")
+    if body.userId and not fetch_one("SELECT id FROM users WHERE id = %s", (body.userId,)):
+        raise HTTPException(status_code=404, detail="User not found")
+    added_by = user["id"]
+    if body.addedById:
+        owner = fetch_one("SELECT id, role FROM users WHERE id = %s", (body.addedById,))
+        if not owner or owner["role"] not in {"agent", "admin", "master_admin"}:
+            raise HTTPException(status_code=400, detail="Course owner must be an agent or admin")
+        added_by = owner["id"]
+    return execute(
+        """
+        UPDATE courses
+        SET user_id = %s,
+            added_by = %s,
+            target_audience = %s,
+            title = %s,
+            provider = %s,
+            completion_date = %s,
+            certificate_url = %s,
+            notes = %s
+        WHERE id = %s
+        RETURNING *
+        """,
+        (body.userId if target_audience == "user" else None, added_by, target_audience, body.title, body.provider, body.completionDate or None, body.certificateUrl, body.notes, course_id),
+    )
+
+
+@app.delete("/api/admin/courses/{course_id}")
+def delete_admin_course(course_id: UUID, user: Annotated[dict, Depends(admin_user)]):
+    deleted = execute("DELETE FROM courses WHERE id = %s RETURNING id", (course_id,))
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Course not found")
+    return {"ok": True}
 
 
 @app.delete("/api/admin/documents/{document_id}")
