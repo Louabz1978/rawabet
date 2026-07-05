@@ -2702,6 +2702,34 @@ td span {
   min-height: 94px;
 }
 
+.job-admin-toolbar {
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.question-row-editor {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+}
+
+.question-row-editor > strong {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.question-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.question-row .icon-button {
+  width: 38px;
+  height: 38px;
+}
+
 .job-editor-form .primary-button,
 .job-editor-form .secondary-button {
   min-height: 38px;

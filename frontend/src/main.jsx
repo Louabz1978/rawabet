@@ -943,10 +943,10 @@ function App() {
       </nav>}
 
       <main className={view === "admin" || isAgent ? "admin-main" : ""}>
-        {isAgent ? <AgentWorkspace t={t} lang={lang} agent={me.user} profile={me.profile || {}} shares={agentShares} interviews={agentInterviews} jobs={agentJobs} reload={loadApp} /> : <>
+        {isAgent ? <AgentWorkspace t={t} lang={lang} agent={me.user} profile={me.profile || {}} shares={agentShares} interviews={agentInterviews} jobs={agentJobs} reload={loadApp} notify={notify} /> : <>
           {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} agents={agents} setSelectedAgent={setSelectedAgent} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} openSmartResume={openSmartResumeForUser} canUseSmartResume={canUseSmartResume} jobSearch={jobSearch} setJobSearch={setJobSearch} setJobMode={setJobMode} />}
           {view === "profile" && <Profile t={t} me={me} reload={loadApp} notify={notify} />}
-          {view === "smartResume" && canUseSmartResume && <SmartResumePage t={t} me={me} reload={loadApp} />}
+          {view === "smartResume" && canUseSmartResume && <SmartResumePage t={t} me={me} reload={loadApp} notify={notify} />}
           {view === "courses" && <CoursesPage t={t} courses={me.courses || []} />}
           {view === "agents" && <AgentsPage t={t} agents={agents} selectedAgent={selectedAgent} setSelectedAgent={setSelectedAgent} openJob={openJob} />}
           {view === "jobs" && <Jobs t={t} lang={lang} jobs={jobs} documents={me.documents || []} applications={me.applications || []} interviews={me.interviews || []} search={jobSearch} mode={jobMode} setMode={setJobMode} selectedJobId={selectedJobId} clearSelectedJob={() => setSelectedJobId("")} reload={loadApp} />}
@@ -957,7 +957,7 @@ function App() {
         </>}
       </main>
       {!isAgent && <MobileBottomNav t={t} view={view} setView={setView} openAllJobs={openAllJobs} openComingInterviews={openComingInterviews} />}
-      {!isAgent && builderOpen && <ProfileBuilder t={t} me={me} reload={loadApp} close={() => setBuilderOpen(false)} />}
+      {!isAgent && builderOpen && <ProfileBuilder t={t} me={me} reload={loadApp} close={() => setBuilderOpen(false)} notify={notify} />}
       {!isAgent && supportOpen && <SupportWindow t={t} me={me} users={adminUsers} initialUserId={supportTarget} onUpdate={loadSupportThreads} close={() => { setSupportOpen(false); setSupportTarget(""); }} />}
       {popup && <ToastPopup t={t} popup={popup} close={() => setPopup(null)} />}
       <AppFooter />
@@ -1489,7 +1489,7 @@ function AgentsPage({ t, agents = [], selectedAgent, setSelectedAgent, openJob }
   );
 }
 
-function ProfileBuilder({ t, me, reload, close }) {
+function ProfileBuilder({ t, me, reload, close, notify }) {
   const [form, setForm] = useState({
     fullName: me.user.fullName || "",
     phone: me.user.phone || "",
@@ -1530,7 +1530,7 @@ function ProfileBuilder({ t, me, reload, close }) {
       await api("/account/documents", { method: "POST", body });
       await reload();
     } catch (err) {
-      alert(err.message);
+      notify?.(err.message, "error", err.stack || err.message);
     }
   }
 
@@ -1617,15 +1617,15 @@ function ProfileBuilder({ t, me, reload, close }) {
   );
 }
 
-function SmartResumePage({ t, me, reload }) {
+function SmartResumePage({ t, me, reload, notify }) {
   return (
     <div className="profile-page">
-      <SmartResumePanel t={t} me={me} reload={reload} />
+      <SmartResumePanel t={t} me={me} reload={reload} notify={notify} />
     </div>
   );
 }
 
-function SmartResumePanel({ t, me, reload }) {
+function SmartResumePanel({ t, me, reload, notify }) {
   const [resumeBuilder, setResumeBuilder] = useState({
     summary: me.profile?.about || "",
     education: "",
@@ -1716,7 +1716,7 @@ function SmartResumePanel({ t, me, reload }) {
       link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 30000);
     } catch (err) {
-      alert(err.message);
+      notify?.(err.message, "error", err.stack || err.message);
     } finally {
       setBuildingResume(false);
     }
@@ -2299,8 +2299,9 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
     try {
       await api(`/admin/users/${selectedProfile.user.id}/documents`, { method: "POST", body });
       await refreshSelectedProfile();
+      notify?.(t("successUpdated"), "success");
     } catch (err) {
-      alert(err.message);
+      notify?.(err.message, "error", err.stack || err.message);
     }
   }
   async function uploadSelectedAvatar(file) {
@@ -2504,12 +2505,14 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
         body: JSON.stringify({ ...interview, jobId: interview.jobId || null })
       });
       if (result.emailSent) {
-        alert(`${t("interviewEmailSent")} ${result.recipientEmail}`);
+        notify?.(`${t("interviewEmailSent")} ${result.recipientEmail}`, "success");
       } else {
-        alert(`${t("interviewEmailFailed")}: ${result.emailError || "-"}`);
+        notify?.(`${t("interviewEmailFailed")}: ${result.emailError || "-"}`, "error", result.emailError || "-");
       }
       setInterview({ userId: "", jobId: "", scheduledAt: "", channel: "Video call", notes: "" });
       await reload();
+    } catch (err) {
+      notify?.(err.message, "error", err.stack || err.message);
     } finally {
       setSchedulingInterview(false);
     }
@@ -2820,7 +2823,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
   );
 }
 
-function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], interviews = [], jobs = [], reload }) {
+function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], interviews = [], jobs = [], reload, notify }) {
   const [tab, setTab] = useState("profile");
   const [selectedShareId, setSelectedShareId] = useState("");
   const [interview, setInterview] = useState({ userId: "", jobId: "", scheduledAt: "", channel: "Video call", notes: "" });
@@ -2907,12 +2910,14 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], interviews 
         body: JSON.stringify({ ...interview, jobId: interview.jobId || null })
       });
       if (result.emailSent) {
-        alert(`${t("interviewEmailSent")} ${result.recipientEmail}`);
+        notify?.(`${t("interviewEmailSent")} ${result.recipientEmail}`, "success");
       } else {
-        alert(`${t("interviewEmailFailed")}: ${result.emailError || "-"}`);
+        notify?.(`${t("interviewEmailFailed")}: ${result.emailError || "-"}`, "error", result.emailError || "-");
       }
       setInterview({ userId: "", jobId: "", scheduledAt: "", channel: "Video call", notes: "" });
       await refreshAgent();
+    } catch (err) {
+      notify?.(err.message, "error", err.stack || err.message);
     } finally {
       setSchedulingInterview(false);
     }

@@ -3039,8 +3039,9 @@ def admin_overview(user: Annotated[dict, Depends(admin_user)]):
         FROM (
           SELECT CASE
             WHEN profile_strength >= 85 THEN 'excellent'
-            WHEN profile_strength >= 55 THEN 'good'
-            ELSE 'needs work'
+            WHEN profile_strength >= 70 THEN 'strong'
+            WHEN profile_strength >= 40 THEN 'medium'
+            ELSE 'weak'
           END AS bucket
           FROM profiles
         ) grouped
