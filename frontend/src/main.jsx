@@ -269,6 +269,17 @@ const text = {
     interviewOutcome: "Interview outcome",
     channel: "Channel",
     notes: "Notes",
+    successSaved: "Saved successfully.",
+    successCreated: "Created successfully.",
+    successUpdated: "Updated successfully.",
+    successDeleted: "Deleted successfully.",
+    errorTitle: "Something went wrong",
+    copyError: "Copy error",
+    close: "Close",
+    weak: "Weak",
+    medium: "Medium",
+    strong: "Strong",
+    excellent: "Excellent",
     language: "ع"
   },
   ar: {
@@ -536,6 +547,17 @@ const text = {
     interviewOutcome: "نتيجة المقابلة",
     channel: "القناة",
     notes: "ملاحظات",
+    successSaved: "تم الحفظ بنجاح.",
+    successCreated: "تمت الإضافة بنجاح.",
+    successUpdated: "تم التحديث بنجاح.",
+    successDeleted: "تم الحذف بنجاح.",
+    errorTitle: "حدث خطأ",
+    copyError: "نسخ الخطأ",
+    close: "إغلاق",
+    weak: "ضعيف",
+    medium: "متوسط",
+    strong: "قوي",
+    excellent: "ممتاز",
     language: "EN"
   }
 };
@@ -621,6 +643,23 @@ function questionsToText(value = []) {
   return Array.isArray(value) ? value.join("\n") : "";
 }
 
+function questionsToArray(value = []) {
+  if (Array.isArray(value)) return value.length ? value.map((item) => String(item || "")) : [""];
+  const rows = questionsFromText(value);
+  return rows.length ? rows : [""];
+}
+
+function compactQuestions(value = []) {
+  return questionsToArray(value).map((item) => item.trim()).filter(Boolean);
+}
+
+function profileStrengthStatus(strength, t) {
+  if (strength >= 85) return { label: t("excellent"), body: t("strengthGreat") };
+  if (strength >= 70) return { label: t("strong"), body: t("strengthGood") };
+  if (strength >= 40) return { label: t("medium"), body: t("strengthNeedsWork") };
+  return { label: t("weak"), body: t("strengthNeedsWork") };
+}
+
 function salaryBounds(salary = "") {
   const values = String(salary).match(/\$?\s*[\d,]+/g)?.map((item) => Number(item.replace(/[^\d]/g, ""))).filter(Boolean) || [];
   if (!values.length) return { min: 0, max: 0 };
@@ -665,16 +704,48 @@ function App() {
   const [builderOpen, setBuilderOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [popup, setPopup] = useState(null);
   const supportUnreadRef = useRef(0);
   const supportUnreadReadyRef = useRef(false);
   const t = (key) => text[lang][key] || key;
   const isAdminRole = (role) => ["admin", "master_admin"].includes(role);
+
+  function notify(message, type = "success", details = "") {
+    setPopup({ message, type, details: details || message, id: Date.now() });
+  }
+
+  async function withNotify(task, successMessage = "") {
+    try {
+      const result = await task();
+      if (successMessage) notify(successMessage, "success");
+      return result;
+    } catch (err) {
+      notify(err.message || String(err), "error", err.stack || err.message || String(err));
+      throw err;
+    }
+  }
 
   useEffect(() => {
     document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
     document.documentElement.lang = lang;
     localStorage.setItem("rawabet_lang", lang);
   }, [lang]);
+
+  useEffect(() => {
+    const onUnhandledRejection = (event) => {
+      const reason = event.reason;
+      notify(reason?.message || String(reason || "Unexpected error"), "error", reason?.stack || reason?.message || String(reason || ""));
+    };
+    const onError = (event) => {
+      notify(event.message || "Unexpected error", "error", event.error?.stack || event.message || "");
+    };
+    window.addEventListener("unhandledrejection", onUnhandledRejection);
+    window.addEventListener("error", onError);
+    return () => {
+      window.removeEventListener("unhandledrejection", onUnhandledRejection);
+      window.removeEventListener("error", onError);
+    };
+  }, []);
 
   async function loadApp() {
     const data = await api("/account");
@@ -874,7 +945,7 @@ function App() {
       <main className={view === "admin" || isAgent ? "admin-main" : ""}>
         {isAgent ? <AgentWorkspace t={t} lang={lang} agent={me.user} profile={me.profile || {}} shares={agentShares} interviews={agentInterviews} jobs={agentJobs} reload={loadApp} /> : <>
           {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} agents={agents} setSelectedAgent={setSelectedAgent} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} openSmartResume={openSmartResumeForUser} canUseSmartResume={canUseSmartResume} jobSearch={jobSearch} setJobSearch={setJobSearch} setJobMode={setJobMode} />}
-          {view === "profile" && <Profile t={t} me={me} reload={loadApp} />}
+          {view === "profile" && <Profile t={t} me={me} reload={loadApp} notify={notify} />}
           {view === "smartResume" && canUseSmartResume && <SmartResumePage t={t} me={me} reload={loadApp} />}
           {view === "courses" && <CoursesPage t={t} courses={me.courses || []} />}
           {view === "agents" && <AgentsPage t={t} agents={agents} selectedAgent={selectedAgent} setSelectedAgent={setSelectedAgent} openJob={openJob} />}
@@ -882,13 +953,65 @@ function App() {
           {view === "allJobs" && <Jobs t={t} lang={lang} jobs={jobs} documents={me.documents || []} applications={me.applications || []} interviews={me.interviews || []} search={jobSearch} mode="all" setMode={(mode) => mode === "applied" ? openAppliedJobs() : openAllJobs()} selectedJobId={selectedJobId} clearSelectedJob={() => setSelectedJobId("")} reload={loadApp} />}
           {view === "appliedJobs" && <Jobs t={t} lang={lang} jobs={jobs} documents={me.documents || []} applications={me.applications || []} interviews={me.interviews || []} search={jobSearch} mode="applied" setMode={(mode) => mode === "all" ? openAllJobs() : openAppliedJobs()} selectedJobId={selectedJobId} clearSelectedJob={() => setSelectedJobId("")} reload={loadApp} />}
           {view === "interviews" && <ComingInterviews t={t} interviews={me.interviews || []} openJob={openJob} />}
-          {view === "admin" && isAdminRole(session.role) && <Admin t={t} lang={lang} session={session} admin={admin} users={adminUsers} setUsers={setAdminUsers} jobs={jobs} courses={adminCourses} applications={adminApplications} setApplications={setAdminApplications} interviews={adminInterviews} supportThreads={supportThreads} initialTab={adminStartTab} clearInitialTab={() => setAdminStartTab("")} reload={loadApp} openSupport={(userId) => { setSupportTarget(userId || ""); setSupportOpen(true); }} />}
+          {view === "admin" && isAdminRole(session.role) && <Admin t={t} lang={lang} session={session} admin={admin} users={adminUsers} setUsers={setAdminUsers} jobs={jobs} courses={adminCourses} applications={adminApplications} setApplications={setAdminApplications} interviews={adminInterviews} supportThreads={supportThreads} initialTab={adminStartTab} clearInitialTab={() => setAdminStartTab("")} reload={loadApp} openSupport={(userId) => { setSupportTarget(userId || ""); setSupportOpen(true); }} notify={notify} withNotify={withNotify} />}
         </>}
       </main>
       {!isAgent && <MobileBottomNav t={t} view={view} setView={setView} openAllJobs={openAllJobs} openComingInterviews={openComingInterviews} />}
       {!isAgent && builderOpen && <ProfileBuilder t={t} me={me} reload={loadApp} close={() => setBuilderOpen(false)} />}
       {!isAgent && supportOpen && <SupportWindow t={t} me={me} users={adminUsers} initialUserId={supportTarget} onUpdate={loadSupportThreads} close={() => { setSupportOpen(false); setSupportTarget(""); }} />}
+      {popup && <ToastPopup t={t} popup={popup} close={() => setPopup(null)} />}
       <AppFooter />
+    </div>
+  );
+}
+
+function ToastPopup({ t, popup, close }) {
+  const isError = popup.type === "error";
+  return (
+    <section className={`toast-popup ${isError ? "error-popup" : "success-popup"}`} role="alertdialog" aria-live="assertive">
+      <div>
+        <strong>{isError ? t("errorTitle") : t("successSaved")}</strong>
+        <button className="icon-button" type="button" onClick={close} aria-label={t("close")}>×</button>
+      </div>
+      <p>{popup.message}</p>
+      {isError && <button className="secondary-button compact" type="button" onClick={() => navigator.clipboard?.writeText(popup.details || popup.message)}>{t("copyError")}</button>}
+    </section>
+  );
+}
+
+function AdminModal({ title, close, children }) {
+  return (
+    <div className="builder-backdrop admin-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && close()}>
+      <section className="builder-modal admin-modal" role="dialog" aria-modal="true">
+        <header className="builder-head">
+          <h2>{title}</h2>
+          <button className="icon-button" type="button" onClick={close} aria-label="Close">×</button>
+        </header>
+        {children}
+      </section>
+    </div>
+  );
+}
+
+function QuestionRows({ t, questions, onChange }) {
+  const rows = questionsToArray(questions);
+  function update(index, value) {
+    onChange(rows.map((row, rowIndex) => rowIndex === index ? value : row));
+  }
+  function remove(index) {
+    const next = rows.filter((_, rowIndex) => rowIndex !== index);
+    onChange(next.length ? next : [""]);
+  }
+  return (
+    <div className="question-row-editor">
+      <strong>{t("screeningQuestions")}</strong>
+      {rows.map((question, index) => (
+        <div className="question-row" key={index}>
+          <input placeholder={`${t("screeningQuestions")} ${index + 1}`} value={question} onChange={(event) => update(index, event.target.value)} />
+          {rows.length > 1 && <button className="icon-button" type="button" onClick={() => remove(index)} aria-label={t("delete")}>×</button>}
+        </div>
+      ))}
+      <button className="secondary-button compact" type="button" onClick={() => onChange([...rows, ""])}>+</button>
     </div>
   );
 }
@@ -1144,6 +1267,7 @@ function AppFooter() {
 
 function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJob, openAppliedJobs, openBuilder, openSmartResume, canUseSmartResume = true, jobSearch, setJobSearch, setJobMode }) {
   const strength = Number(me.profile?.profile_strength ?? 0);
+  const strengthState = profileStrengthStatus(strength, t);
   const applications = me.applications || [];
   const priorityApplications = applications.filter((item) => ["interview", "review"].includes(normalizeStatusValue(item.status)));
   const skills = Array.isArray(me.profile?.skills) ? me.profile.skills.filter(Boolean) : [];
@@ -1163,8 +1287,9 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
       <section className="mobile-home-priority">
         <section className="panel side-panel strength-panel">
           <h2>{t("profileStrength")}</h2>
+          <b className="strength-label">{strengthState.label}</b>
           <div className="meter"><span style={{ width: `${strength}%` }} /></div>
-          <p>{strength >= 85 ? t("strengthGreat") : strength >= 55 ? t("strengthGood") : t("strengthNeedsWork")}</p>
+          <p>{strengthState.body}</p>
         </section>
         <section className="panel side-panel applied-summary-panel">
           <h2>{t("profileViews")}</h2>
@@ -1226,8 +1351,9 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
       <aside className="insight-rail">
         <section className="panel side-panel strength-panel">
           <h2>{t("profileStrength")}</h2>
+          <b className="strength-label">{strengthState.label}</b>
           <div className="meter"><span style={{ width: `${strength}%` }} /></div>
-          <p>{strength >= 85 ? t("strengthGreat") : strength >= 55 ? t("strengthGood") : t("strengthNeedsWork")}</p>
+          <p>{strengthState.body}</p>
         </section>
         <section className="panel side-panel applied-summary-panel">
           <h2>{t("profileViews")}</h2>
@@ -1631,7 +1757,7 @@ function SmartResumePanel({ t, me, reload }) {
   );
 }
 
-function Profile({ t, me, reload }) {
+function Profile({ t, me, reload, notify }) {
   const [form, setForm] = useState({
     fullName: me.user.fullName || "",
     phone: me.user.phone || "",
@@ -1658,6 +1784,7 @@ function Profile({ t, me, reload }) {
       body: JSON.stringify({ ...form, skills: form.skills.map((item) => item.trim()).filter(Boolean) })
     });
     await reload();
+    notify?.(t("successSaved"), "success");
   }
 
   function updateSkill(index, value) {
@@ -1684,7 +1811,7 @@ function Profile({ t, me, reload }) {
       await api("/account/documents", { method: "POST", body });
       await reload();
     } catch (err) {
-      alert(err.message);
+      notify?.(err.message, "error", err.stack || err.message);
     }
   }
 
@@ -1694,6 +1821,7 @@ function Profile({ t, me, reload }) {
     body.append("file", file);
     await api("/account/avatar", { method: "POST", body });
     await reload();
+    notify?.(t("successUpdated"), "success");
   }
 
   async function addExperience(event) {
@@ -1708,8 +1836,9 @@ function Profile({ t, me, reload }) {
       setExperience({ title: "", company: "", location: "", startDate: "", endDate: "", isCurrent: false, description: "" });
       setEditingExperienceId("");
       await reload();
+      notify?.(t("successSaved"), "success");
     } catch (err) {
-      alert(err.message);
+      notify?.(err.message, "error", err.stack || err.message);
     }
   }
 
@@ -1736,8 +1865,9 @@ function Profile({ t, me, reload }) {
       await api(`/account/experience/${id}`, { method: "DELETE" });
       if (editingExperienceId === id) cancelEditExperience();
       await reload();
+      notify?.(t("successDeleted"), "success");
     } catch (err) {
-      alert(err.message);
+      notify?.(err.message, "error", err.stack || err.message);
     }
   }
 
@@ -1753,8 +1883,9 @@ function Profile({ t, me, reload }) {
       setEducation({ school: "", degree: "", field: "", startYear: "", endYear: "" });
       setEditingEducationId("");
       await reload();
+      notify?.(t("successSaved"), "success");
     } catch (err) {
-      alert(err.message);
+      notify?.(err.message, "error", err.stack || err.message);
     }
   }
 
@@ -1779,14 +1910,16 @@ function Profile({ t, me, reload }) {
       await api(`/account/education/${id}`, { method: "DELETE" });
       if (editingEducationId === id) cancelEditEducation();
       await reload();
+      notify?.(t("successDeleted"), "success");
     } catch (err) {
-      alert(err.message);
+      notify?.(err.message, "error", err.stack || err.message);
     }
   }
 
   async function deleteAttachment(documentId) {
     await api(`/account/documents/${documentId}`, { method: "DELETE" });
     await reload();
+    notify?.(t("successDeleted"), "success");
   }
 
   return (
@@ -2045,19 +2178,21 @@ function Jobs({ t, lang, jobs, documents = [], applications, interviews = [], se
   </section>;
 }
 
-function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], applications, setApplications, interviews = [], supportThreads, initialTab, clearInitialTab, reload, openSupport }) {
+function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], applications, setApplications, interviews = [], supportThreads, initialTab, clearInitialTab, reload, openSupport, notify, withNotify }) {
   const [tab, setTab] = useState("overview");
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState(null);
   const emptyUserForm = { fullName: "", email: "", password: "", phone: "", dob: "", headline: "", location: "", role: "member", plan: "free", status: "active" };
   const emptyCourseForm = { targetAudience: "all", addedById: "", title: "", provider: "", completionDate: "", certificateUrl: "", notes: "" };
   const [newUser, setNewUser] = useState(emptyUserForm);
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [adminCourseForm, setAdminCourseForm] = useState(emptyCourseForm);
   const [editingCourse, setEditingCourse] = useState(null);
   const [jobAdminSearch, setJobAdminSearch] = useState("");
-  const emptyJobForm = { companyName: "مختبرات روابط", title: "", category: "General", location: "عن بعد", type: "دوام كامل", salaryRange: "", description: "", questionsText: "" };
+  const emptyJobForm = { companyName: "مختبرات روابط", title: "", category: "General", location: "عن بعد", type: "دوام كامل", salaryRange: "", description: "", screeningQuestions: [""] };
   const [jobForm, setJobForm] = useState(emptyJobForm);
+  const [showAddJobModal, setShowAddJobModal] = useState(false);
   const [newJobAgentId, setNewJobAgentId] = useState("");
   const [editingJobAgentId, setEditingJobAgentId] = useState("");
   const [editingJob, setEditingJob] = useState(null);
@@ -2093,18 +2228,27 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
   }
   async function patchUser(user, patch) {
     await api(`/admin/users/${user.id}`, { method: "PATCH", body: JSON.stringify(patch) });
-    searchUsers(search);
+    await searchUsers(search);
+    notify?.(t("successUpdated"), "success");
   }
   async function createUser(event) {
     event.preventDefault();
-    await api("/admin/users", { method: "POST", body: JSON.stringify(newUser) });
-    setNewUser(emptyUserForm);
-    await searchUsers(search);
+    try {
+      await api("/admin/users", { method: "POST", body: JSON.stringify(newUser) });
+      setNewUser(emptyUserForm);
+      setShowAddUserModal(false);
+      await reload();
+      await searchUsers(search);
+      notify?.(t("successCreated"), "success");
+    } catch (err) {
+      notify?.(err.message, "error", err.stack || err.message);
+    }
   }
   async function deleteUser(user) {
     if (!confirm(`Delete ${user.full_name}?`)) return;
     await api(`/admin/users/${user.id}`, { method: "DELETE" });
-    searchUsers(search);
+    await searchUsers(search);
+    notify?.(t("successDeleted"), "success");
   }
   async function openUserProfile(user) {
     setSelectedProfile(await api(`/admin/users/${user.id}/profile`));
@@ -2145,6 +2289,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
     });
     setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, newPassword: "" } });
     await refreshSelectedProfile();
+    notify?.(t("successUpdated"), "success");
   }
   async function uploadSelectedAttachment(kind, file) {
     if (!file || !selectedProfile) return;
@@ -2179,24 +2324,39 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
   async function addSelectedCourse(event) {
     event.preventDefault();
     if (!selectedProfile?.user?.id || !adminCourseForm.title) return;
-    await api("/courses", { method: "POST", body: JSON.stringify(coursePayload({ targetAudience: "user", userId: selectedProfile.user.id })) });
-    setAdminCourseForm(emptyCourseForm);
-    await refreshSelectedProfile();
+    try {
+      await api("/courses", { method: "POST", body: JSON.stringify(coursePayload({ targetAudience: "user", userId: selectedProfile.user.id })) });
+      setAdminCourseForm(emptyCourseForm);
+      await refreshSelectedProfile();
+      notify?.(t("successCreated"), "success");
+    } catch (err) {
+      notify?.(err.message, "error", err.stack || err.message);
+    }
   }
   async function addAdminCourse(event) {
     event.preventDefault();
     if (!adminCourseForm.title) return;
-    await api("/courses", { method: "POST", body: JSON.stringify(coursePayload()) });
-    setAdminCourseForm(emptyCourseForm);
-    await reload();
+    try {
+      await api("/courses", { method: "POST", body: JSON.stringify(coursePayload()) });
+      setAdminCourseForm(emptyCourseForm);
+      await reload();
+      notify?.(t("successCreated"), "success");
+    } catch (err) {
+      notify?.(err.message, "error", err.stack || err.message);
+    }
   }
   async function saveAdminCourse(event) {
     event.preventDefault();
     if (!editingCourse || !adminCourseForm.title) return;
-    await api(`/admin/courses/${editingCourse.id}`, { method: "PATCH", body: JSON.stringify(coursePayload()) });
-    setEditingCourse(null);
-    setAdminCourseForm(emptyCourseForm);
-    await reload();
+    try {
+      await api(`/admin/courses/${editingCourse.id}`, { method: "PATCH", body: JSON.stringify(coursePayload()) });
+      setEditingCourse(null);
+      setAdminCourseForm(emptyCourseForm);
+      await reload();
+      notify?.(t("successUpdated"), "success");
+    } catch (err) {
+      notify?.(err.message, "error", err.stack || err.message);
+    }
   }
   function startEditCourse(course) {
     setEditingCourse(course);
@@ -2219,6 +2379,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
     await api(`/admin/courses/${course.id}`, { method: "DELETE" });
     if (editingCourse?.id === course.id) cancelEditCourse();
     await reload();
+    notify?.(t("successDeleted"), "success");
   }
   async function saveUser(event) {
     event.preventDefault();
@@ -2238,7 +2399,8 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
       })
     });
     setEditing(null);
-    searchUsers(search);
+    await searchUsers(search);
+    notify?.(t("successUpdated"), "success");
   }
   function startEditJob(job) {
     setEditingJob({
@@ -2251,7 +2413,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
       salaryRange: job.salary_range || "",
       description: job.description || "",
       status: job.status || "active",
-      questionsText: questionsToText(job.screening_questions)
+      screeningQuestions: questionsToArray(job.screening_questions)
     });
     setEditingJobAgentId("");
     setTimeout(() => document.getElementById("edit-job-form")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
@@ -2263,17 +2425,19 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
   }
   async function saveJob(event) {
     event.preventDefault();
-    const updatedJob = await api(`/admin/jobs/${editingJob.id}`, { method: "PATCH", body: JSON.stringify({ ...editingJob, screeningQuestions: questionsFromText(editingJob.questionsText) }) });
+    const updatedJob = await api(`/admin/jobs/${editingJob.id}`, { method: "PATCH", body: JSON.stringify({ ...editingJob, screeningQuestions: compactQuestions(editingJob.screeningQuestions) }) });
     if (editingJobAgentId) await assignJob(updatedJob, editingJobAgentId);
     setEditingJob(null);
     setEditingJobAgentId("");
     await reload();
+    notify?.(t("successUpdated"), "success");
   }
   async function deleteJob(job) {
     if (!confirm(`${t("deleteJob")}: ${job.title}?`)) return;
     await api(`/admin/jobs/${job.id}`, { method: "DELETE" });
     if (editingJob?.id === job.id) setEditingJob(null);
     await reload();
+    notify?.(t("successDeleted"), "success");
   }
   async function updateApplicationStatus(application, status) {
     const nextStatus = normalizeStatusValue(status);
@@ -2318,11 +2482,17 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
   }
   async function addJob(event) {
     event.preventDefault();
-    const createdJob = await api("/admin/jobs", { method: "POST", body: JSON.stringify({ ...jobForm, screeningQuestions: questionsFromText(jobForm.questionsText) }) });
-    if (newJobAgentId) await assignJob(createdJob, newJobAgentId);
-    setJobForm(emptyJobForm);
-    setNewJobAgentId("");
-    await reload();
+    try {
+      const createdJob = await api("/admin/jobs", { method: "POST", body: JSON.stringify({ ...jobForm, screeningQuestions: compactQuestions(jobForm.screeningQuestions) }) });
+      if (newJobAgentId) await assignJob(createdJob, newJobAgentId);
+      setJobForm(emptyJobForm);
+      setNewJobAgentId("");
+      setShowAddJobModal(false);
+      await reload();
+      notify?.(t("successCreated"), "success");
+    } catch (err) {
+      notify?.(err.message, "error", err.stack || err.message);
+    }
   }
   async function scheduleInterview(event) {
     event.preventDefault();
@@ -2380,24 +2550,8 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
           </>}
 
           {tab === "users" && <>
-            <form className="panel admin-form" onSubmit={createUser}>
-              <h2>{t("addUser")}</h2>
-              <input placeholder={t("fullName")} value={newUser.fullName} onChange={(e) => setNewUser({ ...newUser, fullName: e.target.value })} required />
-              <input placeholder={t("email")} value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} required />
-              <input type="password" placeholder={t("password")} value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} required autoComplete="new-password" />
-              <input placeholder={t("phone")} value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} />
-              <input type="date" value={newUser.dob} onChange={(e) => setNewUser({ ...newUser, dob: e.target.value })} />
-              <input placeholder={t("headline")} value={newUser.headline} onChange={(e) => setNewUser({ ...newUser, headline: e.target.value })} />
-              <input placeholder={t("location")} value={newUser.location} onChange={(e) => setNewUser({ ...newUser, location: e.target.value })} />
-              <div className="row-fields">
-                <select value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}>{editableRoles.map((role) => <option value={role} key={role}>{roleLabel(role, lang)}</option>)}</select>
-                <select value={newUser.plan} onChange={(e) => setNewUser({ ...newUser, plan: e.target.value })}>{PLAN_OPTIONS.map((plan) => <option value={plan} key={plan}>{planLabel(plan, lang)}</option>)}</select>
-                <select value={newUser.status} onChange={(e) => setNewUser({ ...newUser, status: e.target.value })}>{USER_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select>
-                <button className="primary-button">{t("addUser")}</button>
-              </div>
-            </form>
             <section className="panel">
-              <div className="section-head"><h2>{t("users")}</h2><input placeholder={t("searchUsers")} value={search} onChange={(e) => searchUsers(e.target.value)} /></div>
+              <div className="section-head"><h2>{t("users")}</h2><div className="section-actions"><input placeholder={t("searchUsers")} value={search} onChange={(e) => searchUsers(e.target.value)} /><button className="primary-button compact" type="button" onClick={() => setShowAddUserModal(true)}>{t("addUser")}</button></div></div>
               <div className="table-wrap">
                 <table>
                   <thead><tr><th>{t("users")}</th><th>{t("role")}</th><th>{t("plan")}</th><th>{t("status")}</th><th>{t("attachments")}</th><th>{t("lastActive")}</th><th>{t("shareWithAgent")}</th><th>{t("actions")}</th></tr></thead>
@@ -2405,6 +2559,21 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
                 </table>
               </div>
             </section>
+            {showAddUserModal && <AdminModal title={t("addUser")} close={() => setShowAddUserModal(false)}>
+              <form className="admin-form modal-form" onSubmit={createUser}>
+                <input placeholder={t("fullName")} value={newUser.fullName} onChange={(e) => setNewUser({ ...newUser, fullName: e.target.value })} required />
+                <input placeholder={t("email")} value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} required />
+                <input type="password" placeholder={t("password")} value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} required autoComplete="new-password" />
+                <input placeholder={t("phone")} value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} />
+                <input type="date" value={newUser.dob} onChange={(e) => setNewUser({ ...newUser, dob: e.target.value })} />
+                <input placeholder={t("headline")} value={newUser.headline} onChange={(e) => setNewUser({ ...newUser, headline: e.target.value })} />
+                <input placeholder={t("location")} value={newUser.location} onChange={(e) => setNewUser({ ...newUser, location: e.target.value })} />
+                <select value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}>{editableRoles.map((role) => <option value={role} key={role}>{roleLabel(role, lang)}</option>)}</select>
+                <select value={newUser.plan} onChange={(e) => setNewUser({ ...newUser, plan: e.target.value })}>{PLAN_OPTIONS.map((plan) => <option value={plan} key={plan}>{planLabel(plan, lang)}</option>)}</select>
+                <select value={newUser.status} onChange={(e) => setNewUser({ ...newUser, status: e.target.value })}>{USER_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select>
+                <div className="modal-actions"><button className="secondary-button" type="button" onClick={() => setShowAddUserModal(false)}>{t("cancel")}</button><button className="primary-button">{t("addUser")}</button></div>
+              </form>
+            </AdminModal>}
             {editing && <form className="panel admin-form" onSubmit={saveUser}>
               <h2>{t("editUser")}</h2>
               <input value={editing.full_name || ""} onChange={(e) => setEditing({ ...editing, full_name: e.target.value })} />
@@ -2533,23 +2702,28 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
           </section>}
 
           {tab === "jobs" && <section className="job-admin-grid">
-            <form className="panel admin-form job-editor-form" onSubmit={addJob}>
-              <h2>{t("addJob")}</h2>
-              <input placeholder={t("company")} value={jobForm.companyName} onChange={(e) => setJobForm({ ...jobForm, companyName: e.target.value })} />
-              <input placeholder={t("title")} value={jobForm.title} onChange={(e) => setJobForm({ ...jobForm, title: e.target.value })} />
-              <select value={jobForm.category} onChange={(e) => setJobForm({ ...jobForm, category: e.target.value })}>
-                {JOB_CATEGORIES.map((item) => <option value={item.value} key={item.value}>{item[lang]}</option>)}
-              </select>
-              <input placeholder={t("location")} value={jobForm.location} onChange={(e) => setJobForm({ ...jobForm, location: e.target.value })} />
-              <input placeholder={t("salary")} value={jobForm.salaryRange} onChange={(e) => setJobForm({ ...jobForm, salaryRange: e.target.value })} />
-              <select value={newJobAgentId} onChange={(e) => setNewJobAgentId(e.target.value)}>
-                <option value="">{agents.length ? t("assignJob") : t("agent")}</option>
-                {agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}
-              </select>
-              <textarea placeholder={t("description")} value={jobForm.description} onChange={(e) => setJobForm({ ...jobForm, description: e.target.value })} />
-              <textarea placeholder={`${t("screeningQuestions")} - ${t("screeningQuestionsHelp")}`} value={jobForm.questionsText} onChange={(e) => setJobForm({ ...jobForm, questionsText: e.target.value })} />
-              <button className="primary-button">{t("addJob")}</button>
-            </form>
+            <div className="section-head panel job-admin-toolbar">
+              <h2>{t("jobManagement")}</h2>
+              <button className="primary-button compact" type="button" onClick={() => setShowAddJobModal(true)}>{t("addJob")}</button>
+            </div>
+            {showAddJobModal && <AdminModal title={t("addJob")} close={() => setShowAddJobModal(false)}>
+              <form className="admin-form job-editor-form modal-job-form" onSubmit={addJob}>
+                <input placeholder={t("company")} value={jobForm.companyName} onChange={(e) => setJobForm({ ...jobForm, companyName: e.target.value })} />
+                <input placeholder={t("title")} value={jobForm.title} onChange={(e) => setJobForm({ ...jobForm, title: e.target.value })} />
+                <select value={jobForm.category} onChange={(e) => setJobForm({ ...jobForm, category: e.target.value })}>
+                  {JOB_CATEGORIES.map((item) => <option value={item.value} key={item.value}>{item[lang]}</option>)}
+                </select>
+                <input placeholder={t("location")} value={jobForm.location} onChange={(e) => setJobForm({ ...jobForm, location: e.target.value })} />
+                <input placeholder={t("salary")} value={jobForm.salaryRange} onChange={(e) => setJobForm({ ...jobForm, salaryRange: e.target.value })} />
+                <select value={newJobAgentId} onChange={(e) => setNewJobAgentId(e.target.value)}>
+                  <option value="">{agents.length ? t("assignJob") : t("agent")}</option>
+                  {agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}
+                </select>
+                <textarea placeholder={t("description")} value={jobForm.description} onChange={(e) => setJobForm({ ...jobForm, description: e.target.value })} />
+                <QuestionRows t={t} questions={jobForm.screeningQuestions} onChange={(screeningQuestions) => setJobForm({ ...jobForm, screeningQuestions })} />
+                <div className="modal-actions"><button className="secondary-button" type="button" onClick={() => setShowAddJobModal(false)}>{t("cancel")}</button><button className="primary-button">{t("addJob")}</button></div>
+              </form>
+            </AdminModal>}
 
             {editingJob && <form id="edit-job-form" className="panel admin-form job-editor-form" onSubmit={saveJob}>
               <h2>{t("editJob")}</h2>
@@ -2567,7 +2741,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
                 {agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}
               </select>
               <textarea placeholder={t("description")} value={editingJob.description} onChange={(e) => setEditingJob({ ...editingJob, description: e.target.value })} />
-              <textarea placeholder={`${t("screeningQuestions")} - ${t("screeningQuestionsHelp")}`} value={editingJob.questionsText || ""} onChange={(e) => setEditingJob({ ...editingJob, questionsText: e.target.value })} />
+              <QuestionRows t={t} questions={editingJob.screeningQuestions || [""]} onChange={(screeningQuestions) => setEditingJob({ ...editingJob, screeningQuestions })} />
               <div className="row-fields">
                 <button className="primary-button">{t("save")}</button>
                 <button className="secondary-button" type="button" onClick={() => setEditingJob(null)}>{t("cancel")}</button>

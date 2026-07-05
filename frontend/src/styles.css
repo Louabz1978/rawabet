@@ -1124,6 +1124,27 @@ textarea { min-height: 110px; resize: vertical; }
   box-shadow: 0 12px 32px rgba(21, 38, 60, 0.18);
 }
 
+.admin-modal {
+  width: min(760px, calc(100vw - 28px));
+}
+
+.admin-modal .builder-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.modal-form,
+.admin-modal .modal-job-form {
+  padding: 18px 22px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  grid-column: 1 / -1;
+}
+
 .builder-head,
 .builder-actions {
   display: flex;
@@ -1662,6 +1683,19 @@ textarea { min-height: 110px; resize: vertical; }
   justify-content: space-between;
   gap: 14px;
   margin-bottom: 14px;
+}
+
+.section-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: min(620px, 100%);
+}
+
+.section-actions input {
+  flex: 1;
+  min-width: 220px;
 }
 
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); }
@@ -2304,6 +2338,60 @@ html[dir="rtl"] .support-window {
 }
 .error { margin: 0; color: #b42318; font-weight: 700; }
 .notice { margin: 0; color: var(--brand); font-weight: 800; }
+.toast-popup {
+  position: fixed;
+  inset-inline-end: 18px;
+  bottom: 18px;
+  z-index: 90;
+  display: grid;
+  gap: 8px;
+  width: min(420px, calc(100vw - 36px));
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(21, 38, 60, 0.18);
+}
+
+.toast-popup > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.toast-popup strong {
+  color: var(--brand);
+  font-size: 0.9rem;
+}
+
+.toast-popup p {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.toast-popup.error-popup {
+  border-color: rgba(180, 35, 24, 0.28);
+  background: #fffafa;
+}
+
+.toast-popup.error-popup strong {
+  color: #b42318;
+}
+
+.strength-label {
+  display: inline-flex;
+  width: max-content;
+  margin-bottom: 8px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  color: var(--brand);
+  background: var(--brand-soft);
+  font-size: 0.76rem;
+}
 .auth-switch {
   width: fit-content;
   padding: 0;
