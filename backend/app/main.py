@@ -2541,14 +2541,15 @@ def apply_to_job(job_id: UUID, body: ApplyBody, user: Annotated[dict, Depends(cu
 
 @app.get("/api/admin/applications")
 def list_admin_applications(user: Annotated[dict, Depends(admin_user)]):
+    job_number_select = "j.job_number" if jobs_have_job_number_column() else "NULL::integer AS job_number"
     return fetch_all(
-        """
+        f"""
         SELECT
           a.id, a.status, a.created_at, COALESCE(a.screening_answers, '[]'::jsonb) AS screening_answers,
           a.resume_document_id, rd.file_name AS resume_file_name,
           CASE WHEN rd.file_path IS NULL THEN NULL ELSE '/uploads/' || split_part(rd.file_path, '/', array_length(string_to_array(rd.file_path, '/'), 1)) END AS resume_file_url,
           u.id AS user_id, u.full_name, u.email, u.headline, u.avatar_url, u.plan, u.last_active_at,
-          j.id AS job_id, j.title AS job_title, j.company_name, j.location,
+          j.id AS job_id, {job_number_select}, j.title AS job_title, j.company_name, j.location,
           COALESCE(j.screening_questions, '[]'::jsonb) AS screening_questions
         FROM applications a
         JOIN users u ON u.id = a.user_id
@@ -3162,7 +3163,6 @@ def admin_user_profile(user_id: UUID, user: Annotated[dict, Depends(admin_user)]
     profile = fetch_one("SELECT about, skills, languages, profile_strength FROM profiles WHERE user_id = %s", (user_id,))
     experiences = fetch_all("SELECT * FROM experiences WHERE user_id = %s ORDER BY start_date DESC NULLS LAST", (user_id,))
     education = fetch_all("SELECT * FROM education WHERE user_id = %s ORDER BY end_year DESC NULLS LAST", (user_id,))
-    courses = fetch_courses_for_user(target_user)
     documents = fetch_all(
         """
         SELECT id, kind, file_name, mime_type, file_size, verification_status, created_at,
@@ -3173,7 +3173,22 @@ def admin_user_profile(user_id: UUID, user: Annotated[dict, Depends(admin_user)]
         """,
         (user_id,),
     )
-    return {"user": target_user, "profile": profile, "experiences": experiences, "education": education, "courses": courses, "documents": documents}
+    job_number_select = "j.job_number" if jobs_have_job_number_column() else "NULL::integer AS job_number"
+    applications = fetch_all(
+        f"""
+        SELECT
+          a.id, a.status, a.created_at, COALESCE(a.screening_answers, '[]'::jsonb) AS screening_answers,
+          a.resume_document_id,
+          j.id AS job_id, {job_number_select}, j.title AS job_title, j.company_name, j.location,
+          j.category, j.salary_range, j.status AS job_status
+        FROM applications a
+        JOIN jobs j ON j.id = a.job_id
+        WHERE a.user_id = %s
+        ORDER BY a.created_at DESC
+        """,
+        (user_id,),
+    )
+    return {"user": target_user, "profile": profile, "experiences": experiences, "education": education, "documents": documents, "applications": applications}
 
 
 @app.patch("/api/admin/users/{user_id}/profile")

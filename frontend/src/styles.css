@@ -1712,6 +1712,48 @@ td span { display: block; color: var(--muted); font-size: 0.84rem; }
   min-width: 190px;
 }
 
+.table-user-button {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.table-user-button:hover strong {
+  color: var(--brand);
+}
+
+.admin-profile-applications {
+  align-content: start;
+}
+
+.profile-application-list {
+  display: grid;
+  gap: 8px;
+}
+
+.profile-application-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.profile-application-row span,
+.profile-application-row small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 .status {
   display: inline-flex;
   width: max-content;

@@ -214,6 +214,7 @@ const text = {
     applicationManagement: "Applications",
     interviews: "Interviews",
     supportInbox: "Support inbox",
+    searchApplications: "Search by applicant, job title, company, or job number",
     unreadMessages: "Unread messages",
     openChat: "Open chat",
     latestMessage: "Latest message",
@@ -492,6 +493,7 @@ const text = {
     applicationManagement: "طلبات التقديم",
     interviews: "المقابلات",
     supportInbox: "صندوق الدعم",
+    searchApplications: "ابحث باسم المتقدم أو الوظيفة أو الشركة أو رقم الوظيفة",
     unreadMessages: "رسائل غير مقروءة",
     openChat: "فتح المحادثة",
     latestMessage: "آخر رسالة",
@@ -2252,6 +2254,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
   const [newJobAgentId, setNewJobAgentId] = useState("");
   const [editingJobAgentId, setEditingJobAgentId] = useState("");
   const [editingJob, setEditingJob] = useState(null);
+  const [applicationSearch, setApplicationSearch] = useState("");
   const [interview, setInterview] = useState({ userId: "", jobId: "", scheduledAt: "", channel: "Video call", notes: "" });
   const [schedulingInterview, setSchedulingInterview] = useState(false);
   const unreadTotal = supportThreads.filter((thread) => Number(thread.unread_count || 0) > 0).length;
@@ -2268,6 +2271,11 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
   const adminVisibleJobs = jobs.filter((job) => {
     if (!normalizedJobAdminSearch) return true;
     return `${job.job_number || ""} ${job.title || ""} ${job.company_name || ""}`.toLowerCase().includes(normalizedJobAdminSearch);
+  });
+  const normalizedApplicationSearch = applicationSearch.trim().toLowerCase();
+  const visibleApplications = applications.filter((application) => {
+    if (!normalizedApplicationSearch) return true;
+    return `${application.full_name || ""} ${application.email || ""} ${application.job_title || ""} ${application.company_name || ""} ${application.job_number || ""}`.toLowerCase().includes(normalizedApplicationSearch);
   });
   const agents = users.filter((user) => user.role === "agent");
   const isMasterAdmin = session?.role === "master_admin";
@@ -2619,7 +2627,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
               <div className="table-wrap">
                 <table>
                   <thead><tr><th>{t("users")}</th><th>{t("role")}</th><th>{t("plan")}</th><th>{t("status")}</th><th>{t("attachments")}</th><th>{t("lastActive")}</th><th>{t("shareWithAgent")}</th><th>{t("actions")}</th></tr></thead>
-                  <tbody>{users.map((user) => <tr key={user.id}><td><div className="table-user"><Avatar user={user} size="small" /><div><strong>{user.full_name}</strong><span>{user.email}</span></div></div></td><td>{roleLabel(user.role, lang)}</td><td><select className="plan-select" value={user.plan || "free"} onChange={(e) => patchUser(user, { plan: e.target.value })}>{PLAN_OPTIONS.map((plan) => <option value={plan} key={plan}>{planLabel(plan, lang)}</option>)}</select></td><td><span className={`status ${user.status}`}>{statusLabel(user.status, lang)}</span></td><td><DocumentLinks t={t} documents={user.documents} avatarUrl={user.avatar_url} compact /></td><td>{new Date(user.last_active_at).toLocaleDateString()}</td><td><select className="action-select" defaultValue="" disabled={!agents.length} onChange={async (e) => { await shareUser(user, e.target.value); e.target.value = ""; }}><option value="">{agents.length ? t("shareWithAgent") : t("agent")}</option>{agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}</select></td><td><select className="action-select" defaultValue="" onChange={(e) => { runUserAction(user, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option><option value="edit">{t("editUser")}</option><option value="verify">{t("verify")}</option><option value="activate">{t("activate")}</option><option value="deactivate">{t("deactivate")}</option>{(isMasterAdmin || !["admin", "master_admin"].includes(user.role)) && <option value="delete">{t("delete")}</option>}</select></td></tr>)}</tbody>
+                  <tbody>{users.map((user) => <tr key={user.id}><td><button className="table-user table-user-button" type="button" onClick={() => openUserProfile(user)}><Avatar user={user} size="small" /><div><strong>{user.full_name}</strong><span>{user.email}</span></div></button></td><td>{roleLabel(user.role, lang)}</td><td><select className="plan-select" value={user.plan || "free"} onChange={(e) => patchUser(user, { plan: e.target.value })}>{PLAN_OPTIONS.map((plan) => <option value={plan} key={plan}>{planLabel(plan, lang)}</option>)}</select></td><td><span className={`status ${user.status}`}>{statusLabel(user.status, lang)}</span></td><td><DocumentLinks t={t} documents={user.documents} avatarUrl={user.avatar_url} compact /></td><td>{new Date(user.last_active_at).toLocaleDateString()}</td><td><select className="action-select" defaultValue="" disabled={!agents.length} onChange={async (e) => { await shareUser(user, e.target.value); e.target.value = ""; }}><option value="">{agents.length ? t("shareWithAgent") : t("agent")}</option>{agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}</select></td><td><select className="action-select" defaultValue="" onChange={(e) => { runUserAction(user, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option><option value="edit">{t("editUser")}</option><option value="verify">{t("verify")}</option><option value="activate">{t("activate")}</option><option value="deactivate">{t("deactivate")}</option>{(isMasterAdmin || !["admin", "master_admin"].includes(user.role)) && <option value="delete">{t("delete")}</option>}</select></td></tr>)}</tbody>
                 </table>
               </div>
             </section>
@@ -2691,20 +2699,24 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
                 <label>{t("certificate")}<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={(e) => uploadSelectedAttachment("certificate", e.target.files[0])} /><span>{t("maxCertificates")}</span></label>
                 <DocumentLinks t={t} documents={selectedProfile.documents} avatarUrl={selectedProfile.user.avatar_url} onDelete={deleteSelectedAttachment} />
               </section>
-              <form className="panel admin-form" onSubmit={addSelectedCourse}>
-                <h2>{t("courses")}</h2>
-                <select value={adminCourseForm.addedById} onChange={(e) => setAdminCourseForm({ ...adminCourseForm, addedById: e.target.value })}>
-                  <option value="">{t("adminDefault")}</option>
-                  {agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}
-                </select>
-                <input placeholder={t("title")} value={adminCourseForm.title} onChange={(e) => setAdminCourseForm({ ...adminCourseForm, title: e.target.value })} />
-                <input placeholder={t("provider")} value={adminCourseForm.provider} onChange={(e) => setAdminCourseForm({ ...adminCourseForm, provider: e.target.value })} />
-                <input type="date" value={adminCourseForm.completionDate} onChange={(e) => setAdminCourseForm({ ...adminCourseForm, completionDate: e.target.value })} />
-                <input placeholder={t("viewFile")} value={adminCourseForm.certificateUrl} onChange={(e) => setAdminCourseForm({ ...adminCourseForm, certificateUrl: e.target.value })} />
-                <textarea placeholder={t("notes")} value={adminCourseForm.notes} onChange={(e) => setAdminCourseForm({ ...adminCourseForm, notes: e.target.value })} />
-                <button className="secondary-button">{t("addCourse")}</button>
-                {(selectedProfile.courses || []).map((course) => <div className="timeline-item" key={course.id}><strong>{course.title}</strong><span>{course.provider || "-"}{course.completion_date ? ` · ${course.completion_date}` : ""}</span></div>)}
-              </form>
+              <section className="panel admin-profile-applications">
+                <div className="section-head">
+                  <h2>{t("appliedJobs")}</h2>
+                  <span className="status">{selectedProfile.applications?.length || 0}</span>
+                </div>
+                <div className="profile-application-list">
+                  {(selectedProfile.applications || []).length ? selectedProfile.applications.map((application) => (
+                    <article className="profile-application-row" key={application.id}>
+                      <div>
+                        <strong>{application.job_title}</strong>
+                        <span>#{application.job_number || "-"} · {application.company_name} · {application.location || "-"}</span>
+                        <small>{application.salary_range || "-"} · {new Date(application.created_at).toLocaleDateString()}</small>
+                      </div>
+                      <b className={`status ${normalizeStatusValue(application.status)}`}>{statusLabel(normalizeStatusValue(application.status), lang)}</b>
+                    </article>
+                  )) : <p>{t("noAppliedJobs")}</p>}
+                </div>
+              </section>
             </section>
             <section className="panel">
               <h2>{t("about")}</h2>
@@ -2833,11 +2845,11 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
           </section>}
 
           {tab === "applications" && <section className="panel">
-            <div className="section-head"><h2>{t("applications")}</h2><span className="status">{applications.length}</span></div>
+            <div className="section-head"><h2>{t("applications")}</h2><div className="section-actions"><input placeholder={t("searchApplications")} value={applicationSearch} onChange={(e) => setApplicationSearch(e.target.value)} /><span className="status">{visibleApplications.length}</span></div></div>
             <div className="table-wrap">
               <table>
-                <thead><tr><th>{t("applicant")}</th><th>{t("job")}</th><th>{t("location")}</th><th>{t("resume")}</th><th>{t("submittedAnswers")}</th><th>{t("applicationStatus")}</th><th>{t("shareWithAgent")}</th><th>{t("actions")}</th></tr></thead>
-                <tbody>{applications.map((application) => <tr key={application.id}><td><div className="table-user"><Avatar user={{ full_name: application.full_name, avatar_url: application.avatar_url, plan: application.plan, last_active_at: application.last_active_at }} size="small" /><div><strong>{application.full_name}</strong><span>{application.email}</span></div></div></td><td><strong>{application.job_title}</strong><span>{application.company_name}</span></td><td>{application.location}</td><td>{application.resume_file_url ? <a href={assetUrl(application.resume_file_url)} target="_blank" rel="noreferrer">{application.resume_file_name || t("resume")}</a> : "-"}</td><td><ApplicationAnswers t={t} answers={application.screening_answers} /></td><td><span className={`status ${application.status}`}>{statusLabel(application.status, lang)}</span></td><td><select className="action-select" defaultValue="" disabled={!agents.length} onChange={async (e) => { await shareApplication(application, e.target.value); e.target.value = ""; }}><option value="">{agents.length ? t("shareWithAgent") : t("agent")}</option>{agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}</select></td><td><select className="action-select" defaultValue="" onChange={(e) => { updateApplicationStatus(application, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option>{APPLICATION_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select></td></tr>)}</tbody>
+                <thead><tr><th>{t("applicant")}</th><th>{t("job")}</th><th>{t("location")}</th><th>{t("submittedAnswers")}</th><th>{t("applicationStatus")}</th><th>{t("shareWithAgent")}</th><th>{t("actions")}</th></tr></thead>
+                <tbody>{visibleApplications.map((application) => <tr key={application.id}><td><button className="table-user table-user-button" type="button" onClick={() => openUserProfile({ id: application.user_id })}><Avatar user={{ full_name: application.full_name, avatar_url: application.avatar_url, plan: application.plan, last_active_at: application.last_active_at }} size="small" /><div><strong>{application.full_name}</strong><span>{application.email}</span></div></button></td><td><strong>{application.job_title}</strong><span>#{application.job_number || "-"} · {application.company_name}</span></td><td>{application.location}</td><td><ApplicationAnswers t={t} answers={application.screening_answers} /></td><td><span className={`status ${application.status}`}>{statusLabel(application.status, lang)}</span></td><td><select className="action-select" defaultValue="" disabled={!agents.length} onChange={async (e) => { await shareApplication(application, e.target.value); e.target.value = ""; }}><option value="">{agents.length ? t("shareWithAgent") : t("agent")}</option>{agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}</select></td><td><select className="action-select" defaultValue="" onChange={(e) => { updateApplicationStatus(application, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option>{APPLICATION_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select></td></tr>)}</tbody>
               </table>
             </div>
           </section>}
