@@ -705,8 +705,11 @@ function App() {
   const [supportOpen, setSupportOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [popup, setPopup] = useState(null);
+  const [presenceTick, setPresenceTick] = useState(0);
   const supportUnreadRef = useRef(0);
   const supportUnreadReadyRef = useRef(false);
+  const presenceBusyRef = useRef(false);
+  const presenceListsBusyRef = useRef(false);
   const t = (key) => text[lang][key] || key;
   const isAdminRole = (role) => ["admin", "master_admin"].includes(role);
 
@@ -795,6 +798,41 @@ function App() {
     }
   }
 
+  async function touchPresence() {
+    if (!session || presenceBusyRef.current) return;
+    presenceBusyRef.current = true;
+    try {
+      const data = await api("/account/presence", { method: "POST" });
+      setMe((current) => current ? { ...current, user: { ...current.user, ...(data.user || {}) } } : current);
+      setSession((current) => current ? { ...current, ...(data.user || {}) } : current);
+    } finally {
+      presenceBusyRef.current = false;
+    }
+  }
+
+  async function refreshPresenceLists() {
+    if (!session || presenceListsBusyRef.current) return;
+    presenceListsBusyRef.current = true;
+    try {
+      if (isAdminRole(session.role)) {
+        setAdminApplications(await api("/admin/applications"));
+        const threads = await api("/admin/support/threads");
+        const nextUnread = threads.filter((thread) => Number(thread.unread_count || 0) > 0).length;
+        if (supportUnreadReadyRef.current && nextUnread > supportUnreadRef.current) playNotificationBeep();
+        supportUnreadRef.current = nextUnread;
+        supportUnreadReadyRef.current = true;
+        setSupportThreads(threads);
+      } else if (session.role === "agent") {
+        setAgentShares(await api("/agent/shares"));
+        setAgentInterviews(await api("/agent/interviews"));
+      } else {
+        setAgents(await api("/agents"));
+      }
+    } finally {
+      presenceListsBusyRef.current = false;
+    }
+  }
+
   useEffect(() => {
     if (localStorage.getItem("rawabet_token")) {
       loadApp().catch(() => clearToken());
@@ -806,6 +844,24 @@ function App() {
     const timer = setInterval(() => loadSupportThreads().catch(() => {}), 12000);
     return () => clearInterval(timer);
   }, [session?.role]);
+
+  useEffect(() => {
+    if (!session) return undefined;
+    touchPresence().catch(() => {});
+    refreshPresenceLists().catch(() => {});
+    const heartbeat = setInterval(() => touchPresence().catch(() => {}), 30000);
+    const listRefresh = setInterval(() => refreshPresenceLists().catch(() => {}), 8000);
+    const visualTick = setInterval(() => setPresenceTick((tick) => tick + 1), 15000);
+    const activeEvents = ["focus", "click", "keydown", "mousemove", "touchstart"];
+    const onActivity = () => touchPresence().catch(() => {});
+    activeEvents.forEach((eventName) => window.addEventListener(eventName, onActivity, { passive: true }));
+    return () => {
+      clearInterval(heartbeat);
+      clearInterval(listRefresh);
+      clearInterval(visualTick);
+      activeEvents.forEach((eventName) => window.removeEventListener(eventName, onActivity));
+    };
+  }, [session?.id, session?.role]);
 
   async function login(email, password) {
     setError("");
@@ -2222,6 +2278,11 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
       clearInitialTab?.();
     }
   }, [initialTab]);
+  useEffect(() => {
+    if (tab !== "users") return undefined;
+    const timer = setInterval(() => searchUsers(search).catch(() => {}), 8000);
+    return () => clearInterval(timer);
+  }, [tab, search]);
   async function searchUsers(value) {
     setSearch(value);
     setUsers(await api(`/admin/users?search=${encodeURIComponent(value)}`));
@@ -3399,7 +3460,7 @@ function isUserOnline(user = {}) {
   if (!value) return false;
   const timestamp = new Date(value).getTime();
   if (!Number.isFinite(timestamp)) return false;
-  return Date.now() - timestamp < 5 * 60 * 1000;
+  return Date.now() - timestamp < 90 * 1000;
 }
 
 function formatNumber(value = 0) {

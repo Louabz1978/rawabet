@@ -2118,6 +2118,20 @@ def me(user: Annotated[dict, Depends(current_user)]):
     return {"user": public_user(user), "profile": profile, "experiences": experiences, "education": education, "courses": courses, "documents": documents, "applications": applications, "interviews": interviews, "stats": stats}
 
 
+@app.post("/api/account/presence")
+def update_presence(user: Annotated[dict, Depends(current_user)]):
+    updated = execute(
+        """
+        UPDATE users
+        SET last_active_at = NOW()
+        WHERE id = %s
+        RETURNING id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url, last_active_at
+        """,
+        (user["id"],),
+    )
+    return {"user": public_user(updated)}
+
+
 @app.put("/api/account/profile")
 def update_profile(body: ProfileBody, user: Annotated[dict, Depends(current_user)]):
     execute(
