@@ -507,7 +507,7 @@ const text = {
     liveAgentRequest: "أريد التحدث مع موظف دعم مباشر.",
     liveSupportStarted: "تم تحويلك إلى الدعم المباشر. اكتب رسالتك وسيقوم المدير بالرد هنا.",
     clearFailed: "تعذر مسح المحادثة.",
-    editUser: "تعديل العمل",
+    editUser: "تعديل المعلومات",
     addUser: "إضافة مستخدم",
     masterAdmin: "المدير الرئيسي",
     delete: "حذف",
