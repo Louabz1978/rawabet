@@ -230,6 +230,7 @@ def ensure_runtime_schema():
     for sql in (
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS dob DATE",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS active_session_id TEXT",
         "ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check",
         "ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('member', 'recruiter', 'company', 'admin', 'agent', 'master_admin'))",
         """
@@ -2130,6 +2131,12 @@ def update_presence(user: Annotated[dict, Depends(current_user)]):
         (user["id"],),
     )
     return {"user": public_user(updated)}
+
+
+@app.post("/api/account/refresh-session")
+def refresh_session(user: Annotated[dict, Depends(current_user)]):
+    execute("UPDATE users SET last_active_at = NOW() WHERE id = %s", (user["id"],))
+    return {"user": public_user(user), "token": create_token(user, user.get("_session_id"))}
 
 
 @app.put("/api/account/profile")

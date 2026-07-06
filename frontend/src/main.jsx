@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { api, clearToken, getToken, setToken } from "./lib/api.js";
+import { api, clearToken, getToken, getTokenCreatedAt, setToken } from "./lib/api.js";
 import "./styles.css";
 
 const text = {
@@ -281,6 +281,11 @@ const text = {
     medium: "Medium",
     strong: "Strong",
     excellent: "Excellent",
+    sessionExpiringTitle: "Session expiring",
+    sessionExpiringBody: "For security, your session expires after 60 minutes. Do you want to stay connected?",
+    stayConnected: "Stay connected",
+    autoLogoutIn: "Auto logout in",
+    signedInElsewhere: "This account was signed in from another device.",
     language: "ع"
   },
   ar: {
@@ -560,6 +565,11 @@ const text = {
     medium: "متوسط",
     strong: "قوي",
     excellent: "ممتاز",
+    sessionExpiringTitle: "ستنتهي الجلسة",
+    sessionExpiringBody: "لأمان الحساب، تنتهي الجلسة بعد 60 دقيقة. هل تريد البقاء متصلا؟",
+    stayConnected: "البقاء متصلا",
+    autoLogoutIn: "تسجيل خروج تلقائي خلال",
+    signedInElsewhere: "تم تسجيل الدخول إلى هذا الحساب من جهاز آخر.",
     language: "EN"
   }
 };
@@ -605,6 +615,9 @@ const JOB_STATUSES = ["active", "paused", "closed"];
 const PLAN_OPTIONS = ["free", "premium"];
 const USER_ROLES = ["member", "agent", "admin", "master_admin"];
 const API_URL = import.meta.env.VITE_API_URL || "/api";
+const SESSION_MS = 60 * 60 * 1000;
+const SESSION_WARNING_MS = 58 * 60 * 1000;
+const SESSION_GRACE_MS = 2 * 60 * 1000;
 
 function statusLabel(value, lang) {
   return STATUS_LABELS[value]?.[lang] || value || "-";
@@ -708,6 +721,8 @@ function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [popup, setPopup] = useState(null);
   const [presenceTick, setPresenceTick] = useState(0);
+  const [sessionWarningOpen, setSessionWarningOpen] = useState(false);
+  const [sessionCountdown, setSessionCountdown] = useState(SESSION_GRACE_MS / 1000);
   const supportUnreadRef = useRef(0);
   const supportUnreadReadyRef = useRef(false);
   const presenceBusyRef = useRef(false);
@@ -835,10 +850,35 @@ function App() {
     }
   }
 
+  async function stayConnected() {
+    try {
+      const data = await api("/account/refresh-session", { method: "POST" });
+      setToken(data.token);
+      setSession(data.user);
+      setMe((current) => current ? { ...current, user: data.user } : current);
+      setSessionWarningOpen(false);
+      setSessionCountdown(SESSION_GRACE_MS / 1000);
+      notify(t("successUpdated"), "success");
+    } catch (err) {
+      notify(err.message || String(err), "error", err.stack || err.message || String(err));
+      logout();
+    }
+  }
+
   useEffect(() => {
     if (localStorage.getItem("rawabet_token")) {
+      if (!getTokenCreatedAt()) localStorage.setItem("rawabet_token_created_at", String(Date.now()));
       loadApp().catch(() => clearToken());
     }
+  }, []);
+
+  useEffect(() => {
+    const onSessionEnded = (event) => {
+      notify(event.detail || t("signedInElsewhere"), "error", event.detail || t("signedInElsewhere"));
+      logout();
+    };
+    window.addEventListener("rawabet:session-ended", onSessionEnded);
+    return () => window.removeEventListener("rawabet:session-ended", onSessionEnded);
   }, []);
 
   useEffect(() => {
@@ -864,6 +904,24 @@ function App() {
       activeEvents.forEach((eventName) => window.removeEventListener(eventName, onActivity));
     };
   }, [session?.id, session?.role]);
+
+  useEffect(() => {
+    if (!session) return undefined;
+    const timer = setInterval(() => {
+      const createdAt = getTokenCreatedAt();
+      if (!createdAt) return;
+      const age = Date.now() - createdAt;
+      if (age >= SESSION_MS) {
+        logout();
+        return;
+      }
+      if (age >= SESSION_WARNING_MS) {
+        setSessionWarningOpen(true);
+        setSessionCountdown(Math.max(0, Math.ceil((SESSION_MS - age) / 1000)));
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [session?.id]);
 
   async function login(email, password) {
     setError("");
@@ -915,6 +973,8 @@ function App() {
     supportUnreadRef.current = 0;
     supportUnreadReadyRef.current = false;
     setMobileMenuOpen(false);
+    setSessionWarningOpen(false);
+    setSessionCountdown(SESSION_GRACE_MS / 1000);
   }
 
   const supportUnread = supportThreads.filter((thread) => Number(thread.unread_count || 0) > 0).length;
@@ -992,6 +1052,7 @@ function App() {
         </div>
       </header>
       {!isAgent && mobileMenuOpen && <nav className="mobile-drawer-menu" aria-label={t("menu")}>
+        {isAdminRole(session.role) && <button type="button" onClick={() => { setView("admin"); setMobileMenuOpen(false); }}>{t("adminDashboard")}</button>}
         <button type="button" onClick={openAppliedJobs}><span>{t("appliedJobs")}</span><b>{formatNumber(me.applications?.length || 0)}</b></button>
         <button type="button" onClick={openAllJobs}>{t("findJob")}</button>
         <button type="button" onClick={() => { setView("agents"); setMobileMenuOpen(false); }}>{t("findCompany")}</button>
@@ -1014,11 +1075,28 @@ function App() {
           {view === "admin" && isAdminRole(session.role) && <Admin t={t} lang={lang} session={session} admin={admin} users={adminUsers} setUsers={setAdminUsers} jobs={jobs} courses={adminCourses} applications={adminApplications} setApplications={setAdminApplications} interviews={adminInterviews} supportThreads={supportThreads} initialTab={adminStartTab} clearInitialTab={() => setAdminStartTab("")} reload={loadApp} openSupport={(userId) => { setSupportTarget(userId || ""); setSupportOpen(true); }} notify={notify} withNotify={withNotify} />}
         </>}
       </main>
-      {!isAgent && <MobileBottomNav t={t} view={view} setView={setView} openAllJobs={openAllJobs} openComingInterviews={openComingInterviews} />}
+      {!isAgent && <MobileBottomNav t={t} view={view} setView={setView} openAllJobs={openAllJobs} openComingInterviews={openComingInterviews} isAdmin={isAdminRole(session.role)} />}
       {!isAgent && builderOpen && <ProfileBuilder t={t} me={me} reload={loadApp} close={() => setBuilderOpen(false)} notify={notify} />}
       {!isAgent && supportOpen && <SupportWindow t={t} me={me} users={adminUsers} initialUserId={supportTarget} onUpdate={loadSupportThreads} close={() => { setSupportOpen(false); setSupportTarget(""); }} />}
       {popup && <ToastPopup t={t} popup={popup} close={() => setPopup(null)} />}
+      {sessionWarningOpen && <SessionWarningModal t={t} seconds={sessionCountdown} stayConnected={stayConnected} logout={logout} />}
       <AppFooter />
+    </div>
+  );
+}
+
+function SessionWarningModal({ t, seconds, stayConnected, logout }) {
+  return (
+    <div className="builder-backdrop session-warning-backdrop" role="presentation">
+      <section className="session-warning-modal" role="dialog" aria-modal="true" aria-live="assertive">
+        <h2>{t("sessionExpiringTitle")}</h2>
+        <p>{t("sessionExpiringBody")}</p>
+        <strong>{t("autoLogoutIn")} {Math.max(0, seconds)}s</strong>
+        <div className="modal-actions">
+          <button className="secondary-button" type="button" onClick={logout}>{t("logout")}</button>
+          <button className="primary-button" type="button" onClick={stayConnected}>{t("stayConnected")}</button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -1449,8 +1527,9 @@ function NavIcon({ name }) {
   return <svg {...common}>{paths[name]}</svg>;
 }
 
-function MobileBottomNav({ t, view, setView, openAllJobs, openComingInterviews }) {
+function MobileBottomNav({ t, view, setView, openAllJobs, openComingInterviews, isAdmin = false }) {
   const items = [
+    ...(isAdmin ? [{ id: "admin", icon: "admin", label: t("admin"), action: () => setView("admin") }] : []),
     { id: "home", icon: "home", label: t("home"), action: () => setView("home") },
     { id: "profile", icon: "profile", label: t("profile"), action: () => setView("profile") },
     { id: "allJobs", icon: "jobs", label: t("jobs"), action: openAllJobs },

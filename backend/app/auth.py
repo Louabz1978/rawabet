@@ -1,4 +1,5 @@
 from typing import Annotated
+from uuid import uuid4
 
 import bcrypt
 from fastapi import Depends, HTTPException
@@ -6,7 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from .config import JWT_SECRET, MASTER_ADMIN_EMAILS
-from .db import fetch_one
+from .db import execute, fetch_one
 
 security = HTTPBearer()
 serializer = URLSafeTimedSerializer(JWT_SECRET, salt="rawabet-session")
@@ -21,8 +22,10 @@ def verify_password(password: str, password_hash: str) -> bool:
     return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
 
 
-def create_token(user: dict) -> str:
-    return serializer.dumps({"sub": str(user["id"]), "role": user["role"]})
+def create_token(user: dict, session_id: str | None = None) -> str:
+    session_id = session_id or uuid4().hex
+    execute("UPDATE users SET active_session_id = %s WHERE id = %s", (session_id, user["id"]))
+    return serializer.dumps({"sub": str(user["id"]), "role": user["role"], "sid": session_id})
 
 
 def public_user(user: dict) -> dict:
@@ -47,17 +50,21 @@ def current_user(credentials: Annotated[HTTPAuthorizationCredentials, Depends(se
     try:
         payload = serializer.loads(credentials.credentials, max_age=TOKEN_MAX_AGE)
         user_id = payload.get("sub")
+        session_id = payload.get("sid")
     except (BadSignature, SignatureExpired) as exc:
         raise HTTPException(status_code=401, detail="Invalid session") from exc
 
     user = fetch_one(
-        "SELECT id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url, last_active_at FROM users WHERE id = %s",
+        "SELECT id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url, last_active_at, active_session_id FROM users WHERE id = %s",
         (user_id,),
     )
     if not user:
         raise HTTPException(status_code=401, detail="Invalid session")
+    if not session_id or user.get("active_session_id") != session_id:
+        raise HTTPException(status_code=401, detail="This account was signed in from another device")
     if user.get("status") == "suspended":
         raise HTTPException(status_code=403, detail="This account is suspended")
+    user["_session_id"] = session_id
     return user
 
 
