@@ -618,6 +618,7 @@ const API_URL = import.meta.env.VITE_API_URL || "/api";
 const SESSION_MS = 60 * 60 * 1000;
 const SESSION_WARNING_MS = 58 * 60 * 1000;
 const SESSION_GRACE_MS = 2 * 60 * 1000;
+const SESSION_VALIDATE_MS = 5 * 1000;
 
 function statusLabel(value, lang) {
   return STATUS_LABELS[value]?.[lang] || value || "-";
@@ -727,6 +728,7 @@ function App() {
   const supportUnreadReadyRef = useRef(false);
   const presenceBusyRef = useRef(false);
   const presenceListsBusyRef = useRef(false);
+  const sessionEndedRef = useRef(false);
   const t = (key) => text[lang][key] || key;
   const isAdminRole = (role) => ["admin", "master_admin"].includes(role);
 
@@ -822,9 +824,27 @@ function App() {
       const data = await api("/account/presence", { method: "POST" });
       setMe((current) => current ? { ...current, user: { ...current.user, ...(data.user || {}) } } : current);
       setSession((current) => current ? { ...current, ...(data.user || {}) } : current);
+    } catch (err) {
+      if (isSessionEndedError(err)) {
+        handleSessionEnded(err.message);
+        return;
+      }
+      throw err;
     } finally {
       presenceBusyRef.current = false;
     }
+  }
+
+  function isSessionEndedError(err) {
+    const message = String(err?.message || err || "");
+    return message.includes("another device") || message.includes("Invalid session");
+  }
+
+  function handleSessionEnded(message) {
+    if (sessionEndedRef.current) return;
+    sessionEndedRef.current = true;
+    notify(message || t("signedInElsewhere"), "error", message || t("signedInElsewhere"));
+    logout();
   }
 
   async function refreshPresenceLists() {
@@ -854,6 +874,7 @@ function App() {
     try {
       const data = await api("/account/refresh-session", { method: "POST" });
       setToken(data.token);
+      sessionEndedRef.current = false;
       setSession(data.user);
       setMe((current) => current ? { ...current, user: data.user } : current);
       setSessionWarningOpen(false);
@@ -874,8 +895,7 @@ function App() {
 
   useEffect(() => {
     const onSessionEnded = (event) => {
-      notify(event.detail || t("signedInElsewhere"), "error", event.detail || t("signedInElsewhere"));
-      logout();
+      handleSessionEnded(event.detail || t("signedInElsewhere"));
     };
     window.addEventListener("rawabet:session-ended", onSessionEnded);
     return () => window.removeEventListener("rawabet:session-ended", onSessionEnded);
@@ -891,7 +911,7 @@ function App() {
     if (!session) return undefined;
     touchPresence().catch(() => {});
     refreshPresenceLists().catch(() => {});
-    const heartbeat = setInterval(() => touchPresence().catch(() => {}), 30000);
+    const heartbeat = setInterval(() => touchPresence().catch(() => {}), SESSION_VALIDATE_MS);
     const listRefresh = setInterval(() => refreshPresenceLists().catch(() => {}), 8000);
     const visualTick = setInterval(() => setPresenceTick((tick) => tick + 1), 15000);
     const activeEvents = ["focus", "click", "keydown", "mousemove", "touchstart"];
@@ -929,6 +949,7 @@ function App() {
       const data = await api("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
       if (data.mfaRequired) return data;
       setToken(data.token);
+      sessionEndedRef.current = false;
       try {
         const loadedUser = await loadApp();
         setView(loadedUser.role === "agent" ? "agent" : "home");
@@ -946,6 +967,7 @@ function App() {
 
   async function verifyAndLoad(token) {
     setToken(token);
+    sessionEndedRef.current = false;
     try {
       const loadedUser = await loadApp();
       setView(loadedUser.role === "agent" ? "agent" : "home");
