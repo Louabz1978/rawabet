@@ -20,6 +20,7 @@ export function getTokenCreatedAt() {
 
 export async function api(path, options = {}) {
   const token = getToken();
+  const requestToken = token;
   const headers = {
     ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -34,10 +35,16 @@ export async function api(path, options = {}) {
   }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    if (response.status === 401 && token) {
+    const message = data.detail || data.message || "Request failed";
+    const error = new Error(message);
+    error.status = response.status;
+    error.detail = message;
+    error.isSessionError = response.status === 401;
+    error.staleSession = response.status === 401 && requestToken && requestToken !== getToken();
+    if (response.status === 401 && token && !error.staleSession) {
       window.dispatchEvent(new CustomEvent("rawabet:session-ended", { detail: data.detail || data.message || "Invalid session" }));
     }
-    throw new Error(data.detail || data.message || "Request failed");
+    throw error;
   }
   return data;
 }

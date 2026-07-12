@@ -620,6 +620,15 @@ const SESSION_WARNING_MS = 58 * 60 * 1000;
 const SESSION_GRACE_MS = 2 * 60 * 1000;
 const SESSION_VALIDATE_MS = 5 * 1000;
 
+function isStaleSessionError(error) {
+  return Boolean(error?.staleSession);
+}
+
+function isSessionError(error) {
+  const message = String(error?.message || error || "");
+  return Boolean(error?.isSessionError) || message.includes("another device") || message.includes("Invalid session");
+}
+
 function statusLabel(value, lang) {
   return STATUS_LABELS[value]?.[lang] || value || "-";
 }
@@ -742,6 +751,7 @@ function App() {
       if (successMessage) notify(successMessage, "success");
       return result;
     } catch (err) {
+      if (isStaleSessionError(err)) return null;
       notify(err.message || String(err), "error", err.stack || err.message || String(err));
       throw err;
     }
@@ -756,6 +766,10 @@ function App() {
   useEffect(() => {
     const onUnhandledRejection = (event) => {
       const reason = event.reason;
+      if (isStaleSessionError(reason)) {
+        event.preventDefault?.();
+        return;
+      }
       notify(reason?.message || String(reason || "Unexpected error"), "error", reason?.stack || reason?.message || String(reason || ""));
     };
     const onError = (event) => {
@@ -836,14 +850,15 @@ function App() {
   }
 
   function isSessionEndedError(err) {
-    const message = String(err?.message || err || "");
-    return message.includes("another device") || message.includes("Invalid session");
+    return !isStaleSessionError(err) && isSessionError(err);
   }
 
   function handleSessionEnded(message) {
     if (sessionEndedRef.current) return;
     sessionEndedRef.current = true;
-    notify(message || t("signedInElsewhere"), "error", message || t("signedInElsewhere"));
+    if (String(message || "").includes("another device")) {
+      notify(message || t("signedInElsewhere"), "error", message || t("signedInElsewhere"));
+    }
     logout();
   }
 
