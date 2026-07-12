@@ -719,6 +719,7 @@ function App() {
   const [agentShares, setAgentShares] = useState([]);
   const [agentInterviews, setAgentInterviews] = useState([]);
   const [agentJobs, setAgentJobs] = useState([]);
+  const [agentUsers, setAgentUsers] = useState([]);
   const [supportThreads, setSupportThreads] = useState([]);
   const [supportTarget, setSupportTarget] = useState("");
   const [adminStartTab, setAdminStartTab] = useState("");
@@ -816,6 +817,7 @@ function App() {
       setAgentShares(await api("/agent/shares"));
       setAgentInterviews(await api("/agent/interviews"));
       setAgentJobs(await api("/agent/jobs"));
+      setAgentUsers(await api("/agent/users"));
     }
     return data.user;
   }
@@ -877,6 +879,7 @@ function App() {
       } else if (session.role === "agent") {
         setAgentShares(await api("/agent/shares"));
         setAgentInterviews(await api("/agent/interviews"));
+        setAgentUsers(await api("/agent/users"));
       } else {
         setAgents(await api("/agents"));
       }
@@ -1006,6 +1009,7 @@ function App() {
     setAgentShares([]);
     setAgentInterviews([]);
     setAgentJobs([]);
+    setAgentUsers([]);
     setSupportThreads([]);
     supportUnreadRef.current = 0;
     supportUnreadReadyRef.current = false;
@@ -1099,7 +1103,7 @@ function App() {
       </nav>}
 
       <main className={view === "admin" || isAgent ? "admin-main" : ""}>
-        {isAgent ? <AgentWorkspace t={t} lang={lang} agent={me.user} profile={me.profile || {}} shares={agentShares} interviews={agentInterviews} jobs={agentJobs} reload={loadApp} notify={notify} /> : <>
+        {isAgent ? <AgentWorkspace t={t} lang={lang} agent={me.user} profile={me.profile || {}} shares={agentShares} users={agentUsers} interviews={agentInterviews} jobs={agentJobs} reload={loadApp} notify={notify} /> : <>
           {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} agents={agents} setSelectedAgent={setSelectedAgent} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} openSmartResume={openSmartResumeForUser} canUseSmartResume={canUseSmartResume} jobSearch={jobSearch} setJobSearch={setJobSearch} setJobMode={setJobMode} />}
           {view === "profile" && <Profile t={t} me={me} reload={loadApp} notify={notify} />}
           {view === "smartResume" && canUseSmartResume && <SmartResumePage t={t} me={me} reload={loadApp} notify={notify} />}
@@ -3012,23 +3016,23 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
   );
 }
 
-function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], interviews = [], jobs = [], reload, notify }) {
+function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [], interviews = [], jobs = [], reload, notify }) {
   const [tab, setTab] = useState("profile");
   const [selectedShareId, setSelectedShareId] = useState("");
   const [interview, setInterview] = useState({ userId: "", jobId: "", scheduledAt: "", channel: "Video call", notes: "" });
   const [agentProfileForm, setAgentProfileForm] = useState({ headline: agent?.headline || "", location: agent?.location || "", about: profile?.about || "", agencyName: profile?.agency_name || "", agencyAbout: profile?.agency_about || "", website: profile?.website || "" });
   const [courseForm, setCourseForm] = useState({ userId: "", title: "", provider: "", completionDate: "", certificateUrl: "", notes: "" });
   const [schedulingInterview, setSchedulingInterview] = useState(false);
-  const selectedShare = shares.find((share) => share.share_id === selectedShareId);
+  const userDirectory = Array.from(new Map([...shares, ...users].map((share) => [share.user_id, share])).values());
+  const selectedShare = [...shares, ...users].find((share) => share.share_id === selectedShareId);
   const applicationShares = shares.filter((share) => share.share_type === "application");
-  const directCandidates = shares.filter((share) => share.share_type === "user");
-  const uniqueCandidates = Array.from(new Map(shares.map((share) => [share.user_id, share])).values());
+  const uniqueCandidates = userDirectory;
   const statusCounts = APPLICATION_STATUSES.map((status) => ({
     label: statusLabel(status, lang),
     value: applicationShares.filter((share) => normalizeStatusValue(share.application_status) === status).length
   })).filter((item) => item.value > 0);
   const activityData = [
-    { label: t("sharedCandidates"), value: uniqueCandidates.length },
+    { label: t("users"), value: uniqueCandidates.length },
     { label: t("managedApplications"), value: applicationShares.length },
     { label: t("scheduledInterviews"), value: interviews.length },
     { label: t("assignedJobs"), value: jobs.length }
@@ -3212,7 +3216,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], interviews 
               <button className="primary-button">{t("save")}</button>
             </form>
             <section className="metric-grid">
-              <Metric label={t("sharedCandidates")} value={uniqueCandidates.length} />
+              <Metric label={t("users")} value={uniqueCandidates.length} />
               <Metric label={t("managedApplications")} value={applicationShares.length} />
               <Metric label={t("scheduledInterviews")} value={interviews.length} />
               <Metric label={t("assignedJobs")} value={jobs.length} />
@@ -3221,7 +3225,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], interviews 
 
           {tab === "overview" && <>
             <section className="metric-grid">
-              <Metric label={t("sharedCandidates")} value={uniqueCandidates.length} />
+              <Metric label={t("users")} value={uniqueCandidates.length} />
               <Metric label={t("managedApplications")} value={applicationShares.length} />
               <Metric label={t("scheduledInterviews")} value={interviews.length} />
               <Metric label={t("assignedJobs")} value={jobs.length} />

@@ -2636,8 +2636,8 @@ def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
         f"""
         SELECT
           'application' AS share_type,
-          s.id AS share_id,
-          s.created_at AS shared_at,
+          COALESCE(s.id, a.id) AS share_id,
+          COALESCE(s.created_at, a.created_at) AS shared_at,
           a.id AS application_id,
           a.status AS application_status,
           a.created_at AS applied_at,
@@ -2667,8 +2667,7 @@ def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
           COALESCE(j.screening_questions, '[]'::jsonb) AS screening_questions,
           COALESCE(docs.documents, '[]'::jsonb) AS documents,
           COALESCE(exps.experiences, '[]'::jsonb) AS experiences
-        FROM agent_profile_shares s
-        JOIN applications a ON a.id = s.application_id
+        FROM applications a
         JOIN users u ON u.id = a.user_id
         LEFT JOIN profiles p ON p.user_id = u.id
         JOIN jobs j ON j.id = a.job_id
@@ -2699,10 +2698,12 @@ def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
           FROM experiences e
           WHERE e.user_id = u.id
         ) exps ON true
-        WHERE s.agent_id = %s
-        ORDER BY s.created_at DESC
+        LEFT JOIN agent_profile_shares s ON s.application_id = a.id AND s.agent_id = %s
+        LEFT JOIN agent_job_assignments aja ON aja.job_id = a.job_id AND aja.agent_id = %s
+        WHERE s.agent_id IS NOT NULL OR aja.agent_id IS NOT NULL
+        ORDER BY COALESCE(s.created_at, a.created_at) DESC
         """,
-        (user["id"],),
+        (user["id"], user["id"]),
     )
     user_shares = []
     if has_table("agent_user_shares"):
@@ -2775,6 +2776,74 @@ def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
     return sorted([*application_shares, *user_shares], key=lambda item: item["shared_at"], reverse=True)
 
 
+@app.get("/api/agent/users")
+def list_agent_users(user: Annotated[dict, Depends(agent_user)]):
+    return fetch_all(
+        """
+        SELECT
+          'user' AS share_type,
+          u.id AS share_id,
+          u.created_at AS shared_at,
+          NULL::uuid AS application_id,
+          NULL::text AS application_status,
+          NULL::timestamptz AS applied_at,
+          '[]'::jsonb AS screening_answers,
+          u.id AS user_id,
+          u.full_name,
+          u.email,
+          u.phone,
+          u.dob,
+          u.headline,
+          u.location AS user_location,
+          u.avatar_url,
+          u.plan,
+          u.last_active_at,
+          p.about,
+          COALESCE(p.skills, '{}') AS skills,
+          NULL::uuid AS job_id,
+          NULL::integer AS job_number,
+          NULL::text AS job_title,
+          NULL::text AS company_name,
+          NULL::text AS category,
+          NULL::text AS job_location,
+          NULL::text AS salary_range,
+          '[]'::jsonb AS screening_questions,
+          COALESCE(docs.documents, '[]'::jsonb) AS documents,
+          COALESCE(exps.experiences, '[]'::jsonb) AS experiences
+        FROM users u
+        LEFT JOIN profiles p ON p.user_id = u.id
+        LEFT JOIN LATERAL (
+          SELECT jsonb_agg(jsonb_build_object(
+            'id', d.id,
+            'kind', d.kind,
+            'file_name', d.file_name,
+            'verification_status', d.verification_status,
+            'created_at', d.created_at,
+            'file_url', '/uploads/' || split_part(d.file_path, '/', array_length(string_to_array(d.file_path, '/'), 1))
+          ) ORDER BY d.created_at DESC) AS documents
+          FROM documents d
+          WHERE d.user_id = u.id
+        ) docs ON true
+        LEFT JOIN LATERAL (
+          SELECT jsonb_agg(jsonb_build_object(
+            'id', e.id,
+            'title', e.title,
+            'company', e.company,
+            'location', e.location,
+            'start_date', e.start_date,
+            'end_date', e.end_date,
+            'is_current', e.is_current,
+            'description', e.description
+          ) ORDER BY e.start_date DESC NULLS LAST) AS experiences
+          FROM experiences e
+          WHERE e.user_id = u.id
+        ) exps ON true
+        WHERE u.role NOT IN ('admin', 'master_admin', 'agent')
+        ORDER BY u.created_at DESC
+        """
+    )
+
+
 @app.put("/api/agent/profile")
 def update_agent_profile(body: AgentProfileBody, user: Annotated[dict, Depends(agent_user)]):
     execute(
@@ -2841,10 +2910,12 @@ def agent_can_access_application(agent_id: UUID, application_id: UUID):
         """
         SELECT a.id, a.user_id, a.job_id
         FROM applications a
-        JOIN agent_profile_shares s ON s.application_id = a.id
-        WHERE s.agent_id = %s AND a.id = %s
+        LEFT JOIN agent_profile_shares s ON s.application_id = a.id AND s.agent_id = %s
+        LEFT JOIN agent_job_assignments aja ON aja.job_id = a.job_id AND aja.agent_id = %s
+        WHERE a.id = %s
+          AND (s.agent_id IS NOT NULL OR aja.agent_id IS NOT NULL)
         """,
-        (agent_id, application_id),
+        (agent_id, agent_id, application_id),
     )
 
 
@@ -2852,14 +2923,15 @@ def agent_can_access_user_job(agent_id: UUID, user_id: UUID, job_id: UUID | None
     application_match = fetch_one(
         """
         SELECT a.id
-        FROM agent_profile_shares s
-        JOIN applications a ON a.id = s.application_id
-        WHERE s.agent_id = %s
-          AND a.user_id = %s
+        FROM applications a
+        LEFT JOIN agent_profile_shares s ON s.application_id = a.id AND s.agent_id = %s
+        LEFT JOIN agent_job_assignments aja ON aja.job_id = a.job_id AND aja.agent_id = %s
+        WHERE a.user_id = %s
           AND (%s::uuid IS NULL OR a.job_id = %s)
+          AND (s.agent_id IS NOT NULL OR aja.agent_id IS NOT NULL)
         LIMIT 1
         """,
-        (agent_id, user_id, job_id, job_id),
+        (agent_id, agent_id, user_id, job_id, job_id),
     )
     if application_match:
         return True
@@ -2912,11 +2984,12 @@ def list_agent_interviews(user: Annotated[dict, Depends(agent_user)]):
           AND (
             EXISTS (
               SELECT 1
-              FROM agent_profile_shares s
-              JOIN applications a ON a.id = s.application_id
-              WHERE s.agent_id = %s
-                AND a.user_id = i.user_id
+              FROM applications a
+              LEFT JOIN agent_profile_shares s ON s.application_id = a.id AND s.agent_id = %s
+              LEFT JOIN agent_job_assignments aja ON aja.job_id = a.job_id AND aja.agent_id = %s
+              WHERE a.user_id = i.user_id
                 AND (i.job_id IS NULL OR a.job_id = i.job_id)
+                AND (s.agent_id IS NOT NULL OR aja.agent_id IS NOT NULL)
             )
             OR (
               %s
@@ -2929,7 +3002,7 @@ def list_agent_interviews(user: Annotated[dict, Depends(agent_user)]):
           )
         ORDER BY i.scheduled_at ASC
         """,
-        (user["id"], has_table("agent_user_shares"), user["id"]),
+        (user["id"], user["id"], has_table("agent_user_shares"), user["id"]),
     )
 
 
