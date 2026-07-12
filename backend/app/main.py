@@ -232,7 +232,9 @@ def ensure_runtime_schema():
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS dob DATE",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS active_session_id TEXT",
         "ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check",
-        "ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('member', 'recruiter', 'company', 'admin', 'agent', 'master_admin'))",
+        "UPDATE users SET role = 'master_admin' WHERE role = 'admin_master'",
+        "UPDATE users SET role = 'member' WHERE role IS NULL OR role IN ('user', 'recruiter', 'company') OR role NOT IN ('member', 'admin', 'agent', 'master_admin')",
+        "ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('member', 'admin', 'agent', 'master_admin'))",
         """
         CREATE TABLE IF NOT EXISTS mfa_challenges (
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -374,7 +376,19 @@ def fetch_courses_for_user(user: dict) -> list[dict]:
         ORDER BY completion_date DESC NULLS LAST, created_at DESC
         """,
         (user["id"], audiences),
-    )
+        )
+
+
+def normalize_role(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip().lower()
+    aliases = {
+        "user": "member",
+        "memeber": "member",
+        "admin_master": "master_admin",
+    }
+    return aliases.get(normalized, normalized)
 
 
 class RegisterBody(BaseModel):
@@ -1873,7 +1887,8 @@ def sync_profile_strength(user_id: UUID | str) -> int:
 
 @app.post("/api/auth/register")
 def register(body: RegisterBody):
-    if body.role != "member":
+    role = normalize_role(body.role)
+    if role != "member":
         raise HTTPException(status_code=403, detail="Privileged accounts must be created by an administrator")
     existing = fetch_one("SELECT id, email_verified, status FROM users WHERE email = %s", (body.email.lower(),))
     if existing and existing.get("email_verified"):
@@ -1893,7 +1908,7 @@ def register(body: RegisterBody):
             WHERE id = %s
             RETURNING id
             """,
-            (body.fullName, body.phone, body.dob or None, hash_password(body.password), body.role, existing["id"]),
+            (body.fullName, body.phone, body.dob or None, hash_password(body.password), role, existing["id"]),
         )
     else:
         registered_user = execute(
@@ -1902,7 +1917,7 @@ def register(body: RegisterBody):
             VALUES (%s,%s,%s,%s,%s,%s,'active',false)
             RETURNING id
             """,
-            (body.fullName, body.email.lower(), body.phone, body.dob or None, hash_password(body.password), body.role),
+            (body.fullName, body.email.lower(), body.phone, body.dob or None, hash_password(body.password), role),
         )
     execute(
         "INSERT INTO profiles (user_id, about, skills, profile_strength) VALUES (%s, '', '{}', 0) ON CONFLICT (user_id) DO NOTHING",
@@ -3199,9 +3214,10 @@ def admin_users(user: Annotated[dict, Depends(admin_user)], search: str = ""):
 @app.post("/api/admin/users", status_code=201)
 def create_admin_user(body: AdminCreateUserBody, user: Annotated[dict, Depends(admin_user)]):
     allowed_roles = {"member", "agent", "admin", "master_admin"}
-    if body.role not in allowed_roles:
+    role = normalize_role(body.role)
+    if role not in allowed_roles:
         raise HTTPException(status_code=400, detail="Invalid user role")
-    if body.role == "master_admin" and not is_master_admin(user):
+    if role == "master_admin" and not is_master_admin(user):
         raise HTTPException(status_code=403, detail="Only master admin can create master admin accounts")
     if len(body.password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
@@ -3219,7 +3235,7 @@ def create_admin_user(body: AdminCreateUserBody, user: Annotated[dict, Depends(a
             body.phone,
             body.dob or None,
             hash_password(body.password),
-            body.role,
+            role,
             body.plan,
             body.status,
             body.headline,
@@ -3276,7 +3292,8 @@ def update_admin_profile(user_id: UUID, body: AdminProfilePatch, user: Annotated
     target_user = fetch_one("SELECT id, email, role FROM users WHERE id = %s", (user_id,))
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
-    if body.role == "master_admin" and not is_master_admin(user):
+    role = normalize_role(body.role)
+    if role == "master_admin" and not is_master_admin(user):
         raise HTTPException(status_code=403, detail="Only master admin can assign master admin role")
     if target_user["role"] == "master_admin" and not is_master_admin(user):
         raise HTTPException(status_code=403, detail="Only master admin can edit master admin accounts")
@@ -3301,7 +3318,7 @@ def update_admin_profile(user_id: UUID, body: AdminProfilePatch, user: Annotated
         WHERE id = %s
         RETURNING id
         """,
-        (body.fullName, str(body.email).lower() if body.email else None, password_hash, body.phone, body.dob or None, body.headline, body.location, body.role, body.plan, body.status, user_id),
+        (body.fullName, str(body.email).lower() if body.email else None, password_hash, body.phone, body.dob or None, body.headline, body.location, role, body.plan, body.status, user_id),
     )
     if not updated:
         raise HTTPException(status_code=404, detail="User not found")
@@ -3480,7 +3497,8 @@ def update_admin_user(user_id: UUID, body: AdminUserPatch, user: Annotated[dict,
     target_user = fetch_one("SELECT id, email, role FROM users WHERE id = %s", (user_id,))
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
-    if body.role == "master_admin" and not is_master_admin(user):
+    role = normalize_role(body.role)
+    if role == "master_admin" and not is_master_admin(user):
         raise HTTPException(status_code=403, detail="Only master admin can assign master admin role")
     if target_user["role"] == "master_admin" and not is_master_admin(user):
         raise HTTPException(status_code=403, detail="Only master admin can edit master admin accounts")
@@ -3505,7 +3523,7 @@ def update_admin_user(user_id: UUID, body: AdminUserPatch, user: Annotated[dict,
         WHERE id = %s
         RETURNING id, full_name, email, phone, dob, role, plan, status, headline, location, created_at, last_active_at
         """,
-        (body.fullName, str(body.email).lower() if body.email else None, password_hash, body.phone, body.dob or None, body.headline, body.location, body.role, body.plan, body.status, user_id),
+        (body.fullName, str(body.email).lower() if body.email else None, password_hash, body.phone, body.dob or None, body.headline, body.location, role, body.plan, body.status, user_id),
     )
     if not updated:
         raise HTTPException(status_code=404, detail="User not found")
