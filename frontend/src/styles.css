@@ -2997,6 +2997,38 @@ td span {
   font-weight: 800;
 }
 
+.agent-job-detail .section-head {
+  align-items: flex-start;
+}
+
+.job-detail-close {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  font-size: 1rem;
+}
+
+.readonly-field {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.readonly-field span {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 12px;
+  color: var(--ink);
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: 0.86rem;
+}
+
 .row-actions {
   gap: 6px;
 }

@@ -2925,13 +2925,23 @@ def create_agent_job(body: JobBody, user: Annotated[dict, Depends(agent_user)]):
     if body.status not in {"active", "paused", "closed"}:
         raise HTTPException(status_code=400, detail="Invalid job status")
     questions = [question.strip() for question in body.screeningQuestions if question.strip()]
+    owner = fetch_one(
+        """
+        SELECT u.full_name, COALESCE(NULLIF(p.agency_name, ''), u.full_name) AS company_name
+        FROM users u
+        LEFT JOIN profiles p ON p.user_id = u.id
+        WHERE u.id = %s
+        """,
+        (user["id"],),
+    )
+    company_name = (owner or {}).get("company_name") or user.get("full_name") or "Rawabet Agent"
     created = execute(
         """
         INSERT INTO jobs (company_name, title, category, location, type, salary_range, description, status, screening_questions)
         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb)
         RETURNING *
         """,
-        (body.companyName, body.title, body.category, body.location, body.type, body.salaryRange, body.description, body.status, json.dumps(questions)),
+        (company_name, body.title, body.category, body.location, body.type, body.salaryRange, body.description, body.status, json.dumps(questions)),
     )
     execute(
         """

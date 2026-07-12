@@ -3023,7 +3023,8 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
   const [interview, setInterview] = useState({ userId: "", jobId: "", scheduledAt: "", channel: "Video call", notes: "" });
   const [agentProfileForm, setAgentProfileForm] = useState({ headline: agent?.headline || "", location: agent?.location || "", about: profile?.about || "", agencyName: profile?.agency_name || "", agencyAbout: profile?.agency_about || "", website: profile?.website || "" });
   const [courseForm, setCourseForm] = useState({ userId: "", title: "", provider: "", completionDate: "", certificateUrl: "", notes: "" });
-  const emptyAgentJobForm = { companyName: profile?.agency_name || agent?.full_name || "", title: "", category: "General", location: agent?.location || "عن بعد", type: "دوام كامل", salaryRange: "", description: "", status: "active", screeningQuestions: [""] };
+  const agentCompanyName = profile?.agency_name || agent?.full_name || "";
+  const emptyAgentJobForm = { companyName: agentCompanyName, title: "", category: "General", location: agent?.location || "عن بعد", type: "دوام كامل", salaryRange: "", description: "", status: "active", screeningQuestions: [""] };
   const [agentJobForm, setAgentJobForm] = useState(emptyAgentJobForm);
   const [showAddJobModal, setShowAddJobModal] = useState(false);
   const [schedulingInterview, setSchedulingInterview] = useState(false);
@@ -3265,7 +3266,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
             <div className="section-head"><h2>{t("assignedJobs")}</h2><div className="section-actions"><button className="primary-button compact" type="button" onClick={() => setShowAddJobModal(true)}>{t("addJob")}</button><span className="status">{jobs.length}</span></div></div>
             {showAddJobModal && <AdminModal title={t("addJob")} close={() => setShowAddJobModal(false)}>
               <form className="admin-form job-editor-form modal-job-form" onSubmit={addAgentJob}>
-                <input placeholder={t("company")} value={agentJobForm.companyName} onChange={(e) => setAgentJobForm({ ...agentJobForm, companyName: e.target.value })} />
+                <label className="readonly-field">{t("company")}<span>{agentCompanyName || "-"}</span></label>
                 <input placeholder={t("title")} value={agentJobForm.title} onChange={(e) => setAgentJobForm({ ...agentJobForm, title: e.target.value })} />
                 <select value={agentJobForm.category} onChange={(e) => setAgentJobForm({ ...agentJobForm, category: e.target.value })}>
                   {JOB_CATEGORIES.map((item) => <option value={item.value} key={item.value}>{item[lang]}</option>)}
@@ -3282,7 +3283,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
             {selectedJob && <article className="panel agent-job-detail">
               <div className="section-head">
                 <div><h2>{selectedJob.title}</h2><p>#{selectedJob.job_number || "-"} · {selectedJob.company_name}</p></div>
-                <button className="secondary-button compact" type="button" onClick={() => setSelectedJob(null)}>{t("cancel")}</button>
+                <button className="icon-button job-detail-close" type="button" aria-label={t("cancel")} title={t("cancel")} onClick={() => setSelectedJob(null)}>×</button>
               </div>
               <dl className="profile-facts">
                 <div><dt>{t("category")}</dt><dd>{jobCategoryLabel(selectedJob.category, lang)}</dd></div>
