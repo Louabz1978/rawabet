@@ -3019,9 +3019,13 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
 function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [], interviews = [], jobs = [], reload, notify }) {
   const [tab, setTab] = useState("profile");
   const [selectedShareId, setSelectedShareId] = useState("");
+  const [selectedJob, setSelectedJob] = useState(null);
   const [interview, setInterview] = useState({ userId: "", jobId: "", scheduledAt: "", channel: "Video call", notes: "" });
   const [agentProfileForm, setAgentProfileForm] = useState({ headline: agent?.headline || "", location: agent?.location || "", about: profile?.about || "", agencyName: profile?.agency_name || "", agencyAbout: profile?.agency_about || "", website: profile?.website || "" });
   const [courseForm, setCourseForm] = useState({ userId: "", title: "", provider: "", completionDate: "", certificateUrl: "", notes: "" });
+  const emptyAgentJobForm = { companyName: profile?.agency_name || agent?.full_name || "", title: "", category: "General", location: agent?.location || "عن بعد", type: "دوام كامل", salaryRange: "", description: "", status: "active", screeningQuestions: [""] };
+  const [agentJobForm, setAgentJobForm] = useState(emptyAgentJobForm);
+  const [showAddJobModal, setShowAddJobModal] = useState(false);
   const [schedulingInterview, setSchedulingInterview] = useState(false);
   const userDirectory = Array.from(new Map([...shares, ...users].map((share) => [share.user_id, share])).values());
   const selectedShare = [...shares, ...users].find((share) => share.share_id === selectedShareId);
@@ -3043,6 +3047,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
     ["jobs", t("assignedJobs"), "▣"],
     ["candidates", t("candidates"), "◎"],
     ["applications", t("applications"), "◈"],
+    ["courses", t("courses"), "▤"],
     ["schedule", t("scheduleInterview"), "◌"],
     ["interviews", t("scheduledInterviews"), "▣"],
     ["reports", t("agentReports"), "▥"]
@@ -3068,6 +3073,18 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
     await api("/courses", { method: "POST", body: JSON.stringify(courseForm) });
     setCourseForm({ userId: "", title: "", provider: "", completionDate: "", certificateUrl: "", notes: "" });
     await refreshAgent();
+  }
+  async function addAgentJob(event) {
+    event.preventDefault();
+    try {
+      await api("/agent/jobs", { method: "POST", body: JSON.stringify({ ...agentJobForm, screeningQuestions: compactQuestions(agentJobForm.screeningQuestions) }) });
+      setAgentJobForm(emptyAgentJobForm);
+      setShowAddJobModal(false);
+      await refreshAgent();
+      notify?.(t("successCreated"), "success");
+    } catch (err) {
+      notify?.(err.message, "error", err.stack || err.message);
+    }
   }
   async function updateApplicationStatus(application, status) {
     const nextStatus = normalizeStatusValue(status);
@@ -3245,13 +3262,48 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
           </>}
 
           {tab === "jobs" && <section className="panel">
-            <div className="section-head"><h2>{t("assignedJobs")}</h2><span className="status">{jobs.length}</span></div>
+            <div className="section-head"><h2>{t("assignedJobs")}</h2><div className="section-actions"><button className="primary-button compact" type="button" onClick={() => setShowAddJobModal(true)}>{t("addJob")}</button><span className="status">{jobs.length}</span></div></div>
+            {showAddJobModal && <AdminModal title={t("addJob")} close={() => setShowAddJobModal(false)}>
+              <form className="admin-form job-editor-form modal-job-form" onSubmit={addAgentJob}>
+                <input placeholder={t("company")} value={agentJobForm.companyName} onChange={(e) => setAgentJobForm({ ...agentJobForm, companyName: e.target.value })} />
+                <input placeholder={t("title")} value={agentJobForm.title} onChange={(e) => setAgentJobForm({ ...agentJobForm, title: e.target.value })} />
+                <select value={agentJobForm.category} onChange={(e) => setAgentJobForm({ ...agentJobForm, category: e.target.value })}>
+                  {JOB_CATEGORIES.map((item) => <option value={item.value} key={item.value}>{item[lang]}</option>)}
+                </select>
+                <input placeholder={t("location")} value={agentJobForm.location} onChange={(e) => setAgentJobForm({ ...agentJobForm, location: e.target.value })} />
+                <input placeholder={t("type")} value={agentJobForm.type} onChange={(e) => setAgentJobForm({ ...agentJobForm, type: e.target.value })} />
+                <input placeholder={t("salary")} value={agentJobForm.salaryRange} onChange={(e) => setAgentJobForm({ ...agentJobForm, salaryRange: e.target.value })} />
+                <select value={agentJobForm.status} onChange={(e) => setAgentJobForm({ ...agentJobForm, status: e.target.value })}>{JOB_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select>
+                <textarea placeholder={t("description")} value={agentJobForm.description} onChange={(e) => setAgentJobForm({ ...agentJobForm, description: e.target.value })} />
+                <QuestionRows t={t} questions={agentJobForm.screeningQuestions} onChange={(screeningQuestions) => setAgentJobForm({ ...agentJobForm, screeningQuestions })} />
+                <div className="modal-actions"><button className="secondary-button" type="button" onClick={() => setShowAddJobModal(false)}>{t("cancel")}</button><button className="primary-button">{t("addJob")}</button></div>
+              </form>
+            </AdminModal>}
+            {selectedJob && <article className="panel agent-job-detail">
+              <div className="section-head">
+                <div><h2>{selectedJob.title}</h2><p>#{selectedJob.job_number || "-"} · {selectedJob.company_name}</p></div>
+                <button className="secondary-button compact" type="button" onClick={() => setSelectedJob(null)}>{t("cancel")}</button>
+              </div>
+              <dl className="profile-facts">
+                <div><dt>{t("category")}</dt><dd>{jobCategoryLabel(selectedJob.category, lang)}</dd></div>
+                <div><dt>{t("location")}</dt><dd>{selectedJob.location || "-"}</dd></div>
+                <div><dt>{t("type")}</dt><dd>{selectedJob.type || "-"}</dd></div>
+                <div><dt>{t("salary")}</dt><dd>{selectedJob.salary_range || "-"}</dd></div>
+                <div><dt>{t("status")}</dt><dd><span className={`status ${selectedJob.status}`}>{statusLabel(selectedJob.status, lang)}</span></dd></div>
+              </dl>
+              <p>{selectedJob.description || "-"}</p>
+              <div>
+                <h3>{t("screeningQuestions")}</h3>
+                <ul className="plain-list">{questionsToArray(selectedJob.screening_questions).filter(Boolean).map((question) => <li key={question}>{question}</li>)}</ul>
+              </div>
+            </article>}
             <div className="admin-post-list">
               {jobs.length ? jobs.map((job) => (
                 <article className="admin-post agent-assigned-job" key={job.id}>
                   <strong>{job.title}</strong>
                   <span>#{job.job_number || "-"} · {job.company_name} · {job.salary_range || "-"}</span>
                   <p>{job.description || "-"}</p>
+                  <button className="secondary-button compact" type="button" onClick={() => setSelectedJob(job)}>{t("jobDetails")}</button>
                 </article>
               )) : <p>{t("noJobsMatching")}</p>}
             </div>
@@ -3259,15 +3311,21 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
 
           {tab === "candidates" && <section className="panel">
             <div className="section-head"><h2>{t("candidates")}</h2><span className="status">{uniqueCandidates.length}</span></div>
-            {uniqueCandidates.length ? <div className="agent-profile-grid-list">
-              {uniqueCandidates.map((share) => (
-                <button className="agent-profile-tile" type="button" key={share.share_id} onClick={() => setSelectedShareId(share.share_id)}>
-                  <Avatar user={{ full_name: share.full_name, avatar_url: share.avatar_url, plan: share.plan, last_active_at: share.last_active_at }} size="large" />
-                  <strong>{share.full_name}</strong>
-                  <span>{share.headline || share.job_title || "-"}</span>
-                  <small>{t("openProfile")}</small>
-                </button>
-              ))}
+            {uniqueCandidates.length ? <div className="table-wrap">
+              <table>
+                <thead><tr><th>{t("users")}</th><th>{t("title")}</th><th>{t("location")}</th><th>{t("plan")}</th><th>{t("attachments")}</th><th>{t("lastActive")}</th><th>{t("profileDetails")}</th></tr></thead>
+                <tbody>{uniqueCandidates.map((share) => (
+                  <tr key={share.share_id}>
+                    <td><div className="table-user"><Avatar user={{ full_name: share.full_name, avatar_url: share.avatar_url, plan: share.plan, last_active_at: share.last_active_at }} size="small" /><div><strong>{share.full_name}</strong><span>{share.email}</span></div></div></td>
+                    <td>{share.headline || share.job_title || "-"}</td>
+                    <td>{share.user_location || "-"}</td>
+                    <td>{planLabel(share.plan || "free", lang)}</td>
+                    <td><DocumentLinks t={t} documents={share.documents} avatarUrl={share.avatar_url} compact /></td>
+                    <td>{share.last_active_at ? new Date(share.last_active_at).toLocaleDateString() : "-"}</td>
+                    <td><button className="secondary-button compact" type="button" onClick={() => setSelectedShareId(share.share_id)}>{t("openProfile")}</button></td>
+                  </tr>
+                ))}</tbody>
+              </table>
             </div> : <p>{t("noSharedProfiles")}</p>}
           </section>}
 
@@ -3299,7 +3357,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
             <button className="primary-button loading-button" disabled={schedulingInterview}>{schedulingInterview && <span className="spinner" aria-hidden="true"></span>}{t("scheduleInterview")}</button>
           </form>}
 
-          {tab === "candidates" && <form className="panel admin-form" onSubmit={addCourse}>
+          {tab === "courses" && <form className="panel admin-form" onSubmit={addCourse}>
             <h2>{t("addCourse")}</h2>
             <select value={courseForm.userId} onChange={(e) => setCourseForm({ ...courseForm, userId: e.target.value })}><option value="">{t("candidates")}</option>{uniqueCandidates.map((share) => <option value={share.user_id} key={share.user_id}>{share.full_name}</option>)}</select>
             <input placeholder={t("title")} value={courseForm.title} onChange={(e) => setCourseForm({ ...courseForm, title: e.target.value })} />

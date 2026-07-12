@@ -2920,6 +2920,30 @@ def list_agent_jobs(user: Annotated[dict, Depends(agent_user)]):
     )
 
 
+@app.post("/api/agent/jobs", status_code=201)
+def create_agent_job(body: JobBody, user: Annotated[dict, Depends(agent_user)]):
+    if body.status not in {"active", "paused", "closed"}:
+        raise HTTPException(status_code=400, detail="Invalid job status")
+    questions = [question.strip() for question in body.screeningQuestions if question.strip()]
+    created = execute(
+        """
+        INSERT INTO jobs (company_name, title, category, location, type, salary_range, description, status, screening_questions)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb)
+        RETURNING *
+        """,
+        (body.companyName, body.title, body.category, body.location, body.type, body.salaryRange, body.description, body.status, json.dumps(questions)),
+    )
+    execute(
+        """
+        INSERT INTO agent_job_assignments (agent_id, job_id, assigned_by)
+        VALUES (%s,%s,%s)
+        ON CONFLICT (agent_id, job_id) DO NOTHING
+        """,
+        (user["id"], created["id"], user["id"]),
+    )
+    return created
+
+
 def agent_can_access_application(agent_id: UUID, application_id: UUID):
     return fetch_one(
         """
