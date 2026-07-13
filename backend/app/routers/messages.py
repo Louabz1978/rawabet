@@ -1,5 +1,5 @@
 from typing import Annotated
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -15,8 +15,37 @@ class ChatMessageBody(BaseModel):
     message: str
 
 
+def ensure_agent_messages_schema():
+    for sql in (
+        """
+        CREATE TABLE IF NOT EXISTS agent_messages (
+          id UUID PRIMARY KEY,
+          agent_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          sender_role TEXT NOT NULL CHECK (sender_role IN ('agent', 'user')),
+          message TEXT NOT NULL,
+          read_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_agent_messages_agent_user ON agent_messages(agent_id, user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_agent_messages_created ON agent_messages(created_at)",
+    ):
+        execute(sql)
+
+
+def clean_message(value: str | None) -> str:
+    message = (value or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Message is required")
+    if len(message) > 4000:
+        raise HTTPException(status_code=400, detail="Message is too long")
+    return message
+
+
 @router.get("/agent/chat/threads")
 def list_agent_chat_threads(user: Annotated[dict, Depends(agent_user)]):
+    ensure_agent_messages_schema()
     return fetch_all(
         """
         SELECT
@@ -65,6 +94,7 @@ def list_agent_chat_threads(user: Annotated[dict, Depends(agent_user)]):
 
 @router.get("/agent/chat/messages")
 def list_agent_chat_messages(user_id: UUID, user: Annotated[dict, Depends(agent_user)]):
+    ensure_agent_messages_schema()
     target = fetch_one("SELECT id FROM users WHERE id = %s AND role IN ('member', 'user')", (user_id,))
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
@@ -85,23 +115,26 @@ def list_agent_chat_messages(user_id: UUID, user: Annotated[dict, Depends(agent_
 
 @router.post("/agent/chat/messages", status_code=201)
 def create_agent_chat_message(body: ChatMessageBody, user: Annotated[dict, Depends(agent_user)]):
+    ensure_agent_messages_schema()
     if not body.userId:
         raise HTTPException(status_code=400, detail="User is required")
+    message = clean_message(body.message)
     target = fetch_one("SELECT id FROM users WHERE id = %s AND role IN ('member', 'user')", (body.userId,))
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    return execute(
+    execute(
         """
-        INSERT INTO agent_messages (agent_id, user_id, sender_role, message)
-        VALUES (%s,%s,'agent',%s)
-        RETURNING *
+        INSERT INTO agent_messages (id, agent_id, user_id, sender_role, message)
+        VALUES (%s,%s,%s,'agent',%s)
         """,
-        (user["id"], body.userId, body.message),
+        (uuid4(), user["id"], body.userId, message),
     )
+    return {"ok": True}
 
 
 @router.get("/user/agent-chat/messages")
 def list_user_agent_chat_messages(agent_id: UUID, user: Annotated[dict, Depends(current_user)]):
+    ensure_agent_messages_schema()
     agent = fetch_one("SELECT id FROM users WHERE id = %s AND role = 'agent'", (agent_id,))
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
@@ -122,16 +155,18 @@ def list_user_agent_chat_messages(agent_id: UUID, user: Annotated[dict, Depends(
 
 @router.post("/user/agent-chat/messages", status_code=201)
 def create_user_agent_chat_message(body: ChatMessageBody, user: Annotated[dict, Depends(current_user)]):
+    ensure_agent_messages_schema()
     if not body.userId:
         raise HTTPException(status_code=400, detail="Agent is required")
+    message = clean_message(body.message)
     agent = fetch_one("SELECT id FROM users WHERE id = %s AND role = 'agent'", (body.userId,))
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    return execute(
+    execute(
         """
-        INSERT INTO agent_messages (agent_id, user_id, sender_role, message)
-        VALUES (%s,%s,'user',%s)
-        RETURNING *
+        INSERT INTO agent_messages (id, agent_id, user_id, sender_role, message)
+        VALUES (%s,%s,%s,'user',%s)
         """,
-        (body.userId, user["id"], body.message),
+        (uuid4(), body.userId, user["id"], message),
     )
+    return {"ok": True}
