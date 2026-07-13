@@ -232,8 +232,8 @@ const text = {
     lastActive: "Last active",
     actions: "Actions",
     save: "Save",
-    support: "AI assistant",
-    supportMessage: "Ask the AI assistant",
+    support: "Message",
+    supportMessage: "Type a message",
     send: "Send",
     clearingChat: "Clearing...",
     speakLive: "Speak with live support",
@@ -282,8 +282,11 @@ const text = {
     strong: "Strong",
     excellent: "Excellent",
     sessionExpiringTitle: "Session expiring",
-    sessionExpiringBody: "For security, your session expires after 60 minutes. Do you want to stay connected?",
-    stayConnected: "Stay connected",
+    sessionExpiringBody: "For security, your session expires after 60 minutes. You will be signed out automatically.",
+    stayConnected: "Sign in again",
+    agentChat: "Agent chat",
+    chatWithAgent: "Chat with agent",
+    message: "Message",
     autoLogoutIn: "Auto logout in",
     signedInElsewhere: "This account was signed in from another device.",
     language: "ع"
@@ -516,8 +519,8 @@ const text = {
     lastActive: "آخر نشاط",
     actions: "الإجراءات",
     save: "حفظ",
-    support: "المساعد الذكي",
-    supportMessage: "اسأل المساعد الذكي",
+    support: "رسالة",
+    supportMessage: "اكتب رسالة",
     send: "إرسال",
     clearingChat: "جار المسح...",
     speakLive: "التحدث مع دعم مباشر",
@@ -566,8 +569,11 @@ const text = {
     strong: "قوي",
     excellent: "ممتاز",
     sessionExpiringTitle: "ستنتهي الجلسة",
-    sessionExpiringBody: "لأمان الحساب، تنتهي الجلسة بعد 60 دقيقة. هل تريد البقاء متصلا؟",
-    stayConnected: "البقاء متصلا",
+    sessionExpiringBody: "لأمان الحساب، تنتهي الجلسة بعد 60 دقيقة وسيتم تسجيل خروجك تلقائيا.",
+    stayConnected: "تسجيل الدخول من جديد",
+    agentChat: "محادثة الوكيل",
+    chatWithAgent: "تواصل مع الوكيل",
+    message: "رسالة",
     autoLogoutIn: "تسجيل خروج تلقائي خلال",
     signedInElsewhere: "تم تسجيل الدخول إلى هذا الحساب من جهاز آخر.",
     language: "EN"
@@ -729,6 +735,8 @@ function App() {
   const [error, setError] = useState("");
   const [builderOpen, setBuilderOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
+  const [agentChatOpen, setAgentChatOpen] = useState(false);
+  const [agentChatTarget, setAgentChatTarget] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [popup, setPopup] = useState(null);
   const [presenceTick, setPresenceTick] = useState(0);
@@ -889,19 +897,7 @@ function App() {
   }
 
   async function stayConnected() {
-    try {
-      const data = await api("/account/refresh-session", { method: "POST" });
-      setToken(data.token);
-      sessionEndedRef.current = false;
-      setSession(data.user);
-      setMe((current) => current ? { ...current, user: data.user } : current);
-      setSessionWarningOpen(false);
-      setSessionCountdown(SESSION_GRACE_MS / 1000);
-      notify(t("successUpdated"), "success");
-    } catch (err) {
-      notify(err.message || String(err), "error", err.stack || err.message || String(err));
-      logout();
-    }
+    logout();
   }
 
   useEffect(() => {
@@ -1063,10 +1059,15 @@ function App() {
     openSmartResume();
   }
 
+  function openAgentChat(agent = null) {
+    setAgentChatTarget(agent);
+    setAgentChatOpen(true);
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
-        {!isAgent && <button className="icon-button mobile-menu-button" type="button" aria-label={t("menu")} onClick={() => setMobileMenuOpen((current) => !current)}>☰</button>}
+        <button className="icon-button mobile-menu-button" type="button" aria-label={t("menu")} onClick={() => setMobileMenuOpen((current) => !current)}>☰</button>
         <button className="brand" onClick={() => setView(isAgent ? "agent" : "home")}>
           <img className="brand-mark" src="/brand/rawabet-mark.png" alt="" />
           <img className="brand-wordmark" src="/brand/rawabet-wordmark.png" alt="Rawabet - روابط تجمعنا" />
@@ -1087,28 +1088,34 @@ function App() {
         </nav>
         <div className="top-actions">
           {!isAgent && <button className="icon-button mobile-chat-button" type="button" aria-label={t("support")} onClick={() => isAdminRole(session.role) ? (setAdminStartTab("support"), setView("admin")) : setSupportOpen(true)}>💬{supportUnread > 0 && <span>{supportUnread}</span>}</button>}
+          {isAgent && <button className="icon-button mobile-chat-button" type="button" aria-label={t("agentChat")} onClick={() => setView("agent-chat")}>💬</button>}
           {!isAgent && <button className="secondary-button compact notify-button" onClick={() => isAdminRole(session.role) ? (setAdminStartTab("support"), setView("admin")) : setSupportOpen(true)}>{t("support")}{supportUnread > 0 && <span>{supportUnread}</span>}</button>}
+          {isAgent && <button className="secondary-button compact notify-button" onClick={() => setView("agent-chat")}>{t("agentChat")}</button>}
           <button className="secondary-button compact" onClick={logout}>{t("logout")}</button>
           <button className="icon-button" onClick={() => setLang(lang === "en" ? "ar" : "en")}>{t("language")}</button>
         </div>
       </header>
-      {!isAgent && mobileMenuOpen && <nav className="mobile-drawer-menu" aria-label={t("menu")}>
+      {mobileMenuOpen && <nav className="mobile-drawer-menu" aria-label={t("menu")}>
         {isAdminRole(session.role) && <button type="button" onClick={() => { setView("admin"); setMobileMenuOpen(false); }}>{t("adminDashboard")}</button>}
-        <button type="button" onClick={openAppliedJobs}><span>{t("appliedJobs")}</span><b>{formatNumber(me.applications?.length || 0)}</b></button>
-        <button type="button" onClick={openAllJobs}>{t("findJob")}</button>
-        <button type="button" onClick={() => { setView("agents"); setMobileMenuOpen(false); }}>{t("findCompany")}</button>
+        {isAgent && <button type="button" onClick={() => { setView("agent"); setMobileMenuOpen(false); }}>{t("agentWorkspace")}</button>}
+        {isAgent && <button type="button" onClick={() => { setView("agent-jobs"); setMobileMenuOpen(false); }}>{t("assignedJobs")}</button>}
+        {isAgent && <button type="button" onClick={() => { setView("agent-users"); setMobileMenuOpen(false); }}>{t("users")}</button>}
+        {isAgent && <button type="button" onClick={() => { setView("agent-chat"); setMobileMenuOpen(false); }}>{t("agentChat")}</button>}
+        {!isAgent && <button type="button" onClick={openAppliedJobs}><span>{t("appliedJobs")}</span><b>{formatNumber(me.applications?.length || 0)}</b></button>}
+        {!isAgent && <button type="button" onClick={openAllJobs}>{t("findJob")}</button>}
+        {!isAgent && <button type="button" onClick={() => { setView("agents"); setMobileMenuOpen(false); }}>{t("findCompany")}</button>}
         {canUseSmartResume && <button type="button" onClick={openSmartResumeForUser}>{t("smartResume")}</button>}
-        <button type="button" onClick={openComingInterviews}>{t("upcomingInterviews")}</button>
+        {!isAgent && <button type="button" onClick={openComingInterviews}>{t("upcomingInterviews")}</button>}
         <button type="button" onClick={logout}>{t("logout")}</button>
       </nav>}
 
       <main className={view === "admin" || isAgent ? "admin-main" : ""}>
-        {isAgent ? <AgentWorkspace t={t} lang={lang} agent={me.user} profile={me.profile || {}} shares={agentShares} users={agentUsers} interviews={agentInterviews} jobs={agentJobs} reload={loadApp} notify={notify} /> : <>
+        {isAgent ? <AgentWorkspace t={t} lang={lang} agent={me.user} profile={me.profile || {}} shares={agentShares} users={agentUsers} interviews={agentInterviews} jobs={agentJobs} view={view} setView={setView} reload={loadApp} notify={notify} openAgentChat={openAgentChat} /> : <>
           {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} agents={agents} setSelectedAgent={setSelectedAgent} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} openSmartResume={openSmartResumeForUser} canUseSmartResume={canUseSmartResume} jobSearch={jobSearch} setJobSearch={setJobSearch} setJobMode={setJobMode} />}
           {view === "profile" && <Profile t={t} me={me} reload={loadApp} notify={notify} />}
           {view === "smartResume" && canUseSmartResume && <SmartResumePage t={t} me={me} reload={loadApp} notify={notify} />}
           {view === "courses" && <CoursesPage t={t} courses={me.courses || []} />}
-          {view === "agents" && <AgentsPage t={t} agents={agents} selectedAgent={selectedAgent} setSelectedAgent={setSelectedAgent} openJob={openJob} />}
+          {view === "agents" && <AgentsPage t={t} agents={agents} selectedAgent={selectedAgent} setSelectedAgent={setSelectedAgent} openJob={openJob} openAgentChat={openAgentChat} />}
           {view === "jobs" && <Jobs t={t} lang={lang} jobs={jobs} documents={me.documents || []} applications={me.applications || []} interviews={me.interviews || []} search={jobSearch} mode={jobMode} setMode={setJobMode} selectedJobId={selectedJobId} clearSelectedJob={() => setSelectedJobId("")} reload={loadApp} />}
           {view === "allJobs" && <Jobs t={t} lang={lang} jobs={jobs} documents={me.documents || []} applications={me.applications || []} interviews={me.interviews || []} search={jobSearch} mode="all" setMode={(mode) => mode === "applied" ? openAppliedJobs() : openAllJobs()} selectedJobId={selectedJobId} clearSelectedJob={() => setSelectedJobId("")} reload={loadApp} />}
           {view === "appliedJobs" && <Jobs t={t} lang={lang} jobs={jobs} documents={me.documents || []} applications={me.applications || []} interviews={me.interviews || []} search={jobSearch} mode="applied" setMode={(mode) => mode === "all" ? openAllJobs() : openAppliedJobs()} selectedJobId={selectedJobId} clearSelectedJob={() => setSelectedJobId("")} reload={loadApp} />}
@@ -1116,9 +1123,10 @@ function App() {
           {view === "admin" && isAdminRole(session.role) && <Admin t={t} lang={lang} session={session} admin={admin} users={adminUsers} setUsers={setAdminUsers} jobs={jobs} courses={adminCourses} applications={adminApplications} setApplications={setAdminApplications} interviews={adminInterviews} supportThreads={supportThreads} initialTab={adminStartTab} clearInitialTab={() => setAdminStartTab("")} reload={loadApp} openSupport={(userId) => { setSupportTarget(userId || ""); setSupportOpen(true); }} notify={notify} withNotify={withNotify} />}
         </>}
       </main>
-      {!isAgent && <MobileBottomNav t={t} view={view} setView={setView} openAllJobs={openAllJobs} openComingInterviews={openComingInterviews} isAdmin={isAdminRole(session.role)} />}
+      <MobileBottomNav t={t} view={view} role={session.role} setView={setView} setAdminStartTab={setAdminStartTab} openAllJobs={openAllJobs} openComingInterviews={openComingInterviews} isAdmin={isAdminRole(session.role)} />
       {!isAgent && builderOpen && <ProfileBuilder t={t} me={me} reload={loadApp} close={() => setBuilderOpen(false)} notify={notify} />}
       {!isAgent && supportOpen && <SupportWindow t={t} me={me} users={adminUsers} initialUserId={supportTarget} onUpdate={loadSupportThreads} close={() => { setSupportOpen(false); setSupportTarget(""); }} />}
+      {agentChatOpen && !isAgent && agentChatTarget && <UserAgentChatWindow t={t} agent={agentChatTarget} close={() => { setAgentChatOpen(false); setAgentChatTarget(null); }} />}
       {popup && <ToastPopup t={t} popup={popup} close={() => setPopup(null)} />}
       {sessionWarningOpen && <SessionWarningModal t={t} seconds={sessionCountdown} stayConnected={stayConnected} logout={logout} />}
       <AppFooter />
@@ -1563,13 +1571,34 @@ function NavIcon({ name }) {
     interviews: <><rect x="4.25" y="5.25" width="15.5" height="15" rx="2.2" /><path d="M8 3.5v4M16 3.5v4M4.25 10h15.5" /><path d="M8 14h4.5M8 17h7.5" /></>,
     courses: <><path d="M3.5 6.75 12 3.25l8.5 3.5-8.5 3.5-8.5-3.5Z" /><path d="M6.5 9.1v4.4c2.9 2.15 8.1 2.15 11 0V9.1" /><path d="M20.5 7v6.25" /></>,
     agents: <><rect x="4.25" y="6.75" width="15.5" height="13.5" rx="2" /><path d="M8 6.75V4.5h8v2.25" /><path d="M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01" /></>,
-    admin: <><rect x="4" y="4" width="16" height="16" rx="2.5" /><path d="M8 9h8M8 12h8M8 15h5" /></>
+    admin: <><rect x="4" y="4" width="16" height="16" rx="2.5" /><path d="M8 9h8M8 12h8M8 15h5" /></>,
+    support: <><path d="M5 6.75A3.25 3.25 0 0 1 8.25 3.5h7.5A3.25 3.25 0 0 1 19 6.75v5.5a3.25 3.25 0 0 1-3.25 3.25H11l-4.4 4v-4.1A3.25 3.25 0 0 1 5 12.25v-5.5Z" /><path d="M8.5 8.5h7M8.5 11.5h4.5" /></>
   };
   return <svg {...common}>{paths[name]}</svg>;
 }
 
-function MobileBottomNav({ t, view, setView, openAllJobs, openComingInterviews, isAdmin = false }) {
-  const items = [
+function MobileBottomNav({ t, view, role, setView, setAdminStartTab, openAllJobs, openComingInterviews, isAdmin = false }) {
+  function openAdminTab(tab) {
+    setAdminStartTab?.(tab);
+    setView("admin");
+  }
+  const adminItems = [
+    { id: "admin-overview", icon: "home", label: t("overview"), action: () => openAdminTab("overview") },
+    { id: "admin-users", icon: "profile", label: t("userManagement"), action: () => openAdminTab("users") },
+    { id: "admin-jobs", icon: "jobs", label: t("jobManagement"), action: () => openAdminTab("jobs") },
+    { id: "admin-applications", icon: "admin", label: t("applications"), action: () => openAdminTab("applications") },
+    { id: "admin-interviews", icon: "interviews", label: t("interviews"), action: () => openAdminTab("interviews") },
+    { id: "admin-support", icon: "support", label: t("supportInbox"), action: () => openAdminTab("support") }
+  ];
+  const agentItems = [
+    { id: "agent", icon: "home", label: t("overview"), action: () => setView("agent") },
+    { id: "agent-jobs", icon: "jobs", label: t("assignedJobs"), action: () => setView("agent-jobs") },
+    { id: "agent-users", icon: "profile", label: t("users"), action: () => setView("agent-users") },
+    { id: "agent-applications", icon: "admin", label: t("applications"), action: () => setView("agent-applications") },
+    { id: "agent-chat", icon: "support", label: t("agentChat"), action: () => setView("agent-chat") },
+    { id: "agent-interviews", icon: "interviews", label: t("scheduledInterviews"), action: () => setView("agent-interviews") }
+  ];
+  const userItems = [
     ...(isAdmin ? [{ id: "admin", icon: "admin", label: t("admin"), action: () => setView("admin") }] : []),
     { id: "home", icon: "home", label: t("home"), action: () => setView("home") },
     { id: "profile", icon: "profile", label: t("profile"), action: () => setView("profile") },
@@ -1578,6 +1607,7 @@ function MobileBottomNav({ t, view, setView, openAllJobs, openComingInterviews, 
     { id: "courses", icon: "courses", label: t("courses"), action: () => setView("courses") },
     { id: "agents", icon: "agents", label: t("companies"), action: () => setView("agents") }
   ];
+  const items = role === "agent" ? agentItems : isAdmin ? adminItems : userItems;
   return (
     <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
       {items.map((item) => <button className={view === item.id || (item.id === "allJobs" && view === "jobs") ? "active" : ""} type="button" onClick={item.action} aria-label={item.label} title={item.label} key={item.id}><span><NavIcon name={item.icon} /></span></button>)}
@@ -1628,7 +1658,7 @@ function ComingInterviews({ t, interviews = [], openJob }) {
   );
 }
 
-function AgentsPage({ t, agents = [], selectedAgent, setSelectedAgent, openJob }) {
+function AgentsPage({ t, agents = [], selectedAgent, setSelectedAgent, openJob, openAgentChat }) {
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState(null);
   const visibleAgents = agents.filter((agent) => `${agent.full_name || ""} ${agent.agency_name || ""}`.toLowerCase().includes(search.toLowerCase()));
@@ -1644,7 +1674,7 @@ function AgentsPage({ t, agents = [], selectedAgent, setSelectedAgent, openJob }
         <div className="section-head"><button className="secondary-button compact" onClick={() => { setSelectedAgent(null); setDetail(null); }}>{t("backToCompanies")}</button></div>
         <section className="profile-hero panel">
           <Avatar user={{ full_name: agent.full_name, avatar_url: agent.avatar_url, plan: agent.plan, last_active_at: agent.last_active_at }} size="large" />
-          <div><h1>{agent.agency_name || agent.full_name}</h1><p>{agent.full_name}</p><span>{agent.location || "-"}</span>{agent.website && <a href={assetUrl(agent.website)} target="_blank" rel="noreferrer">{agent.website}</a>}<p className="agency-about-detail">{agent.agency_about || agent.about || agent.headline || "-"}</p></div>
+          <div><h1>{agent.agency_name || agent.full_name}</h1><p>{agent.full_name}</p><span>{agent.location || "-"}</span>{agent.website && <a href={assetUrl(agent.website)} target="_blank" rel="noreferrer">{agent.website}</a>}<p className="agency-about-detail">{agent.agency_about || agent.about || agent.headline || "-"}</p>{openAgentChat && <button className="secondary-button compact" type="button" onClick={() => openAgentChat(agent)}>{t("chatWithAgent")}</button>}</div>
         </section>
         <section className="panel">
           <div className="section-head"><h2>{t("activeJobs")}</h2><span className="status">{jobs.length}</span></div>
@@ -3016,10 +3046,11 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
   );
 }
 
-function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [], interviews = [], jobs = [], reload, notify }) {
+function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [], interviews = [], jobs = [], view = "agent", setView, reload, notify, openAgentChat }) {
   const [tab, setTab] = useState("profile");
   const [selectedShareId, setSelectedShareId] = useState("");
   const [selectedJob, setSelectedJob] = useState(null);
+  const [chatUserId, setChatUserId] = useState("");
   const [interview, setInterview] = useState({ userId: "", jobId: "", scheduledAt: "", channel: "Video call", notes: "" });
   const [agentProfileForm, setAgentProfileForm] = useState({ headline: agent?.headline || "", location: agent?.location || "", about: profile?.about || "", agencyName: profile?.agency_name || "", agencyAbout: profile?.agency_about || "", website: profile?.website || "" });
   const [courseForm, setCourseForm] = useState({ userId: "", title: "", provider: "", completionDate: "", certificateUrl: "", notes: "" });
@@ -3046,13 +3077,37 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
     ["profile", t("profile"), "◉"],
     ["overview", t("overview"), "▦"],
     ["jobs", t("assignedJobs"), "▣"],
-    ["candidates", t("candidates"), "◎"],
+    ["candidates", t("users"), "◎"],
     ["applications", t("applications"), "◈"],
+    ["chat", t("agentChat"), "✉"],
     ["courses", t("courses"), "▤"],
     ["schedule", t("scheduleInterview"), "◌"],
     ["interviews", t("scheduledInterviews"), "▣"],
     ["reports", t("agentReports"), "▥"]
   ];
+  useEffect(() => {
+    const viewTabMap = {
+      agent: "overview",
+      "agent-jobs": "jobs",
+      "agent-users": "candidates",
+      "agent-applications": "applications",
+      "agent-chat": "chat",
+      "agent-interviews": "interviews"
+    };
+    if (viewTabMap[view] && viewTabMap[view] !== tab) setTab(viewTabMap[view]);
+  }, [view]);
+  function selectAgentTab(id) {
+    setTab(id);
+    const tabViewMap = {
+      overview: "agent",
+      jobs: "agent-jobs",
+      candidates: "agent-users",
+      applications: "agent-applications",
+      chat: "agent-chat",
+      interviews: "agent-interviews"
+    };
+    if (tabViewMap[id]) setView?.(tabViewMap[id]);
+  }
   async function refreshAgent() {
     await reload?.();
   }
@@ -3154,7 +3209,10 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
             <h2>{selectedShare.full_name}</h2>
             <p>{selectedShare.email}</p>
           </div>
-          <button className="secondary-button compact" type="button" onClick={() => setSelectedShareId("")}>{t("backToUsers")}</button>
+          <div className="section-actions">
+            <button className="secondary-button compact" type="button" onClick={() => { setChatUserId(selectedShare.user_id); setSelectedShareId(""); selectAgentTab("chat"); }}>{t("message")}</button>
+            <button className="secondary-button compact" type="button" onClick={() => setSelectedShareId("")}>{t("backToUsers")}</button>
+          </div>
         </div>
         <article className="panel agent-share-card">
           <header className="agent-profile-head">
@@ -3212,7 +3270,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
       <section className="admin-heading"><div><p>{t("agent")}</p><h1>{t("agentWorkspace")}</h1></div><button className="primary-button">{t("agentTools")}</button></section>
       <section className="admin-console">
         <aside className="admin-menu panel">
-          {agentTabs.map(([id, label, icon]) => <button className={tab === id ? "active" : ""} type="button" onClick={() => setTab(id)} key={id}><span>{icon}</span>{label}</button>)}
+          {agentTabs.map(([id, label, icon]) => <button className={tab === id ? "active" : ""} type="button" onClick={() => selectAgentTab(id)} key={id}><span>{icon}</span>{label}</button>)}
         </aside>
         <div className="admin-content">
           {tab === "profile" && <section className="admin-profile-view">
@@ -3254,7 +3312,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
               <article className="panel">
                 <h2>{t("agentTools")}</h2>
                 <div className="agent-tool-list">
-                  <button className="secondary-button" type="button" onClick={() => setTab("candidates")}>{t("candidates")}</button>
+                  <button className="secondary-button" type="button" onClick={() => setTab("candidates")}>{t("users")}</button>
                   <button className="secondary-button" type="button" onClick={() => setTab("applications")}>{t("applications")}</button>
                   <button className="secondary-button" type="button" onClick={() => setTab("schedule")}>{t("scheduleInterview")}</button>
                 </div>
@@ -3311,19 +3369,19 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
           </section>}
 
           {tab === "candidates" && <section className="panel">
-            <div className="section-head"><h2>{t("candidates")}</h2><span className="status">{uniqueCandidates.length}</span></div>
+            <div className="section-head"><h2>{t("users")}</h2><span className="status">{uniqueCandidates.length}</span></div>
             {uniqueCandidates.length ? <div className="table-wrap">
               <table>
-                <thead><tr><th>{t("users")}</th><th>{t("title")}</th><th>{t("location")}</th><th>{t("plan")}</th><th>{t("attachments")}</th><th>{t("lastActive")}</th><th>{t("profileDetails")}</th></tr></thead>
+                <thead><tr><th>{t("users")}</th><th>{t("title")}</th><th>{t("location")}</th><th>{t("plan")}</th><th>{t("attachments")}</th><th>{t("lastActive")}</th><th>{t("message")}</th></tr></thead>
                 <tbody>{uniqueCandidates.map((share) => (
                   <tr key={share.share_id}>
-                    <td><div className="table-user"><Avatar user={{ full_name: share.full_name, avatar_url: share.avatar_url, plan: share.plan, last_active_at: share.last_active_at }} size="small" /><div><strong>{share.full_name}</strong><span>{share.email}</span></div></div></td>
+                    <td><button className="table-user table-user-button" type="button" onClick={() => setSelectedShareId(share.share_id)}><Avatar user={{ full_name: share.full_name, avatar_url: share.avatar_url, plan: share.plan, last_active_at: share.last_active_at }} size="small" /><div><strong>{share.full_name}</strong><span>{share.email}</span></div></button></td>
                     <td>{share.headline || share.job_title || "-"}</td>
                     <td>{share.user_location || "-"}</td>
                     <td>{planLabel(share.plan || "free", lang)}</td>
                     <td><DocumentLinks t={t} documents={share.documents} avatarUrl={share.avatar_url} compact /></td>
                     <td>{share.last_active_at ? new Date(share.last_active_at).toLocaleDateString() : "-"}</td>
-                    <td><button className="secondary-button compact" type="button" onClick={() => setSelectedShareId(share.share_id)}>{t("openProfile")}</button></td>
+                    <td><button className="secondary-button compact" type="button" onClick={() => { setChatUserId(share.user_id); selectAgentTab("chat"); }}>{t("message")}</button></td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -3348,9 +3406,11 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
             </div>
           </section>}
 
+          {tab === "chat" && <AgentChatPanel t={t} users={uniqueCandidates} initialUserId={chatUserId} />}
+
           {tab === "schedule" && <form id="agent-schedule-interview-form" className="panel admin-form" onSubmit={scheduleInterview}>
             <h2>{t("scheduleInterview")}</h2>
-            <select value={interview.userId} onChange={(e) => setInterview({ ...interview, userId: e.target.value, jobId: "" })}><option value="">{t("candidates")}</option>{uniqueCandidates.map((share) => <option key={share.user_id} value={share.user_id}>{share.full_name} - {share.email}</option>)}</select>
+            <select value={interview.userId} onChange={(e) => setInterview({ ...interview, userId: e.target.value, jobId: "" })}><option value="">{t("users")}</option>{uniqueCandidates.map((share) => <option key={share.user_id} value={share.user_id}>{share.full_name} - {share.email}</option>)}</select>
             <select value={interview.jobId} onChange={(e) => setInterview({ ...interview, jobId: e.target.value })}><option value="">{t("jobs")}</option>{applicationShares.filter((share) => !interview.userId || share.user_id === interview.userId).map((share) => <option key={share.application_id} value={share.job_id}>{share.job_title} - {share.company_name}</option>)}</select>
             <input type="datetime-local" value={interview.scheduledAt} onChange={(e) => setInterview({ ...interview, scheduledAt: e.target.value })} />
             <input placeholder={t("channel")} value={interview.channel} onChange={(e) => setInterview({ ...interview, channel: e.target.value })} />
@@ -3360,7 +3420,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
 
           {tab === "courses" && <form className="panel admin-form" onSubmit={addCourse}>
             <h2>{t("addCourse")}</h2>
-            <select value={courseForm.userId} onChange={(e) => setCourseForm({ ...courseForm, userId: e.target.value })}><option value="">{t("candidates")}</option>{uniqueCandidates.map((share) => <option value={share.user_id} key={share.user_id}>{share.full_name}</option>)}</select>
+            <select value={courseForm.userId} onChange={(e) => setCourseForm({ ...courseForm, userId: e.target.value })}><option value="">{t("users")}</option>{uniqueCandidates.map((share) => <option value={share.user_id} key={share.user_id}>{share.full_name}</option>)}</select>
             <input placeholder={t("title")} value={courseForm.title} onChange={(e) => setCourseForm({ ...courseForm, title: e.target.value })} />
             <input placeholder={t("provider")} value={courseForm.provider} onChange={(e) => setCourseForm({ ...courseForm, provider: e.target.value })} />
             <input type="date" value={courseForm.completionDate} onChange={(e) => setCourseForm({ ...courseForm, completionDate: e.target.value })} />
@@ -3398,6 +3458,150 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
         </div>
       </section>
     </section>
+  );
+}
+
+function AgentChatPanel({ t, users = [], initialUserId = "" }) {
+  const [threads, setThreads] = useState([]);
+  const [targetUserId, setTargetUserId] = useState(initialUserId || "");
+  const [messages, setMessages] = useState([]);
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const messagesRef = useRef(null);
+  const latestMessageIdRef = useRef("");
+  async function loadThreads() {
+    const data = await api("/agent/chat/threads");
+    setThreads(data);
+    if (!targetUserId && data[0]?.user_id) setTargetUserId(data[0].user_id);
+  }
+  async function loadMessages(userId = targetUserId) {
+    if (!userId) return;
+    const data = await api(`/agent/chat/messages?user_id=${encodeURIComponent(userId)}`);
+    setMessages(data);
+    await loadThreads();
+  }
+  useEffect(() => { loadThreads().catch(() => {}); }, []);
+  useEffect(() => {
+    if (initialUserId && initialUserId !== targetUserId) setTargetUserId(initialUserId);
+  }, [initialUserId]);
+  useEffect(() => { loadMessages().catch(() => {}); }, [targetUserId]);
+  useEffect(() => {
+    const timer = setInterval(() => loadMessages().catch(() => {}), 3500);
+    return () => clearInterval(timer);
+  }, [targetUserId]);
+  useEffect(() => {
+    if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+    const latest = messages[messages.length - 1];
+    if (latest && latest.id !== latestMessageIdRef.current) {
+      if (latestMessageIdRef.current && latest.sender_role === "user") playNotificationBeep();
+      latestMessageIdRef.current = latest.id;
+    }
+  }, [messages.length]);
+  async function sendMessage(event) {
+    event.preventDefault();
+    if (!message.trim() || !targetUserId) return;
+    setSending(true);
+    try {
+      await api("/agent/chat/messages", { method: "POST", body: JSON.stringify({ userId: targetUserId, message }) });
+      setMessage("");
+      await loadMessages();
+    } finally {
+      setSending(false);
+    }
+  }
+  const visibleThreads = threads.length ? threads : users.map((user) => ({
+    user_id: user.user_id,
+    full_name: user.full_name,
+    email: user.email,
+    avatar_url: user.avatar_url,
+    plan: user.plan,
+    last_active_at: user.last_active_at
+  }));
+  return (
+    <section className="panel agent-chat-panel">
+      <div className="section-head"><h2>{t("agentChat")}</h2><span className="status">{visibleThreads.length}</span></div>
+      <div className="agent-chat-layout">
+        <aside className="agent-chat-threads">
+          {visibleThreads.map((thread) => (
+            <button className={targetUserId === thread.user_id ? "active" : ""} type="button" key={thread.user_id} onClick={() => setTargetUserId(thread.user_id)}>
+              <Avatar user={{ full_name: thread.full_name, avatar_url: thread.avatar_url, plan: thread.plan, last_active_at: thread.last_active_at }} size="small" />
+              <span><strong>{thread.full_name}</strong><small>{thread.last_message || thread.email}</small></span>
+              {Number(thread.unread_count || 0) > 0 && <b>{thread.unread_count}</b>}
+            </button>
+          ))}
+        </aside>
+        <div className="agent-chat-conversation">
+          <div className="support-messages" ref={messagesRef}>
+            {messages.map((item) => <SupportBubble item={item} t={t} key={item.id} />)}
+            {!messages.length && <p className="muted-text">{t("agentChat")}</p>}
+          </div>
+          <form onSubmit={sendMessage}>
+            <input placeholder={t("supportMessage")} value={message} onChange={(e) => setMessage(e.target.value)} />
+            <button className="primary-button" disabled={sending || !targetUserId}>{t("send")}</button>
+          </form>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function UserAgentChatWindow({ t, agent, close }) {
+  const [messages, setMessages] = useState([]);
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const messagesRef = useRef(null);
+  const initializedMessagesRef = useRef(false);
+  const latestMessageIdRef = useRef("");
+  async function loadMessages() {
+    if (!agent?.id) return;
+    setMessages(await api(`/user/agent-chat/messages?agent_id=${encodeURIComponent(agent.id)}`));
+  }
+  useEffect(() => {
+    loadMessages().catch(() => {});
+    const timer = setInterval(() => loadMessages().catch(() => {}), 3500);
+    return () => clearInterval(timer);
+  }, [agent?.id]);
+  useEffect(() => {
+    if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+    const latest = messages[messages.length - 1];
+    if (!latest) return;
+    if (!initializedMessagesRef.current) {
+      initializedMessagesRef.current = true;
+      latestMessageIdRef.current = latest.id;
+      return;
+    }
+    if (latest.id !== latestMessageIdRef.current) {
+      if (latest.sender_role === "agent") playNotificationBeep();
+      latestMessageIdRef.current = latest.id;
+    }
+  }, [messages.length]);
+  async function sendMessage(event) {
+    event.preventDefault();
+    if (!message.trim() || !agent?.id) return;
+    setSending(true);
+    try {
+      await api("/user/agent-chat/messages", { method: "POST", body: JSON.stringify({ userId: agent.id, message }) });
+      setMessage("");
+      await loadMessages();
+    } finally {
+      setSending(false);
+    }
+  }
+  return (
+    <div className="support-window agent-user-chat-window">
+      <header>
+        <strong>{agent.agency_name || agent.full_name || t("agentChat")}</strong>
+        <div><button type="button" onClick={close}>×</button></div>
+      </header>
+      <div className="support-messages" ref={messagesRef}>
+        {messages.map((item) => <SupportBubble item={item} t={t} key={item.id} />)}
+        {!messages.length && <p className="muted-text">{t("chatWithAgent")}</p>}
+      </div>
+      <form onSubmit={sendMessage}>
+        <input placeholder={t("supportMessage")} value={message} onChange={(e) => setMessage(e.target.value)} />
+        <button className="primary-button" disabled={sending}>{t("send")}</button>
+      </form>
+    </div>
   );
 }
 
@@ -3495,7 +3699,7 @@ function SupportWindow({ t, me, users, initialUserId = "", onUpdate, close }) {
       <header><strong>{t("support")}</strong><div><button type="button" onClick={clearChat} disabled={clearing}>{clearing ? t("clearingChat") : t("clearChat")}</button><button onClick={close}>×</button></div></header>
       {isSupportAdmin && <select value={targetUserId} onChange={(e) => setTargetUserId(e.target.value)}>{users.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select>}
       <div className="support-messages" ref={messagesRef}>
-        {messages.map((item) => <SupportBubble item={item} key={item.id} />)}
+        {messages.map((item) => <SupportBubble item={item} t={t} key={item.id} />)}
       </div>
       {liveMode && !isSupportAdmin && <p className="notice support-live-note">{t("liveSupportStarted")}</p>}
       {showBotOptions && <div className="support-options">
@@ -3511,11 +3715,11 @@ function SupportWindow({ t, me, users, initialUserId = "", onUpdate, close }) {
   );
 }
 
-function SupportBubble({ item }) {
+function SupportBubble({ item, t }) {
   const lines = String(item.message || "").split(/\r?\n/).filter((line) => line.trim());
   return (
     <div className={`support-bubble ${item.sender_role}`}>
-      <strong>{item.sender_role === "bot" ? "AI assistant" : item.sender_role}</strong>
+      <strong>{item.sender_role === "bot" ? t?.("message") || "Message" : item.sender_role}</strong>
       <span>
         {lines.length ? lines.map((line, index) => <span className="support-line" key={`${item.id}-${index}`}>{line}</span>) : <span className="support-line">-</span>}
       </span>

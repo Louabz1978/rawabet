@@ -5,7 +5,7 @@ Rawabet is a bilingual English/Arabic professional network inspired by LinkedIn.
 ## Tech Stack
 
 - Frontend: React, Vite, CSS
-- Backend: Python, FastAPI
+- Backend: Python, FastAPI, Pydantic, SQLAlchemy Core
 - Database: PostgreSQL
 - Uploads: local backend storage
 
@@ -17,11 +17,13 @@ Rawabet is a bilingual English/Arabic professional network inspired by LinkedIn.
 npm run install:all
 ```
 
-2. Create and seed the PostgreSQL database:
+2. Configure the database URL in `backend/.env`:
 
 ```bash
-npm run db:setup
+DATABASE_URL=postgresql://rawabet_user:password@host:5432/postgres
 ```
+
+The FastAPI backend creates/updates the runtime schema it needs on startup.
 
 3. Start the full app:
 
@@ -33,14 +35,9 @@ Frontend: http://localhost:5173
 Backend: http://localhost:4000
 API docs: http://localhost:4000/docs
 
-## Demo Accounts
-
-- Admin: `admin@rawabet.app` / `admin123`
-- User: `lou@rawabet.app` / `user123`
-
 ## Notes
 
-The backend reads `backend/.env`. The local database connection is configured for PostgreSQL on this Mac. Uploaded files are stored under `backend/uploads`.
+The backend reads `backend/.env`. Uploaded files are stored under `backend/uploads`.
 
 ## EC2/Nginx deployment
 
