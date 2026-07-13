@@ -33,12 +33,19 @@ export async function api(path, options = {}) {
   } catch (error) {
     throw new Error("Cannot reach Rawabet server. Please check your internet connection or try again in a moment.");
   }
-  const data = await response.json().catch(() => ({}));
+  const rawBody = await response.text().catch(() => "");
+  let data = {};
+  try {
+    data = rawBody ? JSON.parse(rawBody) : {};
+  } catch {
+    data = { message: rawBody };
+  }
   if (!response.ok) {
-    const message = data.detail || data.message || "Request failed";
+    const detail = data.detail || data.message || rawBody;
+    const message = detail ? `${response.status} ${response.statusText}: ${detail}` : `${response.status} ${response.statusText}`;
     const error = new Error(message);
     error.status = response.status;
-    error.detail = message;
+    error.detail = detail || message;
     error.isSessionError = response.status === 401;
     error.staleSession = response.status === 401 && requestToken && requestToken !== getToken();
     if (response.status === 401 && token && !error.staleSession) {

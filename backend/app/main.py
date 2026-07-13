@@ -21,6 +21,7 @@ from pydantic import BaseModel, EmailStr
 from .auth import admin_user, agent_user, create_token, current_user, hash_password, is_master_admin, public_user, verify_password
 from .config import APP_ENV, OPENAI_API_KEY, SMTP_FROM, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USER, UPLOAD_DIR
 from .db import execute, fetch_all, fetch_one
+from .routers.messages import router as messages_router
 
 try:
     from reportlab.lib import colors
@@ -73,6 +74,7 @@ RATE_LIMIT_RULES = (
 )
 
 app = FastAPI(title="Rawabet API", version="1.0.0")
+app.include_router(messages_router, prefix="/api")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -3116,127 +3118,6 @@ def create_agent_interview(body: AgentInterviewBody, user: Annotated[dict, Depen
         email_sent, email_error = send_interview_email(recipient["email"], recipient["full_name"], job, body.scheduledAt, body.channel, body.notes)
     return {**interview, "emailSent": email_sent, "emailError": email_error, "recipientEmail": recipient_email}
 
-
-@app.get("/api/agent/chat/threads")
-def list_agent_chat_threads(user: Annotated[dict, Depends(agent_user)]):
-    return fetch_all(
-        """
-        SELECT
-          u.id AS user_id,
-          u.full_name,
-          u.email,
-          u.avatar_url,
-          u.plan,
-          u.last_active_at,
-          latest.message AS last_message,
-          latest.created_at AS last_message_at,
-          COALESCE(unread.unread_count, 0)::int AS unread_count
-        FROM users u
-        JOIN (
-          SELECT DISTINCT user_id
-          FROM agent_messages
-          WHERE agent_id = %s
-          UNION
-          SELECT user_id
-          FROM agent_user_shares
-          WHERE agent_id = %s
-          UNION
-          SELECT a.user_id
-          FROM applications a
-          JOIN agent_job_assignments aja ON aja.job_id = a.job_id
-          WHERE aja.agent_id = %s
-        ) visible ON visible.user_id = u.id
-        LEFT JOIN LATERAL (
-          SELECT message, created_at
-          FROM agent_messages
-          WHERE agent_id = %s AND user_id = u.id
-          ORDER BY created_at DESC
-          LIMIT 1
-        ) latest ON true
-        LEFT JOIN LATERAL (
-          SELECT COUNT(*) AS unread_count
-          FROM agent_messages
-          WHERE agent_id = %s AND user_id = u.id AND sender_role = 'user' AND read_at IS NULL
-        ) unread ON true
-        WHERE u.role IN ('member', 'user')
-        ORDER BY latest.created_at DESC NULLS LAST, u.full_name
-        """,
-        (user["id"], user["id"], user["id"], user["id"], user["id"]),
-    )
-
-
-@app.get("/api/agent/chat/messages")
-def list_agent_chat_messages(user_id: UUID, user: Annotated[dict, Depends(agent_user)]):
-    target = fetch_one("SELECT id FROM users WHERE id = %s AND role IN ('member', 'user')", (user_id,))
-    if not target:
-        raise HTTPException(status_code=404, detail="User not found")
-    execute(
-        "UPDATE agent_messages SET read_at = NOW() WHERE agent_id = %s AND user_id = %s AND sender_role = 'user' AND read_at IS NULL",
-        (user["id"], user_id),
-    )
-    return fetch_all(
-        """
-        SELECT *
-        FROM agent_messages
-        WHERE agent_id = %s AND user_id = %s
-        ORDER BY created_at ASC
-        """,
-        (user["id"], user_id),
-    )
-
-
-@app.post("/api/agent/chat/messages", status_code=201)
-def create_agent_chat_message(body: SupportMessageBody, user: Annotated[dict, Depends(agent_user)]):
-    if not body.userId:
-        raise HTTPException(status_code=400, detail="User is required")
-    target = fetch_one("SELECT id FROM users WHERE id = %s AND role IN ('member', 'user')", (body.userId,))
-    if not target:
-        raise HTTPException(status_code=404, detail="User not found")
-    return execute(
-        """
-        INSERT INTO agent_messages (agent_id, user_id, sender_role, message)
-        VALUES (%s,%s,'agent',%s)
-        RETURNING *
-        """,
-        (user["id"], body.userId, body.message),
-    )
-
-
-@app.get("/api/user/agent-chat/messages")
-def list_user_agent_chat_messages(agent_id: UUID, user: Annotated[dict, Depends(current_user)]):
-    agent = fetch_one("SELECT id FROM users WHERE id = %s AND role = 'agent'", (agent_id,))
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-    execute(
-        "UPDATE agent_messages SET read_at = NOW() WHERE agent_id = %s AND user_id = %s AND sender_role = 'agent' AND read_at IS NULL",
-        (agent_id, user["id"]),
-    )
-    return fetch_all(
-        """
-        SELECT *
-        FROM agent_messages
-        WHERE agent_id = %s AND user_id = %s
-        ORDER BY created_at ASC
-        """,
-        (agent_id, user["id"]),
-    )
-
-
-@app.post("/api/user/agent-chat/messages", status_code=201)
-def create_user_agent_chat_message(body: SupportMessageBody, user: Annotated[dict, Depends(current_user)]):
-    if not body.userId:
-        raise HTTPException(status_code=400, detail="Agent is required")
-    agent = fetch_one("SELECT id FROM users WHERE id = %s AND role = 'agent'", (body.userId,))
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-    return execute(
-        """
-        INSERT INTO agent_messages (agent_id, user_id, sender_role, message)
-        VALUES (%s,%s,'user',%s)
-        RETURNING *
-        """,
-        (body.userId, user["id"], body.message),
-    )
 
 
 @app.get("/api/admin/overview")
