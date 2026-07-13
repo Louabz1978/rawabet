@@ -164,15 +164,15 @@ const text = {
     agents: "Agents",
     agentWorkspace: "Agent workspace",
     sharedProfiles: "Shared profiles",
-    candidates: "Candidates",
+    candidates: "Users",
     scheduledInterviews: "Scheduled interviews",
     agentReports: "Agent reports",
     agentTools: "Agent tools",
     managedApplications: "Managed applications",
     assignedJobs: "Assigned jobs",
-    sharedCandidates: "Shared candidates",
+    sharedCandidates: "Shared users",
     agentActivity: "Agent activity",
-    openProfile: "Open profile",
+    openProfile: "Profile",
     shareWithAgent: "Share with agent",
     noSharedProfiles: "No shared profiles yet",
     sharedForJob: "Shared for job",
@@ -451,15 +451,15 @@ const text = {
     agents: "الوكلاء",
     agentWorkspace: "مساحة الوكيل",
     sharedProfiles: "الملفات المشاركة",
-    candidates: "المرشحون",
+    candidates: "المستخدمون",
     scheduledInterviews: "المقابلات المجدولة",
     agentReports: "تقارير الوكيل",
     agentTools: "أدوات الوكيل",
     managedApplications: "طلبات تحت المتابعة",
     assignedJobs: "الوظائف المعينة",
-    sharedCandidates: "المرشحون المشاركون",
+    sharedCandidates: "المستخدمون المشاركون",
     agentActivity: "نشاط الوكيل",
-    openProfile: "فتح الملف",
+    openProfile: "الملف",
     shareWithAgent: "مشاركة مع وكيل",
     noSharedProfiles: "لا توجد ملفات مشاركة بعد",
     sharedForJob: "مشارك لوظيفة",
@@ -3077,7 +3077,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
     ["profile", t("profile"), "◉"],
     ["overview", t("overview"), "▦"],
     ["jobs", t("assignedJobs"), "▣"],
-    ["candidates", t("users"), "◎"],
+    ["users", t("users"), "◎"],
     ["applications", t("applications"), "◈"],
     ["chat", t("agentChat"), "✉"],
     ["courses", t("courses"), "▤"],
@@ -3089,7 +3089,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
     const viewTabMap = {
       agent: "overview",
       "agent-jobs": "jobs",
-      "agent-users": "candidates",
+      "agent-users": "users",
       "agent-applications": "applications",
       "agent-chat": "chat",
       "agent-interviews": "interviews"
@@ -3101,7 +3101,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
     const tabViewMap = {
       overview: "agent",
       jobs: "agent-jobs",
-      candidates: "agent-users",
+      users: "agent-users",
       applications: "agent-applications",
       chat: "agent-chat",
       interviews: "agent-interviews"
@@ -3312,7 +3312,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
               <article className="panel">
                 <h2>{t("agentTools")}</h2>
                 <div className="agent-tool-list">
-                  <button className="secondary-button" type="button" onClick={() => setTab("candidates")}>{t("users")}</button>
+                  <button className="secondary-button" type="button" onClick={() => setTab("users")}>{t("users")}</button>
                   <button className="secondary-button" type="button" onClick={() => setTab("applications")}>{t("applications")}</button>
                   <button className="secondary-button" type="button" onClick={() => setTab("schedule")}>{t("scheduleInterview")}</button>
                 </div>
@@ -3368,7 +3368,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
             </div>
           </section>}
 
-          {tab === "candidates" && <section className="panel">
+          {tab === "users" && <section className="panel">
             <div className="section-head"><h2>{t("users")}</h2><span className="status">{uniqueCandidates.length}</span></div>
             {uniqueCandidates.length ? <div className="table-wrap">
               <table>

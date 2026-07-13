@@ -3158,7 +3158,7 @@ def list_agent_chat_threads(user: Annotated[dict, Depends(agent_user)]):
           FROM agent_messages
           WHERE agent_id = %s AND user_id = u.id AND sender_role = 'user' AND read_at IS NULL
         ) unread ON true
-        WHERE u.role = 'member'
+        WHERE u.role IN ('member', 'user')
         ORDER BY latest.created_at DESC NULLS LAST, u.full_name
         """,
         (user["id"], user["id"], user["id"], user["id"], user["id"]),
@@ -3167,7 +3167,7 @@ def list_agent_chat_threads(user: Annotated[dict, Depends(agent_user)]):
 
 @app.get("/api/agent/chat/messages")
 def list_agent_chat_messages(user_id: UUID, user: Annotated[dict, Depends(agent_user)]):
-    target = fetch_one("SELECT id FROM users WHERE id = %s AND role = 'member'", (user_id,))
+    target = fetch_one("SELECT id FROM users WHERE id = %s AND role IN ('member', 'user')", (user_id,))
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     execute(
@@ -3189,7 +3189,7 @@ def list_agent_chat_messages(user_id: UUID, user: Annotated[dict, Depends(agent_
 def create_agent_chat_message(body: SupportMessageBody, user: Annotated[dict, Depends(agent_user)]):
     if not body.userId:
         raise HTTPException(status_code=400, detail="User is required")
-    target = fetch_one("SELECT id FROM users WHERE id = %s AND role = 'member'", (body.userId,))
+    target = fetch_one("SELECT id FROM users WHERE id = %s AND role IN ('member', 'user')", (body.userId,))
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     return execute(
