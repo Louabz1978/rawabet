@@ -167,6 +167,18 @@ button:disabled { cursor: not-allowed; opacity: 0.68; }
 
 .top-actions, .demo-actions { display: flex; align-items: center; gap: 10px; }
 
+.agent-topbar {
+  grid-template-columns: auto 1fr auto;
+}
+
+.agent-topbar .desktop-nav {
+  justify-content: flex-end;
+}
+
+.agent-topbar .top-actions {
+  justify-self: end;
+}
+
 .icon-button, .primary-button, .secondary-button {
   border-radius: 999px;
   transition: 0.18s ease;

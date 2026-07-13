@@ -1066,7 +1066,7 @@ function App() {
 
   return (
     <div className="app-shell">
-      <header className="topbar">
+      <header className={`topbar ${isAgent ? "agent-topbar" : ""}`}>
         <button className="icon-button mobile-menu-button" type="button" aria-label={t("menu")} onClick={() => setMobileMenuOpen((current) => !current)}>☰</button>
         <button className="brand" onClick={() => setView(isAgent ? "agent" : "home")}>
           <img className="brand-mark" src="/brand/rawabet-mark.png" alt="" />
@@ -3082,8 +3082,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
     ["chat", t("agentChat"), "✉"],
     ["courses", t("courses"), "▤"],
     ["schedule", t("scheduleInterview"), "◌"],
-    ["interviews", t("scheduledInterviews"), "▣"],
-    ["reports", t("agentReports"), "▥"]
+    ["interviews", t("scheduledInterviews"), "▣"]
   ];
   useEffect(() => {
     const viewTabMap = {
@@ -3444,17 +3443,6 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
             </div>
           </section>}
 
-          {tab === "reports" && <section className="analytics-grid">
-            <AnalyticsBars title={t("agentActivity")} data={activityData} />
-            <AnalyticsList title={t("applicationOutcomes")} data={statusCounts} />
-            <AnalyticsList title={t("jobCategories")} data={applicationShares.reduce((items, share) => {
-              const label = jobCategoryLabel(share.category, lang);
-              const existing = items.find((item) => item.label === label);
-              if (existing) existing.value += 1;
-              else items.push({ label, value: 1 });
-              return items;
-            }, [])} />
-          </section>}
         </div>
       </section>
     </section>
