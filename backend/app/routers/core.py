@@ -685,7 +685,7 @@ def resume_font_name(weight: str = "medium") -> str:
     weight = weight if weight in {"light", "medium", "bold", "black"} else "medium"
     if weight in RESUME_FONT_CACHE:
         return RESUME_FONT_CACHE[weight]
-    local_font_dir = Path(__file__).resolve().parent / "fonts"
+    local_font_dir = Path(__file__).resolve().parent.parent / "fonts"
     font_paths = {
         "light": [
             str(local_font_dir / "NotoKufiArabic-Regular.ttf"),
