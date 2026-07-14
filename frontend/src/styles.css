@@ -488,6 +488,31 @@ html[dir="rtl"] .avatar-status-wrap.large .online-dot { right: auto; left: 12px;
   font-size: 0.76rem;
 }
 
+.menu-plan-panel {
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+
+.mobile-drawer-menu .menu-plan-panel h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.86rem;
+}
+
+.mobile-drawer-menu .menu-plan-panel button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  background: #fff;
+  justify-content: center;
+}
+
+.mobile-drawer-menu .menu-plan-panel .payment-methods button.active {
+  border-color: var(--green);
+  background: #ecfbf8;
+}
+
 .feed, .profile-page, .admin-page, .job-list { display: grid; gap: 14px; }
 .panel { padding: 18px; }
 
@@ -790,6 +815,19 @@ button.feature-card:hover {
 .agency-row small {
   color: var(--muted);
   font-size: 0.72rem;
+}
+
+.compact-agency-list {
+  gap: 6px;
+}
+
+.compact-agency-list .agency-row {
+  padding: 7px 8px;
+}
+
+.compact-agency-list .avatar {
+  width: 32px;
+  height: 32px;
 }
 
 .side-stat {

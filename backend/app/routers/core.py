@@ -175,6 +175,8 @@ def ensure_runtime_schema():
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS dob DATE",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS active_session_id TEXT",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMPTZ",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_renewal_reminded_at TIMESTAMPTZ",
         "ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check",
         "UPDATE users SET role = 'master_admin' WHERE role = 'admin_master'",
         "UPDATE users SET role = 'member' WHERE role IS NULL OR role IN ('user', 'recruiter', 'company') OR role NOT IN ('member', 'admin', 'agent', 'master_admin')",
@@ -659,6 +661,94 @@ def send_interview_email(email: str, full_name: str, job: dict | None, scheduled
             "Rawabet Team"
         ),
     )
+
+
+def send_subscription_renewal_email(email: str, full_name: str, expires_at: object | None) -> tuple[bool, str | None]:
+    return send_plain_email(
+        email,
+        "Rawabet subscription renewal reminder",
+        (
+            f"Hello {full_name},\n\n"
+            "Your Rawabet premium subscription month has ended.\n"
+            f"Expired at: {expires_at or '-'}\n\n"
+            "To renew, send your monthly payment again by Cash or ShamCash, then submit a new subscription request in Rawabet. "
+            "Once admin approves it, another month will be added to your account.\n\n"
+            "Rawabet Team"
+        ),
+    )
+
+
+def refresh_subscription_state(user_id: UUID | str) -> dict | None:
+    expired = fetch_one(
+        """
+        SELECT id, full_name, email, role, plan, subscription_expires_at, subscription_renewal_reminded_at
+        FROM users
+        WHERE id = %s
+          AND plan = 'premium'
+          AND subscription_expires_at IS NOT NULL
+          AND subscription_expires_at <= NOW()
+        """,
+        (user_id,),
+    )
+    if expired:
+        should_email = not expired.get("subscription_renewal_reminded_at") or expired["subscription_renewal_reminded_at"] < expired["subscription_expires_at"]
+        if should_email:
+            send_subscription_renewal_email(expired["email"], expired["full_name"], expired.get("subscription_expires_at"))
+        execute(
+            """
+            UPDATE users
+            SET plan = 'free', subscription_renewal_reminded_at = NOW()
+            WHERE id = %s AND plan = 'premium' AND subscription_expires_at <= NOW()
+            """,
+            (user_id,),
+        )
+    return fetch_one(
+        "SELECT id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url, last_active_at, subscription_expires_at, subscription_renewal_reminded_at FROM users WHERE id = %s",
+        (user_id,),
+    )
+
+
+def refresh_expired_subscriptions(limit: int = 100) -> None:
+    expired_users = fetch_all(
+        """
+        SELECT id, full_name, email, subscription_expires_at
+        FROM users
+        WHERE plan = 'premium'
+          AND subscription_expires_at IS NOT NULL
+          AND subscription_expires_at <= NOW()
+          AND (
+            subscription_renewal_reminded_at IS NULL
+            OR subscription_renewal_reminded_at < subscription_expires_at
+          )
+        ORDER BY subscription_expires_at
+        LIMIT %s
+        """,
+        (limit,),
+    )
+    for expired in expired_users:
+        send_subscription_renewal_email(expired["email"], expired["full_name"], expired.get("subscription_expires_at"))
+        execute(
+            """
+            UPDATE users
+            SET plan = 'free', subscription_renewal_reminded_at = NOW()
+            WHERE id = %s AND plan = 'premium' AND subscription_expires_at <= NOW()
+            """,
+            (expired["id"],),
+        )
+
+
+def premium_is_active(user: dict | None) -> bool:
+    if not user or user.get("plan") != "premium":
+        return False
+    expires_at = user.get("subscription_expires_at")
+    if not expires_at:
+        return True
+    active = fetch_one("SELECT (%s::timestamptz > NOW()) AS active", (expires_at,))
+    return bool(active and active.get("active"))
+
+
+def upload_limits_for(user: dict | None) -> tuple[int, int]:
+    return (2, 5) if premium_is_active(user) else (1, 1)
 
 
 def pdf_escape(value: str) -> str:
@@ -1600,19 +1690,19 @@ RAWABET_GUIDES = [
         "intent": "smart_resume",
         "stems": ["سير", "cv", "ذكي", "انشاء", "انشئ", "اعمل", "اصنع"],
         "terms": ["create smart resume", "smart resume", "resume builder", "ai resume", "create resume", "generate resume", "no cv", "no resume", "do not have cv", "dont have cv", "don't have cv", "إنشاء سيرة ذكية", "انشاء سيرة ذكية", "سيرة ذكية", "السي في", "سي في", "ليس لدي سيرة", "ليس عندي سيرة", "لا يوجد لدي سي في", "لا املك سيرة", "ماهو انشاء سيرة ذكية", "ما هو انشاء سيرة ذكية", "ساعدني في السيرة", "اعمل سيرة", "أنشئ سيرة", "انشئ سيرة"],
-        "answer": "إذا لم يكن لديك سيرة ذاتية، استخدم إنشاء سيرة ذكية داخل روابط:\n1. افتح القائمة أو مساحة العمل واختر إنشاء سيرة ذكية.\n2. قبل الإنشاء، حاول إكمال ملفك بإضافة المسمى المهني، النبذة، المهارات، تاريخ العمل، التعليم، الدورات، والشهادات.\n3. ستجد أن النظام يسحب المهارات وتاريخ العمل من ملفك تلقائيا.\n4. أضف أي شهادات مع التواريخ، مشاريع، أدوات تستخدمها، إنجازات، ولغات.\n5. اضغط تحميل السيرة.\n6. سيستخدم الذكاء الاصطناعي معلومات ملفك والمعلومات التي كتبتها لصياغة نقاط احترافية وإنشاء ملف PDF.\n7. السيرة الذكية يتم تحميلها مباشرة ولا تُحفظ تلقائيا ضمن مرفقاتك.\n8. إذا أردت استخدامها في التقديم، ارفع ملف PDF الناتج في قسم السيرة الذاتية داخل الملف.\n9. يمكنك الاحتفاظ بما يصل إلى سيرتين ذاتيتين مرفوعتين في ملفك واختيار أي واحدة عند التقديم على وظيفة."
+        "answer": "إنشاء السيرة الذكية متاح للمستخدمين المميزين فقط داخل روابط:\n1. افتح القائمة أو مساحة العمل واختر إنشاء سيرة ذكية.\n2. قبل الإنشاء، أكمل ملفك بإضافة المسمى المهني، النبذة، المهارات، تاريخ العمل، التعليم، الدورات، والشهادات.\n3. النظام يسحب المهارات وتاريخ العمل من ملفك تلقائيا.\n4. أضف أي شهادات مع التواريخ، الأدوات، اللغات، والمعلومات الإضافية.\n5. اضغط تحميل السيرة.\n6. سيستخدم الذكاء الاصطناعي معلومات ملفك والمعلومات التي كتبتها لصياغة نقاط احترافية وإنشاء ملف PDF.\n7. السيرة الذكية يتم تحميلها مباشرة ولا تُحفظ تلقائيا ضمن مرفقاتك.\n8. إذا أردت استخدامها في التقديم، ارفع ملف PDF الناتج في قسم السيرة الذاتية داخل الملف.\n9. المستخدم المميز يمكنه رفع سيرتين وشهادات حتى 5، أما المجاني فيمكنه رفع سيرة واحدة وشهادة واحدة."
     },
     {
         "intent": "resume",
         "stems": ["سير", "cv"],
         "terms": ["resume", "cv", "سيرة", "السيرة", "السيرة الذاتية", "سيرتي", "تعديل سيرتي", "ارفع سيرتي"],
-        "answer": "لرفع السيرة الذاتية:\n1. افتح الملف أو أكمل الملف.\n2. اختر حقل السيرة الذاتية.\n3. ارفع ملف PDF أو DOC أو DOCX.\n4. يمكنك الاحتفاظ بما يصل إلى سيرتين ذاتيتين في ملفك.\n5. عند التقديم على وظيفة يمكنك اختيار السيرة التي تريد إرسالها.\n6. إذا لم يكن لديك سيرة جاهزة، استخدم إنشاء سيرة ذكية أولا لتحميل PDF ثم ارفعه في ملفك."
+        "answer": "لرفع السيرة الذاتية:\n1. افتح الملف أو أكمل الملف.\n2. اختر حقل السيرة الذاتية.\n3. ارفع ملف PDF أو DOC أو DOCX.\n4. المستخدم المجاني يمكنه رفع سيرة واحدة، والمستخدم المميز يمكنه رفع سيرتين.\n5. عند التقديم على وظيفة يمكنك اختيار السيرة التي تريد إرسالها.\n6. إذا لم يكن لديك سيرة جاهزة وكان حسابك مميزا، استخدم إنشاء سيرة ذكية أولا لتحميل PDF ثم ارفعه في ملفك."
     },
     {
         "intent": "certificates",
         "stems": ["شهاد", "رخص", "جوايز", "جوائز"],
         "terms": ["certificate", "certificates", "license", "award", "شهادة", "الشهادات", "شهادتي", "شهاداتي", "رخص", "جوائز"],
-        "answer": "لإضافة الشهادات:\n1. افتح الملف أو أكمل الملف.\n2. اختر حقل الشهادة.\n3. ارفع ملف PDF أو صورة.\n4. يمكنك إضافة حتى 5 شهادات.\n5. تظهر الشهادات كرابط في المرفقات ويمكن للإدارة مراجعتها أو حذفها من ملف المستخدم."
+        "answer": "لإضافة الشهادات:\n1. افتح الملف أو أكمل الملف.\n2. اختر حقل الشهادة.\n3. ارفع ملف PDF أو صورة.\n4. المستخدم المجاني يمكنه رفع شهادة واحدة، والمستخدم المميز يمكنه رفع حتى 5 شهادات.\n5. تظهر الشهادات كرابط في المرفقات ويمكن للإدارة مراجعتها أو حذفها من ملف المستخدم."
     },
     {
         "terms": ["work history", "experience", "career", "خبرة", "تاريخ العمل", "الخبرات", "مسار"],
@@ -2089,8 +2179,9 @@ def login_get_hint():
 
 @router.get("/api/account")
 def me(user: Annotated[dict, Depends(current_user)]):
+    user = refresh_subscription_state(user["id"]) or user
     execute("UPDATE users SET last_active_at = NOW() WHERE id = %s", (user["id"],))
-    user = fetch_one("SELECT id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url, last_active_at FROM users WHERE id = %s", (user["id"],))
+    user = fetch_one("SELECT id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url, last_active_at, subscription_expires_at, subscription_renewal_reminded_at FROM users WHERE id = %s", (user["id"],))
     sync_profile_strength(user["id"])
     resume_profile_columns = resume_profile_select_sql()
     profile = fetch_one(
@@ -2208,11 +2299,12 @@ def create_subscription_request(body: SubscriptionRequestBody, user: Annotated[d
 
 @router.get("/api/admin/subscription-requests")
 def list_subscription_requests(user: Annotated[dict, Depends(admin_user)]):
+    refresh_expired_subscriptions()
     return fetch_all(
         """
         SELECT sr.id, sr.user_id, sr.requested_plan, sr.payment_method, sr.amount, sr.currency,
                sr.status, sr.notes, sr.created_at, sr.updated_at,
-               u.full_name, u.email, u.role, u.plan
+               u.full_name, u.email, u.role, u.plan, u.subscription_expires_at
         FROM subscription_requests sr
         JOIN users u ON u.id = sr.user_id
         ORDER BY CASE sr.status WHEN 'pending' THEN 0 ELSE 1 END, sr.created_at DESC
@@ -2239,9 +2331,44 @@ def update_subscription_request(request_id: UUID, body: SubscriptionRequestStatu
         raise HTTPException(status_code=404, detail="Subscription request not found")
     if status == "approved":
         if request["requested_plan"] == "premium":
-            execute("UPDATE users SET plan = 'premium' WHERE id = %s", (request["user_id"],))
+            updated_user = execute(
+                """
+                UPDATE users
+                SET plan = 'premium',
+                    subscription_expires_at = GREATEST(COALESCE(subscription_expires_at, NOW()), NOW()) + interval '1 month',
+                    subscription_renewal_reminded_at = NULL
+                WHERE id = %s
+                RETURNING full_name, email, subscription_expires_at
+                """,
+                (request["user_id"],),
+            )
         elif request["requested_plan"] == "agent":
-            execute("UPDATE users SET role = 'agent', plan = 'premium' WHERE id = %s", (request["user_id"],))
+            updated_user = execute(
+                """
+                UPDATE users
+                SET role = 'agent',
+                    plan = 'premium',
+                    subscription_expires_at = GREATEST(COALESCE(subscription_expires_at, NOW()), NOW()) + interval '1 month',
+                    subscription_renewal_reminded_at = NULL
+                WHERE id = %s
+                RETURNING full_name, email, subscription_expires_at
+                """,
+                (request["user_id"],),
+            )
+        else:
+            updated_user = None
+        if updated_user:
+            send_plain_email(
+                updated_user["email"],
+                "Rawabet subscription approved",
+                (
+                    f"Hello {updated_user['full_name']},\n\n"
+                    "Your Rawabet subscription payment has been approved.\n"
+                    f"Your subscription is active until: {updated_user['subscription_expires_at']}\n\n"
+                    "When your month ends, Rawabet will send a renewal reminder.\n\n"
+                    "Rawabet Team"
+                ),
+            )
     return request
 
 
@@ -2406,6 +2533,9 @@ def delete_education(education_id: UUID, user: Annotated[dict, Depends(current_u
 def build_resume_pdf(body: ResumeBuilderBody, user: Annotated[dict, Depends(current_user)]):
     if user.get("role") in {"admin", "master_admin", "agent"}:
         raise HTTPException(status_code=403, detail="Smart resume is available for user accounts only")
+    user = refresh_subscription_state(user["id"]) or user
+    if not premium_is_active(user):
+        raise HTTPException(status_code=403, detail="Smart resume is available for premium users only")
     resume_profile_columns = resume_profile_select_sql()
     profile = fetch_one(
         f"""
@@ -2461,14 +2591,16 @@ async def upload_document(
     kind: Annotated[str, Form()] = "resume",
     file: UploadFile = File(...),
 ):
+    user = refresh_subscription_state(user["id"]) or user
+    resume_limit, certificate_limit = upload_limits_for(user)
     safe_kind = "certificate" if kind == "certificate" else "resume"
     if safe_kind == "resume":
-        if resume_count_for(user["id"]) >= 2:
-            raise HTTPException(status_code=400, detail="You can upload up to 2 resumes")
+        if resume_count_for(user["id"]) >= resume_limit:
+            raise HTTPException(status_code=400, detail=f"You can upload up to {resume_limit} resume{'s' if resume_limit != 1 else ''}")
     else:
         certificate_count = fetch_one("SELECT COUNT(*)::int AS count FROM documents WHERE user_id = %s AND kind = 'certificate'", (user["id"],))["count"]
-        if certificate_count >= 5:
-            raise HTTPException(status_code=400, detail="You can upload up to 5 certificates")
+        if certificate_count >= certificate_limit:
+            raise HTTPException(status_code=400, detail=f"You can upload up to {certificate_limit} certificate{'s' if certificate_limit != 1 else ''}")
 
     original_name = file.filename or safe_kind
     suffix = Path(original_name).suffix.lower()
@@ -2806,8 +2938,10 @@ def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
         ) exps ON true
         LEFT JOIN agent_profile_shares s ON s.application_id = a.id AND s.agent_id = %s
         LEFT JOIN agent_job_assignments aja ON aja.job_id = a.job_id AND aja.agent_id = %s
-        WHERE s.agent_id IS NOT NULL OR aja.agent_id IS NOT NULL
-        ORDER BY COALESCE(s.created_at, a.created_at) DESC
+            WHERE (s.agent_id IS NOT NULL OR aja.agent_id IS NOT NULL)
+              AND u.plan = 'premium'
+              AND (u.subscription_expires_at IS NULL OR u.subscription_expires_at > NOW())
+            ORDER BY COALESCE(s.created_at, a.created_at) DESC
         """,
         (user["id"], user["id"]),
     )
@@ -2875,6 +3009,8 @@ def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
               WHERE e.user_id = u.id
             ) exps ON true
             WHERE s.agent_id = %s
+              AND u.plan = 'premium'
+              AND (u.subscription_expires_at IS NULL OR u.subscription_expires_at > NOW())
             ORDER BY s.created_at DESC
             """,
             (user["id"],),
@@ -2945,6 +3081,8 @@ def list_agent_users(user: Annotated[dict, Depends(agent_user)]):
           WHERE e.user_id = u.id
         ) exps ON true
         WHERE COALESCE(u.role, 'member') IN ('member', 'user')
+          AND u.plan = 'premium'
+          AND (u.subscription_expires_at IS NULL OR u.subscription_expires_at > NOW())
         ORDER BY u.created_at DESC
         """
     )
@@ -3199,6 +3337,7 @@ def create_agent_interview(body: AgentInterviewBody, user: Annotated[dict, Depen
 
 @router.get("/api/admin/overview")
 def admin_overview(user: Annotated[dict, Depends(admin_user)]):
+    refresh_expired_subscriptions()
     metrics = {
         "users": fetch_one("SELECT COUNT(*)::int AS count FROM users")["count"],
         "verifiedProfiles": fetch_one("SELECT COUNT(*)::int AS count FROM users WHERE status = 'verified'")["count"],
@@ -3377,7 +3516,7 @@ def create_admin_user(body: AdminCreateUserBody, user: Annotated[dict, Depends(a
 def admin_user_profile(user_id: UUID, user: Annotated[dict, Depends(admin_user)]):
     sync_profile_strength(user_id)
     target_user = fetch_one(
-        "SELECT id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url, created_at, last_active_at FROM users WHERE id = %s",
+        "SELECT id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url, created_at, last_active_at, subscription_expires_at FROM users WHERE id = %s",
         (user_id,),
     )
     if not target_user:
@@ -3473,16 +3612,18 @@ async def upload_admin_document(
     kind: Annotated[str, Form()] = "resume",
     file: UploadFile = File(...),
 ):
-    if not fetch_one("SELECT id FROM users WHERE id = %s", (user_id,)):
+    target_user = refresh_subscription_state(user_id)
+    if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
+    resume_limit, certificate_limit = upload_limits_for(target_user)
     safe_kind = "certificate" if kind == "certificate" else "resume"
     if safe_kind == "resume":
-        if resume_count_for(user_id) >= 2:
-            raise HTTPException(status_code=400, detail="You can upload up to 2 resumes")
+        if resume_count_for(user_id) >= resume_limit:
+            raise HTTPException(status_code=400, detail=f"You can upload up to {resume_limit} resume{'s' if resume_limit != 1 else ''}")
     else:
         certificate_count = fetch_one("SELECT COUNT(*)::int AS count FROM documents WHERE user_id = %s AND kind = 'certificate'", (user_id,))["count"]
-        if certificate_count >= 5:
-            raise HTTPException(status_code=400, detail="You can upload up to 5 certificates")
+        if certificate_count >= certificate_limit:
+            raise HTTPException(status_code=400, detail=f"You can upload up to {certificate_limit} certificate{'s' if certificate_limit != 1 else ''}")
     original_name = file.filename or safe_kind
     suffix = Path(original_name).suffix.lower()
     content = await file.read()

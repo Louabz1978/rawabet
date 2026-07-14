@@ -124,7 +124,7 @@ const text = {
     viewFile: "View file",
     removeAttachment: "Remove",
     downloadResume: "Download resume",
-    maxCertificates: "Up to 5 certificates",
+    maxCertificates: "Up to {count} certificates",
     profileBuilder: "Profile Builder",
     completeYourRawabet: "Complete your Rawabet profile",
     basicInfo: "Basic information",
@@ -229,7 +229,7 @@ const text = {
     status: "Status",
     role: "Role",
     plan: "Plan",
-    subscriptionPlans: "Plans",
+    subscriptionPlans: "Subscriptions",
     premiumPlan: "Premium user",
     agentPlan: "Agent plan",
     premiumPrice: "$7.99 / month",
@@ -431,7 +431,7 @@ const text = {
     viewFile: "عرض الملف",
     removeAttachment: "حذف",
     downloadResume: "تحميل السيرة",
-    maxCertificates: "حتى 5 شهادات",
+    maxCertificates: "حتى {count} شهادات",
     profileBuilder: "منشئ الملف",
     completeYourRawabet: "أكمل ملفك في روابط",
     basicInfo: "المعلومات الأساسية",
@@ -536,7 +536,7 @@ const text = {
     status: "الحالة",
     role: "الدور",
     plan: "الخطة",
-    subscriptionPlans: "الخطط",
+    subscriptionPlans: "الاشتراك",
     premiumPlan: "مستخدم مميز",
     agentPlan: "خطة الوكيل",
     premiumPrice: "7.99$ / شهريا",
@@ -547,7 +547,7 @@ const text = {
     cashPayment: "كاش",
     shamCashPayment: "شام كاش",
     requestPlan: "طلب الخطة",
-    planRequests: "طلبات الخطط",
+    planRequests: "طلبات الاشتراك",
     requestedPlan: "الخطة المطلوبة",
     approve: "قبول",
     reject: "رفض",
@@ -820,6 +820,7 @@ function App() {
   const [agentChatOpen, setAgentChatOpen] = useState(false);
   const [agentChatTarget, setAgentChatTarget] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [subscriptionMenuOpen, setSubscriptionMenuOpen] = useState(false);
   const [popup, setPopup] = useState(null);
   const [presenceTick, setPresenceTick] = useState(0);
   const [sessionWarningOpen, setSessionWarningOpen] = useState(false);
@@ -1103,6 +1104,7 @@ function App() {
     setAgentUsers([]);
     setSupportThreads([]);
     setUserAgentThreads([]);
+    setSubscriptionMenuOpen(false);
     supportUnreadRef.current = 0;
     supportUnreadReadyRef.current = false;
     userAgentUnreadRef.current = 0;
@@ -1151,7 +1153,8 @@ function App() {
 
   if (!session || !me) return <Login lang={lang} setLang={setLang} t={t} login={login} verifyAndLoad={verifyAndLoad} error={error} setError={setError} />;
   const isAgent = session.role === "agent";
-  const canUseSmartResume = !isAgent && !isAdminRole(session.role);
+  const subscriptionActive = !me.user.subscriptionExpiresAt || new Date(me.user.subscriptionExpiresAt) > new Date();
+  const canUseSmartResume = !isAgent && !isAdminRole(session.role) && me.user.plan === "premium" && subscriptionActive;
 
   function openSmartResumeForUser() {
     if (!canUseSmartResume) return;
@@ -1209,6 +1212,8 @@ function App() {
         {!isAgent && <button type="button" onClick={() => { setView("agents"); setMobileMenuOpen(false); }}>{t("findCompany")}</button>}
         {canUseSmartResume && <button type="button" onClick={openSmartResumeForUser}>{t("smartResume")}</button>}
         {!isAgent && <button type="button" onClick={openComingInterviews}>{t("upcomingInterviews")}</button>}
+        {!isAdminRole(session.role) && <button type="button" onClick={() => setSubscriptionMenuOpen((current) => !current)}><span>{t("subscriptionPlans")}</span><b>{subscriptionMenuOpen ? "−" : "+"}</b></button>}
+        {subscriptionMenuOpen && !isAdminRole(session.role) && <PlanCards t={t} currentRole={session.role} currentPlan={me.user.plan} notify={notify} menuMode />}
         <button type="button" onClick={logout}>{t("logout")}</button>
       </nav>}
 
@@ -1569,7 +1574,12 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
     if (status === "accepted") return "accepted-frame";
     return "";
   };
-  const orderedJobs = [...jobs].sort((a, b) => Number(scheduledJobIds.has(b.id)) - Number(scheduledJobIds.has(a.id))).slice(0, PAGE_SIZE);
+  const orderedJobs = [...jobs].sort((a, b) => Number(scheduledJobIds.has(b.id)) - Number(scheduledJobIds.has(a.id))).slice(0, 10);
+  const previewAgents = agents.slice(0, 7);
+  function openAllJobsFromHome() {
+    setJobMode("all");
+    setView("jobs");
+  }
   return (
     <div className="layout-grid">
       <section className="mobile-home-priority">
@@ -1607,7 +1617,6 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
           <button className="panel-link" onClick={() => setView("allJobs")}><span>▦</span>{t("savedJobs")}</button>
           {["admin", "master_admin"].includes(me.user.role) && <button className="panel-link" onClick={() => setView("admin")}><span>▥</span>{t("adminDashboard")}</button>}
         </section>
-        <PlanCards t={t} currentRole={me.user.role} currentPlan={me.user.plan} notify={notify} />
       </aside>
       <section className="feed">
         <article className="panel post-card">
@@ -1625,17 +1634,7 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
               </article>
             )) : <p>{t("noAdminPosts")}</p>}
           </div>
-        </article>
-        <article className="panel post-card">
-          <div className="post-head"><div className="company-logo">A</div><div><h2>{t("agentDirectory")}</h2><p>{t("searchAgents")}</p></div></div>
-          <div className="agency-list">
-            {agents.slice(0, 5).map((agent) => (
-              <button className="agency-row" type="button" key={agent.id} onClick={() => { setSelectedAgent(agent); setView("agents"); }}>
-                <Avatar user={{ full_name: agent.full_name, avatar_url: agent.avatar_url, plan: agent.plan, last_active_at: agent.last_active_at }} size="small" />
-                <span><strong>{agent.agency_name || agent.full_name}</strong><small>{agent.open_jobs || 0} {t("activeJobs")}</small></span>
-              </button>
-            ))}
-          </div>
+          {jobs.length > 10 && <button className="panel-link more-link" type="button" onClick={openAllJobsFromHome}><span>↗</span>{t("more")}</button>}
         </article>
       </section>
       <aside className="insight-rail">
@@ -1656,6 +1655,19 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
           <div className="profile-summary-list skill-summary">
             {skills.length ? skills.map((skill) => <span key={skill}>{skill}</span>) : <button className="panel-link" type="button" onClick={openBuilder}>{t("completeProfile")}</button>}
           </div>
+          {!!agents.length && <>
+            <div className="summary-divider" />
+            <h2>{t("agentDirectory")}</h2>
+            <div className="agency-list compact-agency-list">
+              {previewAgents.map((agent) => (
+                <button className="agency-row" type="button" key={agent.id} onClick={() => { setSelectedAgent(agent); setView("agents"); }}>
+                  <Avatar user={{ full_name: agent.full_name, avatar_url: agent.avatar_url, plan: agent.plan, last_active_at: agent.last_active_at }} size="small" />
+                  <span><strong>{agent.agency_name || agent.full_name}</strong><small>{agent.open_jobs || 0} {t("activeJobs")}</small></span>
+                </button>
+              ))}
+            </div>
+            {agents.length > 7 && <button className="panel-link more-link" type="button" onClick={() => setView("agents")}><span>↗</span>{t("more")}</button>}
+          </>}
           <div className="summary-divider" />
           <h2>{t("workTimeline")}</h2>
           <div className="profile-summary-list experience-summary">
@@ -1667,7 +1679,7 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
   );
 }
 
-function PlanCards({ t, currentRole = "member", currentPlan = "free", notify }) {
+function PlanCards({ t, currentRole = "member", currentPlan = "free", notify, menuMode = false }) {
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [submittingPlan, setSubmittingPlan] = useState("");
   const plans = [
@@ -1685,7 +1697,7 @@ function PlanCards({ t, currentRole = "member", currentPlan = "free", notify }) 
       body: t("agentPlanBody"),
       active: currentRole === "agent"
     }
-  ];
+  ].filter((plan) => currentRole === "agent" ? plan.id === "agent" : plan.id === "premium");
   async function requestPlan(plan) {
     setSubmittingPlan(plan);
     try {
@@ -1701,7 +1713,7 @@ function PlanCards({ t, currentRole = "member", currentPlan = "free", notify }) 
     }
   }
   return (
-    <section className="panel side-panel plan-panel">
+    <section className={menuMode ? "plan-panel menu-plan-panel" : "panel side-panel plan-panel"}>
       <h2>{t("subscriptionPlans")}</h2>
       <div className="payment-methods" role="group" aria-label={t("paymentMethod")}>
         <button className={paymentMethod === "cash" ? "active" : ""} type="button" onClick={() => setPaymentMethod("cash")}>{t("cashPayment")}</button>
@@ -1871,6 +1883,9 @@ function AgentsPage({ t, agents = [], selectedAgent, setSelectedAgent, openJob, 
 }
 
 function ProfileBuilder({ t, me, reload, close, notify }) {
+  const isPremium = me.user.plan === "premium" && (!me.user.subscriptionExpiresAt || new Date(me.user.subscriptionExpiresAt) > new Date());
+  const resumeLimit = isPremium ? 2 : 1;
+  const certificateLimit = isPremium ? 5 : 1;
   const [form, setForm] = useState({
     fullName: me.user.fullName || "",
     phone: me.user.phone || "",
@@ -1962,8 +1977,8 @@ function ProfileBuilder({ t, me, reload, close, notify }) {
           <section className="builder-panel">
             <h3>{t("mediaFiles")}</h3>
             <label>{t("profilePicture")}<input type="file" accept="image/*" onChange={(e) => uploadAvatar(e.target.files[0])} /></label>
-            <label>{t("resume")}<input type="file" accept=".pdf,.doc,.docx" onChange={(e) => upload("resume", e.target.files[0])} /></label>
-            <label>{t("certificate")}<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={(e) => upload("certificate", e.target.files[0])} /><span>{t("maxCertificates")}</span></label>
+            <label>{t("resume")}<input type="file" accept=".pdf,.doc,.docx" onChange={(e) => upload("resume", e.target.files[0])} /><span>{resumeLimit}</span></label>
+            <label>{t("certificate")}<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={(e) => upload("certificate", e.target.files[0])} /><span>{t("maxCertificates").replace("{count}", certificateLimit)}</span></label>
             <div className="upload-preview">
               <Avatar user={me.user} size="large" />
               <div><strong>{t("filesStayLocal")}</strong><p>{t("filesStayLocalBody")}</p></div>
@@ -2139,6 +2154,9 @@ function SmartResumePanel({ t, me, reload, notify }) {
 }
 
 function Profile({ t, me, reload, notify }) {
+  const isPremium = me.user.plan === "premium" && (!me.user.subscriptionExpiresAt || new Date(me.user.subscriptionExpiresAt) > new Date());
+  const resumeLimit = isPremium ? 2 : 1;
+  const certificateLimit = isPremium ? 5 : 1;
   const [form, setForm] = useState({
     fullName: me.user.fullName || "",
     phone: me.user.phone || "",
@@ -2335,8 +2353,8 @@ function Profile({ t, me, reload, notify }) {
       </form>
       <section className="panel upload-grid">
         <label>{t("profilePicture")}<input type="file" accept="image/*" onChange={(e) => uploadAvatar(e.target.files[0])} /></label>
-        <label>{t("resume")}<input type="file" accept=".pdf,.doc,.docx" onChange={(e) => upload("resume", e.target.files[0])} /><span>2</span></label>
-        <label>{t("certificate")}<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={(e) => upload("certificate", e.target.files[0])} /><span>{t("maxCertificates")}</span></label>
+        <label>{t("resume")}<input type="file" accept=".pdf,.doc,.docx" onChange={(e) => upload("resume", e.target.files[0])} /><span>{resumeLimit}</span></label>
+        <label>{t("certificate")}<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={(e) => upload("certificate", e.target.files[0])} /><span>{t("maxCertificates").replace("{count}", certificateLimit)}</span></label>
         <div className="span"><DocumentLinks t={t} documents={me.documents} avatarUrl={me.user.avatarUrl} onDelete={deleteAttachment} /></div>
       </section>
       <section className="panel">
@@ -2619,6 +2637,9 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
   const agents = users.filter((user) => user.role === "agent");
   const isMasterAdmin = session?.role === "master_admin";
   const editableRoles = USER_ROLES.filter((role) => isMasterAdmin || role !== "master_admin");
+  const selectedProfilePremium = selectedProfile?.user?.plan === "premium" && (!selectedProfile?.user?.subscription_expires_at || new Date(selectedProfile.user.subscription_expires_at) > new Date());
+  const selectedProfileResumeLimit = selectedProfilePremium ? 2 : 1;
+  const selectedProfileCertificateLimit = selectedProfilePremium ? 5 : 1;
   useEffect(() => {
     if (initialTab) {
       setTab(initialTab);
@@ -3069,8 +3090,8 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
               <section className="panel admin-form">
                 <h2>{t("attachments")}</h2>
                 <label>{t("profilePicture")}<input type="file" accept="image/*" onChange={(e) => uploadSelectedAvatar(e.target.files[0])} /></label>
-                <label>{t("resume")}<input type="file" accept=".pdf,.doc,.docx" onChange={(e) => uploadSelectedAttachment("resume", e.target.files[0])} /><span>2</span></label>
-                <label>{t("certificate")}<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={(e) => uploadSelectedAttachment("certificate", e.target.files[0])} /><span>{t("maxCertificates")}</span></label>
+                <label>{t("resume")}<input type="file" accept=".pdf,.doc,.docx" onChange={(e) => uploadSelectedAttachment("resume", e.target.files[0])} /><span>{selectedProfileResumeLimit}</span></label>
+                <label>{t("certificate")}<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={(e) => uploadSelectedAttachment("certificate", e.target.files[0])} /><span>{t("maxCertificates").replace("{count}", selectedProfileCertificateLimit)}</span></label>
                 <DocumentLinks t={t} documents={selectedProfile.documents} avatarUrl={selectedProfile.user.avatar_url} onDelete={deleteSelectedAttachment} />
               </section>
               <section className="panel admin-profile-applications">
@@ -3534,7 +3555,6 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
               <Metric label={t("scheduledInterviews")} value={interviews.length} />
               <Metric label={t("assignedJobs")} value={jobs.length} />
             </section>
-            <PlanCards t={t} currentRole={agent?.role} currentPlan={agent?.plan} notify={notify} />
           </section>}
 
           {tab === "overview" && <>
