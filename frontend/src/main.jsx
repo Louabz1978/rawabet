@@ -286,6 +286,7 @@ const text = {
     stayConnected: "Sign in again",
     agentChat: "Agent chat",
     chatWithAgent: "Chat with agent",
+    aiAssistant: "AI Assistant",
     message: "Message",
     autoLogoutIn: "Auto logout in",
     signedInElsewhere: "This account was signed in from another device.",
@@ -573,6 +574,7 @@ const text = {
     stayConnected: "تسجيل الدخول من جديد",
     agentChat: "محادثة الوكيل",
     chatWithAgent: "تواصل مع الوكيل",
+    aiAssistant: "المساعد الذكي",
     message: "رسالة",
     autoLogoutIn: "تسجيل خروج تلقائي خلال",
     signedInElsewhere: "تم تسجيل الدخول إلى هذا الحساب من جهاز آخر.",
@@ -1120,6 +1122,7 @@ function App() {
         {isAgent && <button type="button" onClick={() => { setView("agent-jobs"); setMobileMenuOpen(false); }}>{t("assignedJobs")}</button>}
         {isAgent && <button type="button" onClick={() => { setView("agent-users"); setMobileMenuOpen(false); }}>{t("users")}</button>}
         {isAgent && <button type="button" onClick={() => { setView("agent-chat"); setMobileMenuOpen(false); }}>{t("agentChat")}</button>}
+        {isAgent && <button type="button" onClick={() => { setSupportOpen(true); setMobileMenuOpen(false); }}>{t("aiAssistant")}</button>}
         {!isAgent && <button type="button" onClick={openAppliedJobs}><span>{t("appliedJobs")}</span><b>{formatNumber(me.applications?.length || 0)}</b></button>}
         {!isAgent && <button type="button" onClick={openAllJobs}>{t("findJob")}</button>}
         {!isAgent && <button type="button" onClick={() => { setView("agents"); setMobileMenuOpen(false); }}>{t("findCompany")}</button>}
@@ -1129,8 +1132,8 @@ function App() {
       </nav>}
 
       <main className={view === "admin" || isAgent ? "admin-main" : ""}>
-        {isAgent ? <AgentWorkspace t={t} lang={lang} agent={me.user} profile={me.profile || {}} shares={agentShares} users={agentUsers} interviews={agentInterviews} jobs={agentJobs} view={view} setView={setView} reload={loadApp} notify={notify} openAgentChat={openAgentChat} /> : <>
-          {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} agents={agents} setSelectedAgent={setSelectedAgent} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} openSmartResume={openSmartResumeForUser} canUseSmartResume={canUseSmartResume} jobSearch={jobSearch} setJobSearch={setJobSearch} setJobMode={setJobMode} />}
+        {isAgent ? <AgentWorkspace t={t} lang={lang} agent={me.user} profile={me.profile || {}} shares={agentShares} users={agentUsers} interviews={agentInterviews} jobs={agentJobs} view={view} setView={setView} reload={loadApp} notify={notify} openAgentChat={openAgentChat} openSupportAssistant={() => setSupportOpen(true)} /> : <>
+          {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} agents={agents} setSelectedAgent={setSelectedAgent} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} openSmartResume={openSmartResumeForUser} openSupportAssistant={() => setSupportOpen(true)} canUseSmartResume={canUseSmartResume} jobSearch={jobSearch} setJobSearch={setJobSearch} setJobMode={setJobMode} />}
           {view === "profile" && <Profile t={t} me={me} reload={loadApp} notify={notify} />}
           {view === "smartResume" && canUseSmartResume && <SmartResumePage t={t} me={me} reload={loadApp} notify={notify} />}
           {view === "courses" && <CoursesPage t={t} courses={me.courses || []} />}
@@ -1144,7 +1147,7 @@ function App() {
       </main>
       <MobileBottomNav t={t} view={view} role={session.role} setView={setView} setAdminStartTab={setAdminStartTab} openAllJobs={openAllJobs} openComingInterviews={openComingInterviews} isAdmin={isAdminRole(session.role)} />
       {!isAgent && builderOpen && <ProfileBuilder t={t} me={me} reload={loadApp} close={() => setBuilderOpen(false)} notify={notify} />}
-      {!isAgent && supportOpen && <SupportWindow t={t} me={me} users={adminUsers} initialUserId={supportTarget} onUpdate={loadSupportThreads} close={() => { setSupportOpen(false); setSupportTarget(""); }} />}
+      {supportOpen && !isAdminRole(session.role) && <SupportWindow t={t} me={me} users={adminUsers} initialUserId={supportTarget} onUpdate={loadSupportThreads} close={() => { setSupportOpen(false); setSupportTarget(""); }} />}
       {agentChatOpen && !isAgent && agentChatTarget && <UserAgentChatWindow t={t} agent={agentChatTarget} threads={userAgentThreads} setAgent={setAgentChatTarget} onUpdate={async () => { const threads = await api("/user/agent-chat/threads"); userAgentUnreadRef.current = threads.reduce((sum, thread) => sum + Number(thread.unread_count || 0), 0); setUserAgentThreads(threads); }} close={() => { setAgentChatOpen(false); setAgentChatTarget(null); }} />}
       {popup && <ToastPopup t={t} popup={popup} close={() => setPopup(null)} />}
       {sessionWarningOpen && <SessionWarningModal t={t} seconds={sessionCountdown} stayConnected={stayConnected} logout={logout} />}
@@ -1469,7 +1472,7 @@ function AppFooter() {
   );
 }
 
-function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJob, openAppliedJobs, openBuilder, openSmartResume, canUseSmartResume = true, jobSearch, setJobSearch, setJobMode }) {
+function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJob, openAppliedJobs, openBuilder, openSmartResume, openSupportAssistant, canUseSmartResume = true, jobSearch, setJobSearch, setJobMode }) {
   const strength = Number(me.profile?.profile_strength ?? 0);
   const strengthState = profileStrengthStatus(strength, t);
   const applications = me.applications || [];
@@ -1517,6 +1520,7 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
         <section className="panel side-panel workspace-panel">
           <h2>{t("workspace")}</h2>
           <button className="panel-link" onClick={() => setView("profile")}><span>↗</span>{t("publicProfile")}</button>
+          <button className="panel-link" onClick={openSupportAssistant}><span>✦</span>{t("aiAssistant")}</button>
           {canUseSmartResume && <button className="panel-link" onClick={openSmartResume}><span>◈</span>{t("smartResume")}</button>}
           <button className="panel-link desktop-only-workspace-link" onClick={() => setView("courses")}><span>▤</span>{t("courses")}</button>
           <button className="panel-link" onClick={() => setView("allJobs")}><span>▦</span>{t("savedJobs")}</button>
@@ -3065,7 +3069,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
   );
 }
 
-function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [], interviews = [], jobs = [], view = "agent", setView, reload, notify, openAgentChat }) {
+function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [], interviews = [], jobs = [], view = "agent", setView, reload, notify, openAgentChat, openSupportAssistant }) {
   const [tab, setTab] = useState("profile");
   const [selectedShareId, setSelectedShareId] = useState("");
   const [selectedJob, setSelectedJob] = useState(null);
@@ -3099,6 +3103,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
     ["users", t("users"), "◎"],
     ["applications", t("applications"), "◈"],
     ["chat", t("agentChat"), "✉"],
+    ["support", t("aiAssistant"), "✦"],
     ["courses", t("courses"), "▤"],
     ["schedule", t("scheduleInterview"), "◌"],
     ["interviews", t("scheduledInterviews"), "▣"]
@@ -3332,6 +3337,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
                 <div className="agent-tool-list">
                   <button className="secondary-button" type="button" onClick={() => setTab("users")}>{t("users")}</button>
                   <button className="secondary-button" type="button" onClick={() => setTab("applications")}>{t("applications")}</button>
+                  <button className="secondary-button" type="button" onClick={openSupportAssistant}>{t("aiAssistant")}</button>
                   <button className="secondary-button" type="button" onClick={() => setTab("schedule")}>{t("scheduleInterview")}</button>
                 </div>
               </article>
@@ -3425,6 +3431,11 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
           </section>}
 
           {tab === "chat" && <AgentChatPanel t={t} users={uniqueCandidates} initialUserId={chatUserId} />}
+
+          {tab === "support" && <section className="panel">
+            <div className="section-head"><h2>{t("aiAssistant")}</h2><button className="primary-button compact" type="button" onClick={openSupportAssistant}>{t("openChat")}</button></div>
+            <p className="muted-text">{t("liveSupportStarted")}</p>
+          </section>}
 
           {tab === "schedule" && <form id="agent-schedule-interview-form" className="panel admin-form" onSubmit={scheduleInterview}>
             <h2>{t("scheduleInterview")}</h2>
@@ -3714,7 +3725,7 @@ function SupportWindow({ t, me, users, initialUserId = "", onUpdate, close }) {
   const showBotOptions = !liveMode && lastMessage?.sender_role === "bot" && /دعم مباشر|live support|end the conversation|إنهاء المحادثة|end the conversation/i.test(lastMessage.message || "");
   return (
     <div className="support-window">
-      <header><strong>{t("support")}</strong><div><button type="button" onClick={clearChat} disabled={clearing}>{clearing ? t("clearingChat") : t("clearChat")}</button><button onClick={close}>×</button></div></header>
+      <header><strong>{isSupportAdmin ? t("supportInbox") : t("aiAssistant")}</strong><div><button type="button" onClick={clearChat} disabled={clearing}>{clearing ? t("clearingChat") : t("clearChat")}</button><button onClick={close}>×</button></div></header>
       {isSupportAdmin && <select value={targetUserId} onChange={(e) => setTargetUserId(e.target.value)}>{users.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select>}
       <div className="support-messages" ref={messagesRef}>
         {messages.map((item) => <SupportBubble item={item} t={t} key={item.id} />)}
