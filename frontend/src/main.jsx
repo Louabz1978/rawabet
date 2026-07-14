@@ -727,6 +727,7 @@ function App() {
   const [agentJobs, setAgentJobs] = useState([]);
   const [agentUsers, setAgentUsers] = useState([]);
   const [supportThreads, setSupportThreads] = useState([]);
+  const [userAgentThreads, setUserAgentThreads] = useState([]);
   const [supportTarget, setSupportTarget] = useState("");
   const [adminStartTab, setAdminStartTab] = useState("");
   const [jobSearch, setJobSearch] = useState("");
@@ -744,6 +745,8 @@ function App() {
   const [sessionCountdown, setSessionCountdown] = useState(SESSION_GRACE_MS / 1000);
   const supportUnreadRef = useRef(0);
   const supportUnreadReadyRef = useRef(false);
+  const userAgentUnreadRef = useRef(0);
+  const userAgentUnreadReadyRef = useRef(false);
   const presenceBusyRef = useRef(false);
   const presenceListsBusyRef = useRef(false);
   const sessionEndedRef = useRef(false);
@@ -809,6 +812,10 @@ function App() {
     } else {
       setJobs(await api("/jobs"));
       setAgents(await api("/agents"));
+      const threads = await api("/user/agent-chat/threads");
+      userAgentUnreadRef.current = threads.reduce((sum, thread) => sum + Number(thread.unread_count || 0), 0);
+      userAgentUnreadReadyRef.current = true;
+      setUserAgentThreads(threads);
     }
     if (isAdminRole(data.user.role)) {
       setAdmin(await api("/admin/overview"));
@@ -890,6 +897,12 @@ function App() {
         setAgentUsers(await api("/agent/users"));
       } else {
         setAgents(await api("/agents"));
+        const threads = await api("/user/agent-chat/threads");
+        const nextUnread = threads.reduce((sum, thread) => sum + Number(thread.unread_count || 0), 0);
+        if (userAgentUnreadReadyRef.current && nextUnread > userAgentUnreadRef.current) playNotificationBeep();
+        userAgentUnreadRef.current = nextUnread;
+        userAgentUnreadReadyRef.current = true;
+        setUserAgentThreads(threads);
       }
     } finally {
       presenceListsBusyRef.current = false;
@@ -1007,14 +1020,18 @@ function App() {
     setAgentJobs([]);
     setAgentUsers([]);
     setSupportThreads([]);
+    setUserAgentThreads([]);
     supportUnreadRef.current = 0;
     supportUnreadReadyRef.current = false;
+    userAgentUnreadRef.current = 0;
+    userAgentUnreadReadyRef.current = false;
     setMobileMenuOpen(false);
     setSessionWarningOpen(false);
     setSessionCountdown(SESSION_GRACE_MS / 1000);
   }
 
   const supportUnread = supportThreads.filter((thread) => Number(thread.unread_count || 0) > 0).length;
+  const userAgentUnread = userAgentThreads.reduce((sum, thread) => sum + Number(thread.unread_count || 0), 0);
 
   function openJob(jobId) {
     setJobMode("all");
@@ -1060,7 +1077,9 @@ function App() {
   }
 
   function openAgentChat(agent = null) {
-    setAgentChatTarget(agent);
+    const target = agent || userAgentThreads[0] || null;
+    if (!target) return;
+    setAgentChatTarget(target);
     setAgentChatOpen(true);
   }
 
@@ -1087,9 +1106,9 @@ function App() {
           {isAgent && <button className="nav-link active" onClick={() => setView("agent")}><span><NavIcon name="agents" /></span><b>{t("agentWorkspace")}</b></button>}
         </nav>
         <div className="top-actions">
-          {!isAgent && <button className="icon-button mobile-chat-button" type="button" aria-label={t("support")} onClick={() => isAdminRole(session.role) ? (setAdminStartTab("support"), setView("admin")) : setSupportOpen(true)}>💬{supportUnread > 0 && <span>{supportUnread}</span>}</button>}
+          {!isAgent && <button className="icon-button mobile-chat-button" type="button" aria-label={isAdminRole(session.role) ? t("support") : t("message")} onClick={() => isAdminRole(session.role) ? (setAdminStartTab("support"), setView("admin")) : openAgentChat()} disabled={!isAdminRole(session.role) && !userAgentThreads.length}>💬{(isAdminRole(session.role) ? supportUnread : userAgentUnread) > 0 && <span>{isAdminRole(session.role) ? supportUnread : userAgentUnread}</span>}</button>}
           {isAgent && <button className="icon-button mobile-chat-button" type="button" aria-label={t("agentChat")} onClick={() => setView("agent-chat")}>💬</button>}
-          {!isAgent && <button className="secondary-button compact notify-button" onClick={() => isAdminRole(session.role) ? (setAdminStartTab("support"), setView("admin")) : setSupportOpen(true)}>{t("support")}{supportUnread > 0 && <span>{supportUnread}</span>}</button>}
+          {!isAgent && <button className="secondary-button compact notify-button message-button" onClick={() => isAdminRole(session.role) ? (setAdminStartTab("support"), setView("admin")) : openAgentChat()} disabled={!isAdminRole(session.role) && !userAgentThreads.length}>{isAdminRole(session.role) ? t("support") : t("message")}{(isAdminRole(session.role) ? supportUnread : userAgentUnread) > 0 && <span>{isAdminRole(session.role) ? supportUnread : userAgentUnread}</span>}</button>}
           {isAgent && <button className="secondary-button compact notify-button" onClick={() => setView("agent-chat")}>{t("agentChat")}</button>}
           <button className="secondary-button compact" onClick={logout}>{t("logout")}</button>
           <button className="icon-button" onClick={() => setLang(lang === "en" ? "ar" : "en")}>{t("language")}</button>
@@ -1126,7 +1145,7 @@ function App() {
       <MobileBottomNav t={t} view={view} role={session.role} setView={setView} setAdminStartTab={setAdminStartTab} openAllJobs={openAllJobs} openComingInterviews={openComingInterviews} isAdmin={isAdminRole(session.role)} />
       {!isAgent && builderOpen && <ProfileBuilder t={t} me={me} reload={loadApp} close={() => setBuilderOpen(false)} notify={notify} />}
       {!isAgent && supportOpen && <SupportWindow t={t} me={me} users={adminUsers} initialUserId={supportTarget} onUpdate={loadSupportThreads} close={() => { setSupportOpen(false); setSupportTarget(""); }} />}
-      {agentChatOpen && !isAgent && agentChatTarget && <UserAgentChatWindow t={t} agent={agentChatTarget} close={() => { setAgentChatOpen(false); setAgentChatTarget(null); }} />}
+      {agentChatOpen && !isAgent && agentChatTarget && <UserAgentChatWindow t={t} agent={agentChatTarget} threads={userAgentThreads} setAgent={setAgentChatTarget} onUpdate={async () => { const threads = await api("/user/agent-chat/threads"); userAgentUnreadRef.current = threads.reduce((sum, thread) => sum + Number(thread.unread_count || 0), 0); setUserAgentThreads(threads); }} close={() => { setAgentChatOpen(false); setAgentChatTarget(null); }} />}
       {popup && <ToastPopup t={t} popup={popup} close={() => setPopup(null)} />}
       {sessionWarningOpen && <SessionWarningModal t={t} seconds={sessionCountdown} stayConnected={stayConnected} logout={logout} />}
       <AppFooter />
@@ -3533,7 +3552,7 @@ function AgentChatPanel({ t, users = [], initialUserId = "" }) {
   );
 }
 
-function UserAgentChatWindow({ t, agent, close }) {
+function UserAgentChatWindow({ t, agent, threads = [], setAgent, onUpdate, close }) {
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
@@ -3543,6 +3562,8 @@ function UserAgentChatWindow({ t, agent, close }) {
   async function loadMessages() {
     if (!agent?.id) return;
     setMessages(await api(`/user/agent-chat/messages?agent_id=${encodeURIComponent(agent.id)}`));
+    const update = onUpdate?.();
+    update?.catch?.(() => {});
   }
   useEffect(() => {
     loadMessages().catch(() => {});
@@ -3581,6 +3602,15 @@ function UserAgentChatWindow({ t, agent, close }) {
         <strong>{agent.agency_name || agent.full_name || t("agentChat")}</strong>
         <div><button type="button" onClick={close}>×</button></div>
       </header>
+      {threads.length > 1 && <div className="user-agent-thread-row">
+        {threads.map((thread) => (
+          <button className={thread.id === agent.id ? "active" : ""} type="button" key={thread.id} onClick={() => setAgent?.(thread)}>
+            <Avatar user={{ full_name: thread.agency_name || thread.full_name, avatar_url: thread.avatar_url }} size="small" />
+            <span>{thread.agency_name || thread.full_name}</span>
+            {Number(thread.unread_count || 0) > 0 && <b>{thread.unread_count}</b>}
+          </button>
+        ))}
+      </div>}
       <div className="support-messages" ref={messagesRef}>
         {messages.map((item) => <SupportBubble item={item} t={t} key={item.id} />)}
         {!messages.length && <p className="muted-text">{t("chatWithAgent")}</p>}

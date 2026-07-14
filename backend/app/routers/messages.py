@@ -137,6 +137,48 @@ def create_agent_chat_message(body: ChatMessageBody, user: Annotated[dict, Depen
     return {"ok": True}
 
 
+@router.get("/user/agent-chat/threads")
+def list_user_agent_chat_threads(user: Annotated[dict, Depends(current_user)]):
+    ensure_agent_messages_schema()
+    return fetch_all(
+        """
+        SELECT
+          a.id,
+          a.full_name,
+          a.email,
+          a.avatar_url,
+          p.agency_name,
+          p.agency_about,
+          p.website,
+          latest.message AS last_message,
+          latest.created_at AS last_message_at,
+          COALESCE(unread.unread_count, 0)::int AS unread_count
+        FROM users a
+        JOIN (
+          SELECT DISTINCT agent_id
+          FROM agent_messages
+          WHERE user_id = %s
+        ) visible ON visible.agent_id = a.id
+        LEFT JOIN profiles p ON p.user_id = a.id
+        LEFT JOIN LATERAL (
+          SELECT message, created_at
+          FROM agent_messages
+          WHERE agent_id = a.id AND user_id = %s
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) latest ON true
+        LEFT JOIN LATERAL (
+          SELECT COUNT(*) AS unread_count
+          FROM agent_messages
+          WHERE agent_id = a.id AND user_id = %s AND sender_role = 'agent' AND read_at IS NULL
+        ) unread ON true
+        WHERE a.role = 'agent'
+        ORDER BY latest.created_at DESC NULLS LAST, a.full_name
+        """,
+        (user["id"], user["id"], user["id"]),
+    )
+
+
 @router.get("/user/agent-chat/messages")
 def list_user_agent_chat_messages(agent_id: UUID, user: Annotated[dict, Depends(current_user)]):
     ensure_agent_messages_schema()

@@ -167,6 +167,24 @@ button:disabled { cursor: not-allowed; opacity: 0.68; }
 
 .top-actions, .demo-actions { display: flex; align-items: center; gap: 10px; }
 
+.message-button {
+  position: relative;
+}
+
+.message-button span {
+  display: inline-grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  margin-inline-start: 7px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--green);
+  color: #fff;
+  font-size: 0.68rem;
+  line-height: 18px;
+}
+
 .agent-topbar {
   grid-template-columns: auto 1fr auto;
 }
@@ -2163,6 +2181,55 @@ html[dir="rtl"] .support-window {
 .agent-chat-conversation input {
   flex: 1;
   min-width: 0;
+}
+
+.user-agent-thread-row {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+  background: #f8fbfc;
+}
+
+.user-agent-thread-row button {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  max-width: 190px;
+  min-height: 38px;
+  padding: 4px 10px 4px 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--brand);
+  font-weight: 800;
+}
+
+.user-agent-thread-row button.active {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.user-agent-thread-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+}
+
+.user-agent-thread-row b {
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--green);
+  color: #fff;
+  font-size: 0.66rem;
 }
 
 .support-thread.unread {
