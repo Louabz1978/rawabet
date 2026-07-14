@@ -464,15 +464,115 @@ html[dir="rtl"] .avatar-status-wrap.large .online-dot { right: auto; left: 12px;
   background: #f0fbf8;
 }
 
-.profile-plan-panel .plan-card-list {
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+.profile-plan-panel {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(260px, 0.9fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
 }
 
-.subscription-expiry {
-  margin: -4px 0 12px;
+.subscription-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.subscription-card-head h2 {
+  margin: 0;
+}
+
+.subscription-card-head span:not(.subscription-badge) {
+  display: block;
+  margin-top: 3px;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 0.74rem;
+  font-weight: 750;
+}
+
+.subscription-status-row,
+.subscription-cell {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 12px;
+}
+
+.subscription-cell {
+  margin: 0;
+}
+
+.subscription-status-row small,
+.subscription-cell small,
+.subscription-detail {
+  color: var(--muted);
+  font-size: 0.72rem;
   font-weight: 700;
+  white-space: nowrap;
+}
+
+.subscription-detail {
+  margin: 0;
+}
+
+.profile-plan-panel .payment-methods {
+  margin: 0;
+}
+
+.profile-plan-panel .payment-methods button {
+  min-height: 32px;
+  padding: 5px 8px;
+  font-size: 0.72rem;
+}
+
+.profile-plan-panel .shamcash-choice img {
+  width: 18px;
+  height: 18px;
+}
+
+.subscription-request-button {
+  min-width: 112px;
+}
+
+.subscription-badge {
+  width: fit-content;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #eef4f5;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.subscription-badge.active {
+  background: #dff7ed;
+  color: #047857;
+}
+
+.subscription-badge.soon {
+  background: #fff1cc;
+  color: #9a5b00;
+}
+
+.subscription-badge.expired {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.admin-subscription-inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.admin-subscription-inline .subscription-cell {
+  margin: 0;
 }
 
 .plan-card div {
@@ -3373,6 +3473,12 @@ td span {
   .admin-console { grid-template-columns: 190px minmax(0, 1fr); }
   .analytics-grid { grid-template-columns: 1fr; }
   .agent-profile-grid-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .profile-plan-panel {
+    grid-template-columns: 1fr;
+  }
+  .profile-plan-panel .payment-methods {
+    max-width: 340px;
+  }
 }
 
 @media (max-width: 900px) {
@@ -3754,4 +3860,7 @@ td span {
 
 @media (max-width: 520px) {
   .agent-profile-grid-list { grid-template-columns: 1fr; }
+  .profile-plan-panel .payment-methods {
+    grid-template-columns: 1fr;
+  }
 }

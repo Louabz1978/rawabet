@@ -231,6 +231,11 @@ const text = {
     plan: "Plan",
     subscriptionPlans: "Subscriptions",
     subscriptionExpires: "Expires",
+    subscriptionStatus: "Subscription status",
+    renewNow: "Needs renewal",
+    expiringSoon: "Expiring soon",
+    activeUntil: "Active until",
+    noSubscription: "No active subscription",
     premiumPlan: "Premium user",
     agentPlan: "Agent plan",
     premiumPrice: "$7.99 / month",
@@ -539,6 +544,11 @@ const text = {
     plan: "الخطة",
     subscriptionPlans: "الاشتراك",
     subscriptionExpires: "ينتهي في",
+    subscriptionStatus: "حالة الاشتراك",
+    renewNow: "بحاجة إلى تجديد",
+    expiringSoon: "ينتهي قريبا",
+    activeUntil: "نشط حتى",
+    noSubscription: "لا يوجد اشتراك نشط",
     premiumPlan: "مستخدم مميز",
     agentPlan: "خطة الوكيل",
     premiumPrice: "7.99$ / شهريا",
@@ -736,6 +746,24 @@ function planLabel(value, lang) {
     premium: { en: "Premium", ar: "مميز" }
   };
   return labels[value]?.[lang] || value || "-";
+}
+
+function subscriptionInfo(user = {}, t) {
+  const expiresRaw = user.subscriptionExpiresAt || user.subscription_expires_at || "";
+  const expiresAt = expiresRaw ? new Date(expiresRaw) : null;
+  const isValidDate = expiresAt && !Number.isNaN(expiresAt.getTime());
+  const now = new Date();
+  const daysLeft = isValidDate ? Math.ceil((expiresAt.getTime() - now.getTime()) / 86400000) : null;
+  if (user.plan !== "premium") {
+    if (isValidDate && daysLeft <= 0) {
+      return { state: "expired", label: t("renewNow"), detail: `${t("subscriptionExpires")}: ${expiresAt.toLocaleDateString()}` };
+    }
+    return { state: "free", label: t("noSubscription"), detail: "" };
+  }
+  if (!isValidDate) return { state: "active", label: t("active"), detail: "" };
+  if (daysLeft <= 0) return { state: "expired", label: t("renewNow"), detail: `${t("subscriptionExpires")}: ${expiresAt.toLocaleDateString()}` };
+  if (daysLeft <= 7) return { state: "soon", label: t("expiringSoon"), detail: `${t("activeUntil")}: ${expiresAt.toLocaleDateString()}` };
+  return { state: "active", label: t("active"), detail: `${t("activeUntil")}: ${expiresAt.toLocaleDateString()}` };
 }
 
 function roleLabel(value, lang) {
@@ -1683,6 +1711,7 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
 function PlanCards({ t, currentRole = "member", currentPlan = "free", subscriptionExpiresAt = "", notify, menuMode = false, profileMode = false }) {
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [submittingPlan, setSubmittingPlan] = useState("");
+  const subInfo = subscriptionInfo({ plan: currentPlan, subscriptionExpiresAt }, t);
   const plans = [
     {
       id: "premium",
@@ -1699,6 +1728,7 @@ function PlanCards({ t, currentRole = "member", currentPlan = "free", subscripti
       active: currentRole === "agent"
     }
   ].filter((plan) => currentRole === "agent" ? plan.id === "agent" : plan.id === "premium");
+  const primaryPlan = plans[0];
   async function requestPlan(plan) {
     setSubmittingPlan(plan);
     try {
@@ -1715,12 +1745,24 @@ function PlanCards({ t, currentRole = "member", currentPlan = "free", subscripti
   }
   return (
     <section className={menuMode ? "plan-panel menu-plan-panel" : profileMode ? "panel plan-panel profile-plan-panel" : "panel side-panel plan-panel"}>
-      <h2>{t("subscriptionPlans")}</h2>
-      {subscriptionExpiresAt && <p className="subscription-expiry">{t("subscriptionExpires")}: {new Date(subscriptionExpiresAt).toLocaleDateString()}</p>}
+      <div className="subscription-card-head">
+        <div>
+          <h2>{t("subscriptionPlans")}</h2>
+          {primaryPlan && <span>{primaryPlan.title} · {primaryPlan.price}</span>}
+        </div>
+        <span className={`subscription-badge ${subInfo.state}`}>{subInfo.label}</span>
+      </div>
+      {subInfo.detail && <small className="subscription-detail">{subInfo.detail}</small>}
       <div className="payment-methods" role="group" aria-label={t("paymentMethod")}>
         <button className={paymentMethod === "cash" ? "active" : ""} type="button" onClick={() => setPaymentMethod("cash")}>{t("cashPayment")}</button>
         <button className={paymentMethod === "shamcash" ? "active shamcash-choice" : "shamcash-choice"} type="button" onClick={() => setPaymentMethod("shamcash")}><img src="/brand/shamcash.png" alt="" />{t("shamCashPayment")}</button>
       </div>
+      {profileMode && primaryPlan ? (
+        <button className="secondary-button compact subscription-request-button" type="button" disabled={primaryPlan.active || submittingPlan === primaryPlan.id} onClick={() => requestPlan(primaryPlan.id)}>
+          {submittingPlan === primaryPlan.id ? t("saving") : primaryPlan.active ? t("active") : t("requestPlan")}
+        </button>
+      ) : null}
+      {!profileMode && (
       <div className="plan-card-list">
         {plans.map((plan) => (
           <article className={plan.active ? "plan-card active" : "plan-card"} key={plan.id}>
@@ -1732,7 +1774,18 @@ function PlanCards({ t, currentRole = "member", currentPlan = "free", subscripti
           </article>
         ))}
       </div>
+      )}
     </section>
+  );
+}
+
+function SubscriptionStatus({ user, t }) {
+  const info = subscriptionInfo(user, t);
+  return (
+    <div className="subscription-cell">
+      <span className={`subscription-badge ${info.state}`}>{info.label}</span>
+      {info.detail && <small>{info.detail}</small>}
+    </div>
   );
 }
 
@@ -2997,13 +3050,14 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
               <div className="section-head"><h2>{t("planRequests")}</h2></div>
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>{t("users")}</th><th>{t("requestedPlan")}</th><th>{t("paymentMethod")}</th><th>{t("status")}</th><th>{t("actions")}</th></tr></thead>
+                  <thead><tr><th>{t("users")}</th><th>{t("requestedPlan")}</th><th>{t("paymentMethod")}</th><th>{t("subscriptionStatus")}</th><th>{t("status")}</th><th>{t("actions")}</th></tr></thead>
                   <tbody>
                     {subscriptionRequests.length ? pagedSubscriptionRequests.map((request) => (
                       <tr key={request.id}>
                         <td><div className="table-user"><Avatar user={{ full_name: request.full_name }} size="small" /><div><strong>{request.full_name}</strong><span>{request.email}</span></div></div></td>
                         <td><strong>{request.requested_plan === "agent" ? t("agentPlan") : t("premiumPlan")}</strong><span className="muted-inline">{Number(request.amount).toFixed(2)} {request.currency}</span></td>
                         <td>{request.payment_method === "shamcash" ? t("shamCashPayment") : t("cashPayment")}</td>
+                        <td><SubscriptionStatus user={{ plan: request.plan, subscription_expires_at: request.subscription_expires_at }} t={t} /></td>
                         <td><span className={`status ${request.status}`}>{statusLabel(request.status, lang)}</span></td>
                         <td>
                           <div className="row-actions">
@@ -3012,7 +3066,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
                           </div>
                         </td>
                       </tr>
-                    )) : <tr><td colSpan="5">{t("emptyState")}</td></tr>}
+                    )) : <tr><td colSpan="6">{t("emptyState")}</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -3024,8 +3078,8 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
               <div className="section-head"><h2>{t("users")}</h2><div className="section-actions"><input placeholder={t("searchUsers")} value={search} onChange={(e) => searchUsers(e.target.value)} /><button className="primary-button compact" type="button" onClick={() => setShowAddUserModal(true)}>{t("addUser")}</button></div></div>
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>{t("users")}</th><th>{t("role")}</th><th>{t("plan")}</th><th>{t("status")}</th><th>{t("attachments")}</th><th>{t("lastActive")}</th><th>{t("shareWithAgent")}</th><th>{t("actions")}</th></tr></thead>
-                  <tbody>{pagedUsers.map((user) => <tr key={user.id}><td><button className="table-user table-user-button" type="button" onClick={() => openUserProfile(user)}><Avatar user={user} size="small" /><div><strong>{user.full_name}</strong><span>{user.email}</span></div></button></td><td>{roleLabel(user.role, lang)}</td><td><select className="plan-select" value={user.plan || "free"} onChange={(e) => patchUser(user, { plan: e.target.value })}>{PLAN_OPTIONS.map((plan) => <option value={plan} key={plan}>{planLabel(plan, lang)}</option>)}</select></td><td><span className={`status ${user.status}`}>{statusLabel(user.status, lang)}</span></td><td><DocumentLinks t={t} documents={user.documents} avatarUrl={user.avatar_url} compact /></td><td>{new Date(user.last_active_at).toLocaleDateString()}</td><td><select className="action-select" defaultValue="" disabled={!agents.length} onChange={async (e) => { await shareUser(user, e.target.value); e.target.value = ""; }}><option value="">{agents.length ? t("shareWithAgent") : t("agent")}</option>{agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}</select></td><td><select className="action-select" defaultValue="" onChange={(e) => { runUserAction(user, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option><option value="edit">{t("editUser")}</option><option value="verify">{t("verify")}</option><option value="activate">{t("activate")}</option><option value="deactivate">{t("deactivate")}</option>{(isMasterAdmin || !["admin", "master_admin"].includes(user.role)) && <option value="delete">{t("delete")}</option>}</select></td></tr>)}</tbody>
+                  <thead><tr><th>{t("users")}</th><th>{t("role")}</th><th>{t("plan")}</th><th>{t("subscriptionStatus")}</th><th>{t("status")}</th><th>{t("attachments")}</th><th>{t("lastActive")}</th><th>{t("shareWithAgent")}</th><th>{t("actions")}</th></tr></thead>
+                  <tbody>{pagedUsers.map((user) => <tr key={user.id}><td><button className="table-user table-user-button" type="button" onClick={() => openUserProfile(user)}><Avatar user={user} size="small" /><div><strong>{user.full_name}</strong><span>{user.email}</span></div></button></td><td>{roleLabel(user.role, lang)}</td><td><select className="plan-select" value={user.plan || "free"} onChange={(e) => patchUser(user, { plan: e.target.value })}>{PLAN_OPTIONS.map((plan) => <option value={plan} key={plan}>{planLabel(plan, lang)}</option>)}</select></td><td><SubscriptionStatus user={user} t={t} /></td><td><span className={`status ${user.status}`}>{statusLabel(user.status, lang)}</span></td><td><DocumentLinks t={t} documents={user.documents} avatarUrl={user.avatar_url} compact /></td><td>{new Date(user.last_active_at).toLocaleDateString()}</td><td><select className="action-select" defaultValue="" disabled={!agents.length} onChange={async (e) => { await shareUser(user, e.target.value); e.target.value = ""; }}><option value="">{agents.length ? t("shareWithAgent") : t("agent")}</option>{agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}</select></td><td><select className="action-select" defaultValue="" onChange={(e) => { runUserAction(user, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option><option value="edit">{t("editUser")}</option><option value="verify">{t("verify")}</option><option value="activate">{t("activate")}</option><option value="deactivate">{t("deactivate")}</option>{(isMasterAdmin || !["admin", "master_admin"].includes(user.role)) && <option value="delete">{t("delete")}</option>}</select></td></tr>)}</tbody>
                 </table>
               </div>
             </section>
@@ -3082,6 +3136,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
                 <input value={selectedProfile.user.headline || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, headline: e.target.value } })} placeholder={t("headline")} />
                 <input value={selectedProfile.user.location || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, location: e.target.value } })} placeholder={t("location")} />
                 <select value={selectedProfile.user.plan || "free"} onChange={(e) => setSelectedProfile({ ...selectedProfile, user: { ...selectedProfile.user, plan: e.target.value } })}>{PLAN_OPTIONS.map((plan) => <option value={plan} key={plan}>{planLabel(plan, lang)}</option>)}</select>
+                <div className="span admin-subscription-inline"><strong>{t("subscriptionStatus")}</strong><SubscriptionStatus user={selectedProfile.user} t={t} /></div>
                 <textarea value={selectedProfile.profile?.about || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, profile: { ...(selectedProfile.profile || {}), about: e.target.value } })} placeholder={t("about")} />
                 <input value={Array.isArray(selectedProfile.profile?.skills) ? selectedProfile.profile.skills.join(", ") : selectedProfile.profile?.skills || ""} onChange={(e) => setSelectedProfile({ ...selectedProfile, profile: { ...(selectedProfile.profile || {}), skills: e.target.value } })} placeholder={t("skills")} />
                 <div className="row-fields">

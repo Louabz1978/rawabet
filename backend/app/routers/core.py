@@ -3446,11 +3446,13 @@ def admin_overview(user: Annotated[dict, Depends(admin_user)]):
 
 @router.get("/api/admin/users")
 def admin_users(user: Annotated[dict, Depends(admin_user)], search: str = ""):
+    refresh_expired_subscriptions()
     query = f"%{search}%"
     return fetch_all(
         """
         SELECT
           u.id, u.full_name, u.email, u.phone, u.dob, u.role, u.plan, u.status, u.headline, u.location, u.avatar_url, u.created_at, u.last_active_at,
+          u.subscription_expires_at, u.subscription_renewal_reminded_at,
           COALESCE(
             json_agg(
               json_build_object(
@@ -3514,6 +3516,7 @@ def create_admin_user(body: AdminCreateUserBody, user: Annotated[dict, Depends(a
 
 @router.get("/api/admin/users/{user_id}/profile")
 def admin_user_profile(user_id: UUID, user: Annotated[dict, Depends(admin_user)]):
+    refresh_expired_subscriptions()
     sync_profile_strength(user_id)
     target_user = fetch_one(
         "SELECT id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url, created_at, last_active_at, subscription_expires_at FROM users WHERE id = %s",
