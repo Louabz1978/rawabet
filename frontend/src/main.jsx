@@ -229,6 +229,24 @@ const text = {
     status: "Status",
     role: "Role",
     plan: "Plan",
+    subscriptionPlans: "Plans",
+    premiumPlan: "Premium user",
+    agentPlan: "Agent plan",
+    premiumPrice: "$7.99 / month",
+    agentPrice: "$9.99 / month",
+    premiumPlanBody: "For professionals who want stronger visibility, premium profile signals, and access to premium resources.",
+    agentPlanBody: "For agencies and companies that want a public company profile, assigned jobs, candidates, interviews, and live user messages.",
+    paymentMethod: "Payment method",
+    cashPayment: "Cash",
+    shamCashPayment: "ShamCash",
+    requestPlan: "Request plan",
+    planRequests: "Plan requests",
+    requestedPlan: "Requested plan",
+    approve: "Approve",
+    reject: "Reject",
+    planRequestSent: "Plan request sent. Admin will review your payment and activate it.",
+    saving: "Saving...",
+    active: "Active",
     lastActive: "Last active",
     actions: "Actions",
     save: "Save",
@@ -518,6 +536,24 @@ const text = {
     status: "الحالة",
     role: "الدور",
     plan: "الخطة",
+    subscriptionPlans: "الخطط",
+    premiumPlan: "مستخدم مميز",
+    agentPlan: "خطة الوكيل",
+    premiumPrice: "7.99$ / شهريا",
+    agentPrice: "9.99$ / شهريا",
+    premiumPlanBody: "للمهنيين الذين يريدون ظهورا أقوى، إشارة حساب مميز، والوصول إلى موارد مخصصة للمميزين.",
+    agentPlanBody: "للجهات والشركات التي تريد ملف شركة عام، وظائف مرتبطة بها، مرشحين، مقابلات، ومراسلة مباشرة مع المستخدمين.",
+    paymentMethod: "طريقة الدفع",
+    cashPayment: "كاش",
+    shamCashPayment: "شام كاش",
+    requestPlan: "طلب الخطة",
+    planRequests: "طلبات الخطط",
+    requestedPlan: "الخطة المطلوبة",
+    approve: "قبول",
+    reject: "رفض",
+    planRequestSent: "تم إرسال طلب الخطة. ستراجع الإدارة الدفع وتفعّلها.",
+    saving: "جار الحفظ...",
+    active: "نشط",
     lastActive: "آخر نشاط",
     actions: "الإجراءات",
     save: "حفظ",
@@ -614,6 +650,9 @@ const STATUS_LABELS = {
   active: { en: "Active", ar: "نشط" },
   verified: { en: "Verified", ar: "موثق" },
   suspended: { en: "Suspended", ar: "موقوف" },
+  pending: { en: "Pending", ar: "معلق" },
+  approved: { en: "Approved", ar: "مقبول" },
+  cancelled: { en: "Cancelled", ar: "ملغى" },
   paused: { en: "Paused", ar: "متوقف" },
   closed: { en: "Closed", ar: "مغلق" }
 };
@@ -629,6 +668,7 @@ const SESSION_MS = 60 * 60 * 1000;
 const SESSION_WARNING_MS = 58 * 60 * 1000;
 const SESSION_GRACE_MS = 2 * 60 * 1000;
 const SESSION_VALIDATE_MS = 5 * 1000;
+const PAGE_SIZE = 15;
 
 function isStaleSessionError(error) {
   return Boolean(error?.staleSession);
@@ -641,6 +681,22 @@ function isSessionError(error) {
 
 function statusLabel(value, lang) {
   return STATUS_LABELS[value]?.[lang] || value || "-";
+}
+
+function pageItems(items, page, pageSize = PAGE_SIZE) {
+  return items.slice((page - 1) * pageSize, page * pageSize);
+}
+
+function PaginationControls({ t, page, total, setPage, pageSize = PAGE_SIZE }) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  if (total <= pageSize) return null;
+  return (
+    <div className="pagination panel">
+      <button className="secondary-button compact" type="button" disabled={page <= 1} onClick={() => setPage(page - 1)}>{t("previous")}</button>
+      <span>{t("page")} {page} / {totalPages}</span>
+      <button className="secondary-button compact" type="button" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>{t("next")}</button>
+    </div>
+  );
 }
 
 function analyticsLabel(kind, value, lang, t) {
@@ -744,6 +800,7 @@ function App() {
   const [adminApplications, setAdminApplications] = useState([]);
   const [adminInterviews, setAdminInterviews] = useState([]);
   const [adminCourses, setAdminCourses] = useState([]);
+  const [adminSubscriptionRequests, setAdminSubscriptionRequests] = useState([]);
   const [agents, setAgents] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [agentShares, setAgentShares] = useState([]);
@@ -847,6 +904,7 @@ function App() {
       setAdminApplications(await api("/admin/applications"));
       setAdminInterviews(await api("/admin/interviews"));
       setAdminCourses(await api("/admin/courses"));
+      setAdminSubscriptionRequests(await api("/admin/subscription-requests"));
       const threads = await api("/admin/support/threads");
       supportUnreadRef.current = threads.filter((thread) => Number(thread.unread_count || 0) > 0).length;
       supportUnreadReadyRef.current = true;
@@ -1156,7 +1214,7 @@ function App() {
 
       <main className={view === "admin" || isAgent ? "admin-main" : ""}>
         {isAgent ? <AgentWorkspace t={t} lang={lang} agent={me.user} profile={me.profile || {}} shares={agentShares} users={agentUsers} interviews={agentInterviews} jobs={agentJobs} view={view} setView={setView} reload={loadApp} notify={notify} openAgentChat={openAgentChat} openAdminChat={() => setSupportOpen(true)} /> : <>
-          {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} agents={agents} setSelectedAgent={setSelectedAgent} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} openSmartResume={openSmartResumeForUser} openSupportAssistant={() => setSupportOpen(true)} canUseSmartResume={canUseSmartResume} jobSearch={jobSearch} setJobSearch={setJobSearch} setJobMode={setJobMode} />}
+          {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} agents={agents} setSelectedAgent={setSelectedAgent} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} openSmartResume={openSmartResumeForUser} openSupportAssistant={() => setSupportOpen(true)} canUseSmartResume={canUseSmartResume} jobSearch={jobSearch} setJobSearch={setJobSearch} setJobMode={setJobMode} notify={notify} />}
           {view === "profile" && <Profile t={t} me={me} reload={loadApp} notify={notify} />}
           {view === "smartResume" && canUseSmartResume && <SmartResumePage t={t} me={me} reload={loadApp} notify={notify} />}
           {view === "courses" && <CoursesPage t={t} courses={me.courses || []} />}
@@ -1165,7 +1223,7 @@ function App() {
           {view === "allJobs" && <Jobs t={t} lang={lang} jobs={jobs} documents={me.documents || []} applications={me.applications || []} interviews={me.interviews || []} search={jobSearch} mode="all" setMode={(mode) => mode === "applied" ? openAppliedJobs() : openAllJobs()} selectedJobId={selectedJobId} clearSelectedJob={() => setSelectedJobId("")} reload={loadApp} />}
           {view === "appliedJobs" && <Jobs t={t} lang={lang} jobs={jobs} documents={me.documents || []} applications={me.applications || []} interviews={me.interviews || []} search={jobSearch} mode="applied" setMode={(mode) => mode === "all" ? openAllJobs() : openAppliedJobs()} selectedJobId={selectedJobId} clearSelectedJob={() => setSelectedJobId("")} reload={loadApp} />}
           {view === "interviews" && <ComingInterviews t={t} interviews={me.interviews || []} openJob={openJob} />}
-          {view === "admin" && isAdminRole(session.role) && <Admin t={t} lang={lang} session={session} admin={admin} users={adminUsers} setUsers={setAdminUsers} jobs={jobs} courses={adminCourses} applications={adminApplications} setApplications={setAdminApplications} interviews={adminInterviews} supportThreads={supportThreads} initialTab={adminStartTab} clearInitialTab={() => setAdminStartTab("")} reload={loadApp} openSupport={(userId) => { setSupportTarget(userId || ""); setSupportOpen(true); }} notify={notify} withNotify={withNotify} />}
+          {view === "admin" && isAdminRole(session.role) && <Admin t={t} lang={lang} session={session} admin={admin} users={adminUsers} setUsers={setAdminUsers} jobs={jobs} courses={adminCourses} applications={adminApplications} setApplications={setAdminApplications} interviews={adminInterviews} subscriptionRequests={adminSubscriptionRequests} supportThreads={supportThreads} initialTab={adminStartTab} clearInitialTab={() => setAdminStartTab("")} reload={loadApp} openSupport={(userId) => { setSupportTarget(userId || ""); setSupportOpen(true); }} notify={notify} withNotify={withNotify} />}
         </>}
       </main>
       <MobileBottomNav t={t} view={view} role={session.role} setView={setView} setAdminStartTab={setAdminStartTab} openAllJobs={openAllJobs} openComingInterviews={openComingInterviews} isAdmin={isAdminRole(session.role)} />
@@ -1495,7 +1553,7 @@ function AppFooter() {
   );
 }
 
-function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJob, openAppliedJobs, openBuilder, openSmartResume, openSupportAssistant, canUseSmartResume = true, jobSearch, setJobSearch, setJobMode }) {
+function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJob, openAppliedJobs, openBuilder, openSmartResume, openSupportAssistant, canUseSmartResume = true, jobSearch, setJobSearch, setJobMode, notify }) {
   const strength = Number(me.profile?.profile_strength ?? 0);
   const strengthState = profileStrengthStatus(strength, t);
   const applications = me.applications || [];
@@ -1511,7 +1569,7 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
     if (status === "accepted") return "accepted-frame";
     return "";
   };
-  const orderedJobs = [...jobs].sort((a, b) => Number(scheduledJobIds.has(b.id)) - Number(scheduledJobIds.has(a.id))).slice(0, 20);
+  const orderedJobs = [...jobs].sort((a, b) => Number(scheduledJobIds.has(b.id)) - Number(scheduledJobIds.has(a.id))).slice(0, PAGE_SIZE);
   return (
     <div className="layout-grid">
       <section className="mobile-home-priority">
@@ -1549,6 +1607,7 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
           <button className="panel-link" onClick={() => setView("allJobs")}><span>▦</span>{t("savedJobs")}</button>
           {["admin", "master_admin"].includes(me.user.role) && <button className="panel-link" onClick={() => setView("admin")}><span>▥</span>{t("adminDashboard")}</button>}
         </section>
+        <PlanCards t={t} currentRole={me.user.role} currentPlan={me.user.plan} notify={notify} />
       </aside>
       <section className="feed">
         <article className="panel post-card">
@@ -1608,6 +1667,61 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
   );
 }
 
+function PlanCards({ t, currentRole = "member", currentPlan = "free", notify }) {
+  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [submittingPlan, setSubmittingPlan] = useState("");
+  const plans = [
+    {
+      id: "premium",
+      title: t("premiumPlan"),
+      price: t("premiumPrice"),
+      body: t("premiumPlanBody"),
+      active: currentPlan === "premium"
+    },
+    {
+      id: "agent",
+      title: t("agentPlan"),
+      price: t("agentPrice"),
+      body: t("agentPlanBody"),
+      active: currentRole === "agent"
+    }
+  ];
+  async function requestPlan(plan) {
+    setSubmittingPlan(plan);
+    try {
+      await api("/account/subscription-requests", {
+        method: "POST",
+        body: JSON.stringify({ plan, paymentMethod })
+      });
+      notify?.(t("planRequestSent"), "success");
+    } catch (err) {
+      notify?.(err.message, "error", err.stack || err.message);
+    } finally {
+      setSubmittingPlan("");
+    }
+  }
+  return (
+    <section className="panel side-panel plan-panel">
+      <h2>{t("subscriptionPlans")}</h2>
+      <div className="payment-methods" role="group" aria-label={t("paymentMethod")}>
+        <button className={paymentMethod === "cash" ? "active" : ""} type="button" onClick={() => setPaymentMethod("cash")}>{t("cashPayment")}</button>
+        <button className={paymentMethod === "shamcash" ? "active shamcash-choice" : "shamcash-choice"} type="button" onClick={() => setPaymentMethod("shamcash")}><img src="/brand/shamcash.png" alt="" />{t("shamCashPayment")}</button>
+      </div>
+      <div className="plan-card-list">
+        {plans.map((plan) => (
+          <article className={plan.active ? "plan-card active" : "plan-card"} key={plan.id}>
+            <div><strong>{plan.title}</strong><b>{plan.price}</b></div>
+            <p>{plan.body}</p>
+            <button className="secondary-button compact" type="button" disabled={plan.active || submittingPlan === plan.id} onClick={() => requestPlan(plan.id)}>
+              {submittingPlan === plan.id ? t("saving") : plan.active ? t("active") : t("requestPlan")}
+            </button>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function NavIcon({ name }) {
   const common = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.15", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" };
   const paths = {
@@ -1662,13 +1776,15 @@ function MobileBottomNav({ t, view, role, setView, setAdminStartTab, openAllJobs
 }
 
 function CoursesPage({ t, courses = [] }) {
+  const [page, setPage] = useState(1);
+  const pagedCourses = pageItems(courses, page);
   return (
     <section className="courses-page">
       <div className="panel section-head mobile-page-head">
         <h2>{t("courses")}</h2>
         <span className="status">{courses.length}</span>
       </div>
-      {courses.length ? courses.map((course) => (
+      {courses.length ? pagedCourses.map((course) => (
         <article className="panel course-card" key={course.id}>
           <h2>{course.title}</h2>
           <p>{course.provider || "-"}</p>
@@ -1677,18 +1793,21 @@ function CoursesPage({ t, courses = [] }) {
           {course.certificate_url && <a className="secondary-button compact" href={assetUrl(course.certificate_url)} target="_blank" rel="noreferrer">{t("seeCourse")}</a>}
         </article>
       )) : <section className="panel empty-state"><h2>{t("courses")}</h2><p>{t("noAttachments")}</p></section>}
+      <PaginationControls t={t} page={page} total={courses.length} setPage={setPage} />
     </section>
   );
 }
 
 function ComingInterviews({ t, interviews = [], openJob }) {
+  const [page, setPage] = useState(1);
+  const pagedInterviews = pageItems(interviews, page);
   return (
     <section className="interviews-page">
       <div className="panel section-head mobile-page-head">
         <h2>{t("upcomingInterviews")}</h2>
         <span className="status">{interviews.length}</span>
       </div>
-      {interviews.length ? interviews.map((interview) => (
+      {interviews.length ? pagedInterviews.map((interview) => (
         <article className="panel interview-page-card highlighted-job" key={interview.id}>
           <div>
             <h2>{interview.job_title || t("job")}</h2>
@@ -1700,21 +1819,27 @@ function ComingInterviews({ t, interviews = [], openJob }) {
           {interview.job_id && <button className="secondary-button compact" type="button" onClick={() => openJob(interview.job_id)}>{t("jobDetails")}</button>}
         </article>
       )) : <section className="panel empty-state"><h2>{t("upcomingInterviews")}</h2><p>-</p></section>}
+      <PaginationControls t={t} page={page} total={interviews.length} setPage={setPage} />
     </section>
   );
 }
 
 function AgentsPage({ t, agents = [], selectedAgent, setSelectedAgent, openJob, openAgentChat }) {
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [detail, setDetail] = useState(null);
   const visibleAgents = agents.filter((agent) => `${agent.full_name || ""} ${agent.agency_name || ""}`.toLowerCase().includes(search.toLowerCase()));
+  const pagedAgents = pageItems(visibleAgents, page);
+  useEffect(() => setPage(1), [search]);
   useEffect(() => {
     if (!selectedAgent?.id) return;
+    setPage(1);
     api(`/agents/${selectedAgent.id}`).then(setDetail).catch(() => setDetail(null));
   }, [selectedAgent?.id]);
   if (selectedAgent) {
     const agent = detail?.agent || selectedAgent;
     const jobs = detail?.jobs || [];
+    const pagedJobs = pageItems(jobs, page);
     return (
       <section className="agency-page">
         <div className="section-head"><button className="secondary-button compact" onClick={() => { setSelectedAgent(null); setDetail(null); }}>{t("backToCompanies")}</button></div>
@@ -1725,8 +1850,9 @@ function AgentsPage({ t, agents = [], selectedAgent, setSelectedAgent, openJob, 
         <section className="panel">
           <div className="section-head"><h2>{t("activeJobs")}</h2><span className="status">{jobs.length}</span></div>
           <div className="admin-post-list">
-            {jobs.length ? jobs.map((job) => <article className="admin-post" key={job.id}><strong>{job.title}</strong><span>#{job.job_number || "-"} · {job.salary_range || "-"} · {job.location}</span><button className="secondary-button compact" onClick={() => openJob(job.id)}>{t("jobDetails")}</button></article>) : <p>{t("noJobsMatching")}</p>}
+            {jobs.length ? pagedJobs.map((job) => <article className="admin-post" key={job.id}><strong>{job.title}</strong><span>#{job.job_number || "-"} · {job.salary_range || "-"} · {job.location}</span><button className="secondary-button compact" onClick={() => openJob(job.id)}>{t("jobDetails")}</button></article>) : <p>{t("noJobsMatching")}</p>}
           </div>
+          <PaginationControls t={t} page={page} total={jobs.length} setPage={setPage} />
         </section>
       </section>
     );
@@ -1736,8 +1862,9 @@ function AgentsPage({ t, agents = [], selectedAgent, setSelectedAgent, openJob, 
       <section className="panel">
         <div className="section-head"><h2>{t("agentDirectory")}</h2><input placeholder={t("searchAgents")} value={search} onChange={(e) => setSearch(e.target.value)} /></div>
         <div className="agent-profile-grid-list">
-          {visibleAgents.map((agent) => <button className="agent-profile-tile" type="button" key={agent.id} onClick={() => setSelectedAgent(agent)}><Avatar user={{ full_name: agent.full_name, avatar_url: agent.avatar_url, plan: agent.plan, last_active_at: agent.last_active_at }} size="large" /><strong>{agent.agency_name || agent.full_name}</strong><span>{agent.headline || agent.location || "-"}</span><small>{agent.open_jobs || 0} {t("activeJobs")}</small></button>)}
+          {pagedAgents.map((agent) => <button className="agent-profile-tile" type="button" key={agent.id} onClick={() => setSelectedAgent(agent)}><Avatar user={{ full_name: agent.full_name, avatar_url: agent.avatar_url, plan: agent.plan, last_active_at: agent.last_active_at }} size="large" /><strong>{agent.agency_name || agent.full_name}</strong><span>{agent.headline || agent.location || "-"}</span><small>{agent.open_jobs || 0} {t("activeJobs")}</small></button>)}
         </div>
+        <PaginationControls t={t} page={page} total={visibleAgents.length} setPage={setPage} />
       </section>
     </section>
   );
@@ -2303,13 +2430,13 @@ function Jobs({ t, lang, jobs, documents = [], applications, interviews = [], se
     if (!selectedJobId) return;
     const index = visibleJobs.findIndex((job) => job.id === selectedJobId);
     if (index >= 0) {
-      setPage(Math.max(1, Math.ceil((index + 1) / 20)));
+      setPage(Math.max(1, Math.ceil((index + 1) / PAGE_SIZE)));
       setOpenJobId(selectedJobId);
       setTimeout(() => document.getElementById(`job-${selectedJobId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
     }
     clearSelectedJob?.();
   }, [selectedJobId]);
-  const pageSize = 20;
+  const pageSize = PAGE_SIZE;
   const totalPages = Math.max(1, Math.ceil(visibleJobs.length / pageSize));
   const pagedJobs = visibleJobs.slice((page - 1) * pageSize, page * pageSize);
   async function apply(job) {
@@ -2432,7 +2559,7 @@ function Jobs({ t, lang, jobs, documents = [], applications, interviews = [], se
   </section>;
 }
 
-function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], applications, setApplications, interviews = [], supportThreads, initialTab, clearInitialTab, reload, openSupport, notify, withNotify }) {
+function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], applications, setApplications, interviews = [], subscriptionRequests = [], supportThreads, initialTab, clearInitialTab, reload, openSupport, notify, withNotify }) {
   const [tab, setTab] = useState("overview");
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState(null);
@@ -2444,6 +2571,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
   const [adminCourseForm, setAdminCourseForm] = useState(emptyCourseForm);
   const [editingCourse, setEditingCourse] = useState(null);
   const [jobAdminSearch, setJobAdminSearch] = useState("");
+  const [adminPage, setAdminPage] = useState(1);
   const emptyJobForm = { companyName: "مختبرات روابط", title: "", category: "General", location: "عن بعد", type: "دوام كامل", salaryRange: "", description: "", screeningQuestions: [""] };
   const [jobForm, setJobForm] = useState(emptyJobForm);
   const [showAddJobModal, setShowAddJobModal] = useState(false);
@@ -2473,6 +2601,21 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
     if (!normalizedApplicationSearch) return true;
     return `${application.full_name || ""} ${application.email || ""} ${application.job_title || ""} ${application.company_name || ""} ${application.job_number || ""}`.toLowerCase().includes(normalizedApplicationSearch);
   });
+  const pagedSubscriptionRequests = pageItems(subscriptionRequests, adminPage);
+  const pagedUsers = pageItems(users, adminPage);
+  const pagedCourses = pageItems(courses, adminPage);
+  const pagedAdminVisibleJobs = pageItems(adminVisibleJobs, adminPage);
+  const pagedVisibleApplications = pageItems(visibleApplications, adminPage);
+  const pagedInterviews = pageItems(interviews, adminPage);
+  const pagedSupportThreads = pageItems(supportThreads, adminPage);
+  const activeAdminTotal = tab === "overview" ? subscriptionRequests.length
+    : tab === "users" ? users.length
+    : tab === "courses" ? courses.length
+    : tab === "jobs" ? adminVisibleJobs.length
+    : tab === "applications" ? visibleApplications.length
+    : tab === "interviews" ? interviews.length
+    : tab === "support" ? supportThreads.length
+    : 0;
   const agents = users.filter((user) => user.role === "agent");
   const isMasterAdmin = session?.role === "master_admin";
   const editableRoles = USER_ROLES.filter((role) => isMasterAdmin || role !== "master_admin");
@@ -2482,6 +2625,9 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
       clearInitialTab?.();
     }
   }, [initialTab]);
+  useEffect(() => {
+    setAdminPage(1);
+  }, [tab, search, jobAdminSearch, applicationSearch]);
   useEffect(() => {
     if (tab !== "users") return undefined;
     const timer = setInterval(() => searchUsers(search).catch(() => {}), 8000);
@@ -2788,6 +2934,14 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
     await api(`/admin/interviews/${item.id}`, { method: "PATCH", body: JSON.stringify({ status: nextStatus }) });
     await reload();
   }
+  async function updateSubscriptionRequest(request, status) {
+    await api(`/admin/subscription-requests/${request.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status })
+    });
+    await reload();
+    notify?.(t("successUpdated"), "success");
+  }
   if (!admin) return null;
   return (
     <div className="admin-page">
@@ -2815,6 +2969,30 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
               <AnalyticsList title={t("jobCategories")} data={admin.analytics?.jobCategories || []} labelFormatter={(label) => analyticsLabel("category", label, lang, t)} />
               <AnalyticsList title={t("profileHealth")} data={admin.analytics?.profileHealth || []} labelFormatter={(label) => analyticsLabel("profile", label, lang, t)} />
             </section>
+            <section className="panel">
+              <div className="section-head"><h2>{t("planRequests")}</h2></div>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>{t("users")}</th><th>{t("requestedPlan")}</th><th>{t("paymentMethod")}</th><th>{t("status")}</th><th>{t("actions")}</th></tr></thead>
+                  <tbody>
+                    {subscriptionRequests.length ? pagedSubscriptionRequests.map((request) => (
+                      <tr key={request.id}>
+                        <td><div className="table-user"><Avatar user={{ full_name: request.full_name }} size="small" /><div><strong>{request.full_name}</strong><span>{request.email}</span></div></div></td>
+                        <td><strong>{request.requested_plan === "agent" ? t("agentPlan") : t("premiumPlan")}</strong><span className="muted-inline">{Number(request.amount).toFixed(2)} {request.currency}</span></td>
+                        <td>{request.payment_method === "shamcash" ? t("shamCashPayment") : t("cashPayment")}</td>
+                        <td><span className={`status ${request.status}`}>{statusLabel(request.status, lang)}</span></td>
+                        <td>
+                          <div className="row-actions">
+                            <button className="secondary-button compact" type="button" disabled={request.status !== "pending"} onClick={() => updateSubscriptionRequest(request, "approved")}>{t("approve")}</button>
+                            <button className="secondary-button compact" type="button" disabled={request.status !== "pending"} onClick={() => updateSubscriptionRequest(request, "rejected")}>{t("reject")}</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )) : <tr><td colSpan="5">{t("emptyState")}</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           </>}
 
           {tab === "users" && <>
@@ -2823,7 +3001,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
               <div className="table-wrap">
                 <table>
                   <thead><tr><th>{t("users")}</th><th>{t("role")}</th><th>{t("plan")}</th><th>{t("status")}</th><th>{t("attachments")}</th><th>{t("lastActive")}</th><th>{t("shareWithAgent")}</th><th>{t("actions")}</th></tr></thead>
-                  <tbody>{users.map((user) => <tr key={user.id}><td><button className="table-user table-user-button" type="button" onClick={() => openUserProfile(user)}><Avatar user={user} size="small" /><div><strong>{user.full_name}</strong><span>{user.email}</span></div></button></td><td>{roleLabel(user.role, lang)}</td><td><select className="plan-select" value={user.plan || "free"} onChange={(e) => patchUser(user, { plan: e.target.value })}>{PLAN_OPTIONS.map((plan) => <option value={plan} key={plan}>{planLabel(plan, lang)}</option>)}</select></td><td><span className={`status ${user.status}`}>{statusLabel(user.status, lang)}</span></td><td><DocumentLinks t={t} documents={user.documents} avatarUrl={user.avatar_url} compact /></td><td>{new Date(user.last_active_at).toLocaleDateString()}</td><td><select className="action-select" defaultValue="" disabled={!agents.length} onChange={async (e) => { await shareUser(user, e.target.value); e.target.value = ""; }}><option value="">{agents.length ? t("shareWithAgent") : t("agent")}</option>{agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}</select></td><td><select className="action-select" defaultValue="" onChange={(e) => { runUserAction(user, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option><option value="edit">{t("editUser")}</option><option value="verify">{t("verify")}</option><option value="activate">{t("activate")}</option><option value="deactivate">{t("deactivate")}</option>{(isMasterAdmin || !["admin", "master_admin"].includes(user.role)) && <option value="delete">{t("delete")}</option>}</select></td></tr>)}</tbody>
+                  <tbody>{pagedUsers.map((user) => <tr key={user.id}><td><button className="table-user table-user-button" type="button" onClick={() => openUserProfile(user)}><Avatar user={user} size="small" /><div><strong>{user.full_name}</strong><span>{user.email}</span></div></button></td><td>{roleLabel(user.role, lang)}</td><td><select className="plan-select" value={user.plan || "free"} onChange={(e) => patchUser(user, { plan: e.target.value })}>{PLAN_OPTIONS.map((plan) => <option value={plan} key={plan}>{planLabel(plan, lang)}</option>)}</select></td><td><span className={`status ${user.status}`}>{statusLabel(user.status, lang)}</span></td><td><DocumentLinks t={t} documents={user.documents} avatarUrl={user.avatar_url} compact /></td><td>{new Date(user.last_active_at).toLocaleDateString()}</td><td><select className="action-select" defaultValue="" disabled={!agents.length} onChange={async (e) => { await shareUser(user, e.target.value); e.target.value = ""; }}><option value="">{agents.length ? t("shareWithAgent") : t("agent")}</option>{agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}</select></td><td><select className="action-select" defaultValue="" onChange={(e) => { runUserAction(user, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option><option value="edit">{t("editUser")}</option><option value="verify">{t("verify")}</option><option value="activate">{t("activate")}</option><option value="deactivate">{t("deactivate")}</option>{(isMasterAdmin || !["admin", "master_admin"].includes(user.role)) && <option value="delete">{t("delete")}</option>}</select></td></tr>)}</tbody>
                 </table>
               </div>
             </section>
@@ -2958,7 +3136,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
               <div className="table-wrap">
                 <table>
                   <thead><tr><th>{t("title")}</th><th>{t("courseAudience")}</th><th>{t("courseOwner")}</th><th>{t("provider")}</th><th>{t("courseLink")}</th><th>{t("actions")}</th></tr></thead>
-                  <tbody>{courses.map((course) => (
+                  <tbody>{pagedCourses.map((course) => (
                     <tr key={course.id}>
                       <td><strong>{course.title}</strong>{course.notes && <span>{course.notes}</span>}</td>
                       <td>{course.target_audience === "premium" ? t("premiumUsers") : course.target_audience === "agents" ? t("agents") : course.target_audience === "user" ? course.user_name || t("users") : t("allUsers")}</td>
@@ -3025,7 +3203,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
               <div className="table-wrap job-table-wrap">
                 <table>
                   <thead><tr><th>{t("jobId")}</th><th>{t("job")}</th><th>{t("category")}</th><th>{t("location")}</th><th>{t("assignedAgents")}</th><th>{t("status")}</th><th>{t("assignJob")}</th><th>{t("actions")}</th></tr></thead>
-                  <tbody>{adminVisibleJobs.map((job) => <tr key={job.id}>
+                  <tbody>{pagedAdminVisibleJobs.map((job) => <tr key={job.id}>
                     <td><strong className="job-number">#{job.job_number || "-"}</strong></td>
                     <td><strong>{job.title}</strong><span>{job.company_name}</span></td>
                     <td>{jobCategoryLabel(job.category, lang)}</td>
@@ -3045,7 +3223,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
             <div className="table-wrap">
               <table>
                 <thead><tr><th>{t("applicant")}</th><th>{t("job")}</th><th>{t("location")}</th><th>{t("submittedAnswers")}</th><th>{t("applicationStatus")}</th><th>{t("shareWithAgent")}</th><th>{t("actions")}</th></tr></thead>
-                <tbody>{visibleApplications.map((application) => <tr key={application.id}><td><button className="table-user table-user-button" type="button" onClick={() => openUserProfile({ id: application.user_id })}><Avatar user={{ full_name: application.full_name, avatar_url: application.avatar_url, plan: application.plan, last_active_at: application.last_active_at }} size="small" /><div><strong>{application.full_name}</strong><span>{application.email}</span></div></button></td><td><strong>{application.job_title}</strong><span>#{application.job_number || "-"} · {application.company_name}</span></td><td>{application.location}</td><td><ApplicationAnswers t={t} answers={application.screening_answers} /></td><td><span className={`status ${application.status}`}>{statusLabel(application.status, lang)}</span></td><td><select className="action-select" defaultValue="" disabled={!agents.length} onChange={async (e) => { await shareApplication(application, e.target.value); e.target.value = ""; }}><option value="">{agents.length ? t("shareWithAgent") : t("agent")}</option>{agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}</select></td><td><select className="action-select" defaultValue="" onChange={(e) => { updateApplicationStatus(application, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option>{APPLICATION_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select></td></tr>)}</tbody>
+                <tbody>{pagedVisibleApplications.map((application) => <tr key={application.id}><td><button className="table-user table-user-button" type="button" onClick={() => openUserProfile({ id: application.user_id })}><Avatar user={{ full_name: application.full_name, avatar_url: application.avatar_url, plan: application.plan, last_active_at: application.last_active_at }} size="small" /><div><strong>{application.full_name}</strong><span>{application.email}</span></div></button></td><td><strong>{application.job_title}</strong><span>#{application.job_number || "-"} · {application.company_name}</span></td><td>{application.location}</td><td><ApplicationAnswers t={t} answers={application.screening_answers} /></td><td><span className={`status ${application.status}`}>{statusLabel(application.status, lang)}</span></td><td><select className="action-select" defaultValue="" disabled={!agents.length} onChange={async (e) => { await shareApplication(application, e.target.value); e.target.value = ""; }}><option value="">{agents.length ? t("shareWithAgent") : t("agent")}</option>{agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}</select></td><td><select className="action-select" defaultValue="" onChange={(e) => { updateApplicationStatus(application, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option>{APPLICATION_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select></td></tr>)}</tbody>
               </table>
             </div>
           </section>}
@@ -3063,7 +3241,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
             <section className="panel">
               <div className="section-head"><h2>{t("upcomingAdminInterviews")}</h2><span className="status">{interviews.length}</span></div>
               <div className="interview-admin-list">
-                {interviews.length ? interviews.map((item) => <article className="interview-admin-item" key={item.id}>
+                {interviews.length ? pagedInterviews.map((item) => <article className="interview-admin-item" key={item.id}>
                   <div><strong>{item.full_name}</strong><span>{item.email}</span></div>
                   <div><strong>{item.job_title || t("job")}</strong><span>{item.company_name || "-"}</span></div>
                   <div><strong>{new Date(item.scheduled_at).toLocaleString()}</strong><span>{item.channel}</span></div>
@@ -3079,13 +3257,14 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
           {tab === "support" && <section className="panel">
             <div className="section-head"><h2>{t("supportInbox")}</h2><span className="status">{unreadTotal} {t("unreadMessages")}</span></div>
             <div className="support-thread-list">
-              {supportThreads.map((thread) => <article className={Number(thread.unread_count) > 0 ? "support-thread unread" : "support-thread"} key={thread.user_id}>
+              {pagedSupportThreads.map((thread) => <article className={Number(thread.unread_count) > 0 ? "support-thread unread" : "support-thread"} key={thread.user_id}>
                 <Avatar user={{ full_name: thread.full_name, avatar_url: thread.avatar_url, plan: thread.plan, last_active_at: thread.last_active_at }} size="small" />
                 <div><strong>{thread.full_name}</strong><span>{thread.email}</span><p>{thread.last_message}</p></div>
                 <div className="support-thread-actions">{Number(thread.unread_count) > 0 && <b>{thread.unread_count}</b>}<button className="secondary-button compact" onClick={() => openSupport(thread.user_id)}>{t("openChat")}</button></div>
               </article>)}
             </div>
           </section>}
+          <PaginationControls t={t} page={adminPage} total={activeAdminTotal} setPage={setAdminPage} />
         </div>
       </section>
     </div>
@@ -3105,10 +3284,20 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
   const [agentJobForm, setAgentJobForm] = useState(emptyAgentJobForm);
   const [showAddJobModal, setShowAddJobModal] = useState(false);
   const [schedulingInterview, setSchedulingInterview] = useState(false);
+  const [agentPage, setAgentPage] = useState(1);
   const userDirectory = Array.from(new Map([...shares, ...users].map((share) => [share.user_id, share])).values());
   const selectedShare = [...shares, ...users].find((share) => share.share_id === selectedShareId);
   const applicationShares = shares.filter((share) => share.share_type === "application");
   const uniqueCandidates = userDirectory;
+  const pagedAgentJobs = pageItems(jobs, agentPage);
+  const pagedUniqueCandidates = pageItems(uniqueCandidates, agentPage);
+  const pagedApplicationShares = pageItems(applicationShares, agentPage);
+  const pagedAgentInterviews = pageItems(interviews, agentPage);
+  const activeAgentTotal = tab === "jobs" ? jobs.length
+    : tab === "users" ? uniqueCandidates.length
+    : tab === "applications" ? applicationShares.length
+    : tab === "interviews" ? interviews.length
+    : 0;
   const statusCounts = APPLICATION_STATUSES.map((status) => ({
     label: statusLabel(status, lang),
     value: applicationShares.filter((share) => normalizeStatusValue(share.application_status) === status).length
@@ -3141,6 +3330,9 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
     };
     if (viewTabMap[view] && viewTabMap[view] !== tab) setTab(viewTabMap[view]);
   }, [view]);
+  useEffect(() => {
+    setAgentPage(1);
+  }, [tab]);
   function selectAgentTab(id) {
     setTab(id);
     const tabViewMap = {
@@ -3342,6 +3534,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
               <Metric label={t("scheduledInterviews")} value={interviews.length} />
               <Metric label={t("assignedJobs")} value={jobs.length} />
             </section>
+            <PlanCards t={t} currentRole={agent?.role} currentPlan={agent?.plan} notify={notify} />
           </section>}
 
           {tab === "overview" && <>
@@ -3403,7 +3596,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
               </div>
             </article>}
             <div className="admin-post-list">
-              {jobs.length ? jobs.map((job) => (
+              {jobs.length ? pagedAgentJobs.map((job) => (
                 <article className="admin-post agent-assigned-job" key={job.id}>
                   <strong>{job.title}</strong>
                   <span>#{job.job_number || "-"} · {job.company_name} · {job.salary_range || "-"}</span>
@@ -3419,7 +3612,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
             {uniqueCandidates.length ? <div className="table-wrap">
               <table>
                 <thead><tr><th>{t("users")}</th><th>{t("title")}</th><th>{t("location")}</th><th>{t("plan")}</th><th>{t("attachments")}</th><th>{t("lastActive")}</th><th>{t("message")}</th></tr></thead>
-                <tbody>{uniqueCandidates.map((share) => (
+                <tbody>{pagedUniqueCandidates.map((share) => (
                   <tr key={share.share_id}>
                     <td><button className="table-user table-user-button" type="button" onClick={() => setSelectedShareId(share.share_id)}><Avatar user={{ full_name: share.full_name, avatar_url: share.avatar_url, plan: share.plan, last_active_at: share.last_active_at }} size="small" /><div><strong>{share.full_name}</strong><span>{share.email}</span></div></button></td>
                     <td>{share.headline || share.job_title || "-"}</td>
@@ -3439,7 +3632,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
             <div className="table-wrap">
               <table>
                 <thead><tr><th>{t("applicant")}</th><th>{t("job")}</th><th>{t("submittedAnswers")}</th><th>{t("applicationStatus")}</th><th>{t("actions")}</th></tr></thead>
-                <tbody>{applicationShares.map((application) => (
+                <tbody>{pagedApplicationShares.map((application) => (
                   <tr key={application.share_id}>
                     <td><div className="table-user"><Avatar user={{ full_name: application.full_name, avatar_url: application.avatar_url, plan: application.plan, last_active_at: application.last_active_at }} size="small" /><div><button className="link-button" type="button" onClick={() => setSelectedShareId(application.share_id)}>{application.full_name}</button><span>{application.email}</span></div></div></td>
                     <td><strong>{application.job_title}</strong><span>#{application.job_number || "-"} · {application.company_name}</span></td>
@@ -3478,7 +3671,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
           {tab === "interviews" && <section className="panel">
             <div className="section-head"><h2>{t("scheduledInterviews")}</h2><span className="status">{interviews.length}</span></div>
             <div className="interview-admin-list">
-              {interviews.length ? interviews.map((item) => <article className="interview-admin-item" key={item.id}>
+              {interviews.length ? pagedAgentInterviews.map((item) => <article className="interview-admin-item" key={item.id}>
                 <div><strong>{item.full_name}</strong><span>{item.email}</span></div>
                 <div><strong>{item.job_title || t("job")}</strong><span>{item.company_name || "-"}</span></div>
                 <div><strong>{new Date(item.scheduled_at).toLocaleString()}</strong><span>{item.channel}</span></div>
@@ -3490,6 +3683,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
             </div>
           </section>}
 
+          <PaginationControls t={t} page={agentPage} total={activeAgentTotal} setPage={setAgentPage} />
         </div>
       </section>
     </section>

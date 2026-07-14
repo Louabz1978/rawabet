@@ -274,6 +274,22 @@ def ensure_runtime_schema():
         """,
         "CREATE INDEX IF NOT EXISTS idx_agent_messages_agent_user ON agent_messages(agent_id, user_id)",
         "CREATE INDEX IF NOT EXISTS idx_agent_messages_created ON agent_messages(created_at)",
+        """
+        CREATE TABLE IF NOT EXISTS subscription_requests (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          requested_plan TEXT NOT NULL CHECK (requested_plan IN ('premium', 'agent')),
+          payment_method TEXT NOT NULL CHECK (payment_method IN ('cash', 'shamcash')),
+          amount NUMERIC(10,2) NOT NULL,
+          currency TEXT NOT NULL DEFAULT 'USD',
+          status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled')),
+          notes TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_subscription_requests_user ON subscription_requests(user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_subscription_requests_status ON subscription_requests(status)",
     ):
         try:
             execute(sql)
@@ -539,6 +555,16 @@ class SupportMessageBody(BaseModel):
 
 class ClearSupportBody(BaseModel):
     userId: UUID | None = None
+
+
+class SubscriptionRequestBody(BaseModel):
+    plan: str
+    paymentMethod: str
+    notes: str | None = None
+
+
+class SubscriptionRequestStatusBody(BaseModel):
+    status: str
 
 
 class ContactBody(BaseModel):
@@ -1112,8 +1138,8 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
     ink = colors.black
     muted = colors.HexColor("#595959")
     base = ParagraphStyle("BaseResume", parent=styles["Normal"], fontName=font, fontSize=9.0, leading=12.0, textColor=ink)
-    name_style = ParagraphStyle("NameResume", parent=base, fontName=font_bold, fontSize=32, leading=38, textColor=colors.black, spaceAfter=18, alignment=TA_LEFT)
-    title_style = ParagraphStyle("TitleResume", parent=base, fontName=font_light, fontSize=10.1, leading=12.5, textColor=muted, alignment=TA_LEFT)
+    name_style = ParagraphStyle("NameResume", parent=base, fontName=font_bold, fontSize=32, leading=38, textColor=colors.black, spaceAfter=18, alignment=TA_RIGHT if rtl else TA_LEFT)
+    title_style = ParagraphStyle("TitleResume", parent=base, fontName=font_light, fontSize=10.1, leading=12.5, textColor=muted, alignment=TA_RIGHT if rtl else TA_LEFT)
     contact_style = ParagraphStyle("ContactResume", parent=base, fontSize=10.1, leading=15, textColor=colors.black, alignment=TA_LEFT)
     section_style = ParagraphStyle("SectionResume", parent=base, fontName=font_bold, fontSize=10.8, leading=13.5, textColor=blue, spaceBefore=0, spaceAfter=24, alignment=TA_CENTER)
     side_section_style = ParagraphStyle("SideSectionResume", parent=section_style, alignment=TA_RIGHT, spaceBefore=0, spaceAfter=20)
@@ -1128,12 +1154,12 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
             style.alignment = TA_RIGHT
 
     contact_lines = [part for part in [user.get("phone"), user.get("email"), user.get("location")] if part]
-    header_left = [
+    name_block = [
         paragraph(user.get("full_name") or "Rawabet Resume", name_style),
         paragraph(sections.get("target_title") or user.get("headline") or "", title_style),
     ]
-    header_right = [paragraph("<br/>".join(contact_lines), contact_style)]
-    header = Table([[header_left, header_right]], colWidths=[380, 132], hAlign="LEFT")
+    contact_block = [paragraph("<br/>".join(contact_lines), contact_style)]
+    header = Table([[contact_block, name_block]] if rtl else [[name_block, contact_block]], colWidths=[132, 380] if rtl else [380, 132], hAlign="LEFT")
     header.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
@@ -2152,6 +2178,73 @@ def refresh_session(user: Annotated[dict, Depends(current_user)]):
     raise HTTPException(status_code=403, detail="Sessions expire after 60 minutes. Please sign in again.")
 
 
+@router.post("/api/account/subscription-requests", status_code=201)
+def create_subscription_request(body: SubscriptionRequestBody, user: Annotated[dict, Depends(current_user)]):
+    plan = body.plan.strip().lower()
+    payment_method = body.paymentMethod.strip().lower()
+    if plan not in {"premium", "agent"}:
+        raise HTTPException(status_code=400, detail="Invalid plan")
+    if payment_method not in {"cash", "shamcash"}:
+        raise HTTPException(status_code=400, detail="Invalid payment method")
+    amount = 7.99 if plan == "premium" else 9.99
+    execute(
+        """
+        UPDATE subscription_requests
+        SET status = 'cancelled', updated_at = NOW()
+        WHERE user_id = %s AND status = 'pending'
+        """,
+        (user["id"],),
+    )
+    request = execute(
+        """
+        INSERT INTO subscription_requests (user_id, requested_plan, payment_method, amount, currency, notes)
+        VALUES (%s,%s,%s,%s,'USD',%s)
+        RETURNING id, requested_plan, payment_method, amount, currency, status, notes, created_at
+        """,
+        (user["id"], plan, payment_method, amount, body.notes),
+    )
+    return request
+
+
+@router.get("/api/admin/subscription-requests")
+def list_subscription_requests(user: Annotated[dict, Depends(admin_user)]):
+    return fetch_all(
+        """
+        SELECT sr.id, sr.user_id, sr.requested_plan, sr.payment_method, sr.amount, sr.currency,
+               sr.status, sr.notes, sr.created_at, sr.updated_at,
+               u.full_name, u.email, u.role, u.plan
+        FROM subscription_requests sr
+        JOIN users u ON u.id = sr.user_id
+        ORDER BY CASE sr.status WHEN 'pending' THEN 0 ELSE 1 END, sr.created_at DESC
+        LIMIT 100
+        """
+    )
+
+
+@router.patch("/api/admin/subscription-requests/{request_id}")
+def update_subscription_request(request_id: UUID, body: SubscriptionRequestStatusBody, user: Annotated[dict, Depends(admin_user)]):
+    status = body.status.strip().lower()
+    if status not in {"pending", "approved", "rejected", "cancelled"}:
+        raise HTTPException(status_code=400, detail="Invalid subscription request status")
+    request = execute(
+        """
+        UPDATE subscription_requests
+        SET status = %s, updated_at = NOW()
+        WHERE id = %s
+        RETURNING id, user_id, requested_plan, payment_method, amount, currency, status
+        """,
+        (status, request_id),
+    )
+    if not request:
+        raise HTTPException(status_code=404, detail="Subscription request not found")
+    if status == "approved":
+        if request["requested_plan"] == "premium":
+            execute("UPDATE users SET plan = 'premium' WHERE id = %s", (request["user_id"],))
+        elif request["requested_plan"] == "agent":
+            execute("UPDATE users SET role = 'agent', plan = 'premium' WHERE id = %s", (request["user_id"],))
+    return request
+
+
 @router.put("/api/account/profile")
 def update_profile(body: ProfileBody, user: Annotated[dict, Depends(current_user)]):
     execute(
@@ -2851,7 +2944,7 @@ def list_agent_users(user: Annotated[dict, Depends(agent_user)]):
           FROM experiences e
           WHERE e.user_id = u.id
         ) exps ON true
-        WHERE u.role NOT IN ('admin', 'master_admin', 'agent')
+        WHERE COALESCE(u.role, 'member') IN ('member', 'user')
         ORDER BY u.created_at DESC
         """
     )

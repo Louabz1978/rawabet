@@ -406,6 +406,88 @@ html[dir="rtl"] .avatar-status-wrap.large .online-dot { right: auto; left: 12px;
 .quick-stats dd { margin: 0; color: var(--brand); font-weight: 800; }
 .profile-card .secondary-button { margin: 14px; width: calc(100% - 28px); }
 
+.plan-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.payment-methods {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.payment-methods button {
+  min-height: 38px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--brand);
+  font-weight: 800;
+}
+
+.payment-methods button.active {
+  border-color: var(--green);
+  background: #ecfbf8;
+}
+
+.shamcash-choice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.shamcash-choice img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.plan-card-list {
+  display: grid;
+  gap: 10px;
+}
+
+.plan-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.plan-card.active {
+  border-color: var(--green);
+  background: #f0fbf8;
+}
+
+.plan-card div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.plan-card strong {
+  color: var(--ink);
+  font-size: 0.88rem;
+}
+
+.plan-card b {
+  color: var(--brand);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.plan-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
 .feed, .profile-page, .admin-page, .job-list { display: grid; gap: 14px; }
 .panel { padding: 18px; }
 
@@ -1612,6 +1694,13 @@ textarea { min-height: 110px; resize: vertical; }
   gap: 8px;
 }
 
+.muted-inline {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
 .danger-button {
   border-color: #c2410c;
   color: #c2410c;
@@ -1843,7 +1932,10 @@ td span { display: block; color: var(--muted); font-size: 0.84rem; }
 .status.submitted { color: #384250; background: #eef2f6; }
 .status.interview { color: #075985; background: #e0f2fe; }
 .status.accepted { color: #14633f; background: #e5f6ee; }
+.status.approved { color: #14633f; background: #e5f6ee; }
+.status.pending { color: #84500d; background: #fff3d9; }
 .status.rejected { color: #9c1c1c; background: #fde8e8; }
+.status.cancelled { color: #384250; background: #eef2f6; }
 
 .table-actions {
   display: flex;
