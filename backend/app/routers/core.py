@@ -1232,7 +1232,7 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
     base = ParagraphStyle("BaseResume", parent=styles["Normal"], fontName=font, fontSize=9.0, leading=12.0, textColor=ink)
     banner_name_style = ParagraphStyle("BannerNameResume", parent=base, fontName=font_black, fontSize=22, leading=28, textColor=colors.white, alignment=TA_RIGHT if rtl else TA_LEFT)
     banner_title_style = ParagraphStyle("BannerTitleResume", parent=base, fontName=font, fontSize=9.8, leading=13, textColor=colors.HexColor("#e9fbf8"), alignment=TA_RIGHT if rtl else TA_LEFT)
-    contact_style = ParagraphStyle("ContactResume", parent=base, fontSize=10.1, leading=15, textColor=colors.black, alignment=TA_LEFT)
+    contact_style = ParagraphStyle("ContactResume", parent=base, fontSize=10.1, leading=15, textColor=colors.black, alignment=TA_RIGHT if rtl else TA_LEFT)
     section_style = ParagraphStyle("SectionResume", parent=base, fontName=font_bold, fontSize=10.8, leading=13.5, textColor=blue, spaceBefore=0, spaceAfter=24, alignment=TA_CENTER)
     side_section_style = ParagraphStyle("SideSectionResume", parent=section_style, alignment=TA_RIGHT, spaceBefore=0, spaceAfter=20)
     company_style = ParagraphStyle("CompanyResume", parent=base, fontName=font_bold, fontSize=9.9, leading=13, textColor=colors.black, alignment=TA_CENTER, spaceAfter=10)
@@ -1240,7 +1240,7 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
     meta_style = ParagraphStyle("MetaResume", parent=base, fontSize=8.8, leading=11.5, textColor=muted, alignment=TA_CENTER, spaceAfter=11)
     responsibilities_style = ParagraphStyle("ResponsibilitiesResume", parent=base, fontName=font_bold, fontSize=8.8, leading=11.5, textColor=muted, alignment=TA_CENTER, spaceAfter=18)
     bullet_style = ParagraphStyle("BulletResume", parent=base, fontSize=8.9, leading=12.5, textColor=colors.black, alignment=TA_RIGHT)
-    side_item = ParagraphStyle("SideItemResume", parent=base, fontName=font_bold, fontSize=8.9, leading=17.5, textColor=muted, alignment=TA_LEFT)
+    side_item = ParagraphStyle("SideItemResume", parent=base, fontName=font_bold, fontSize=8.9, leading=17.5, textColor=muted, alignment=TA_RIGHT if rtl else TA_LEFT)
     if rtl:
         for style in (base, section_style, side_section_style, company_style, role_style, meta_style, responsibilities_style, bullet_style):
             style.alignment = TA_RIGHT
