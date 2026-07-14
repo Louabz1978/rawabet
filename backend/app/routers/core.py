@@ -1221,15 +1221,17 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
     font_bold = resume_font_name("bold")
     font_black = resume_font_name("black")
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=50, leftMargin=50, topMargin=48, bottomMargin=42)
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=50, leftMargin=50, topMargin=42, bottomMargin=42)
     styles = getSampleStyleSheet()
+    platform_navy = colors.HexColor("#0a2e57")
+    platform_teal = colors.HexColor("#14b8a6")
     blue = colors.HexColor("#0070c0")
     red = colors.HexColor("#c0392b")
     ink = colors.black
     muted = colors.HexColor("#595959")
     base = ParagraphStyle("BaseResume", parent=styles["Normal"], fontName=font, fontSize=9.0, leading=12.0, textColor=ink)
-    name_style = ParagraphStyle("NameResume", parent=base, fontName=font_bold, fontSize=32, leading=38, textColor=colors.black, spaceAfter=18, alignment=TA_RIGHT if rtl else TA_LEFT)
-    title_style = ParagraphStyle("TitleResume", parent=base, fontName=font_light, fontSize=10.1, leading=12.5, textColor=muted, alignment=TA_RIGHT if rtl else TA_LEFT)
+    banner_name_style = ParagraphStyle("BannerNameResume", parent=base, fontName=font_black, fontSize=22, leading=28, textColor=colors.white, alignment=TA_RIGHT if rtl else TA_LEFT)
+    banner_title_style = ParagraphStyle("BannerTitleResume", parent=base, fontName=font, fontSize=9.8, leading=13, textColor=colors.HexColor("#e9fbf8"), alignment=TA_RIGHT if rtl else TA_LEFT)
     contact_style = ParagraphStyle("ContactResume", parent=base, fontSize=10.1, leading=15, textColor=colors.black, alignment=TA_LEFT)
     section_style = ParagraphStyle("SectionResume", parent=base, fontName=font_bold, fontSize=10.8, leading=13.5, textColor=blue, spaceBefore=0, spaceAfter=24, alignment=TA_CENTER)
     side_section_style = ParagraphStyle("SideSectionResume", parent=section_style, alignment=TA_RIGHT, spaceBefore=0, spaceAfter=20)
@@ -1243,20 +1245,24 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
         for style in (base, section_style, side_section_style, company_style, role_style, meta_style, responsibilities_style, bullet_style):
             style.alignment = TA_RIGHT
 
-    contact_lines = [part for part in [user.get("phone"), user.get("email"), user.get("location")] if part]
-    name_block = [
-        paragraph(user.get("full_name") or "Rawabet Resume", name_style),
-        paragraph(sections.get("target_title") or user.get("headline") or "", title_style),
+    banner_block = [
+        paragraph(user.get("full_name") or "Rawabet Resume", banner_name_style),
+        Spacer(1, 4),
+        paragraph(sections.get("target_title") or user.get("headline") or "", banner_title_style),
     ]
-    contact_block = [paragraph("<br/>".join(contact_lines), contact_style)]
-    header = Table([[contact_block, name_block]] if rtl else [[name_block, contact_block]], colWidths=[132, 380] if rtl else [380, 132], hAlign="LEFT")
-    header.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    banner = Table([[banner_block]], colWidths=[512], rowHeights=[76])
+    banner.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), platform_navy),
+        ("LINEBELOW", (0, 0), (-1, -1), 3, platform_teal),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 24),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 24),
         ("TOPPADDING", (0, 0), (-1, -1), 0),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
+
+    contact_lines = [part for part in [user.get("phone"), user.get("email"), user.get("location")] if part]
+    contact_block = [paragraph("<br/>".join(contact_lines), contact_style)]
 
     def section_block(title: str, items: list[str]):
         if not items:
@@ -1267,6 +1273,8 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
         return flow
 
     sidebar = [
+        *contact_block,
+        Spacer(1, 28),
         paragraph("Skills" if not rtl else "المهارات", side_section_style),
         *[paragraph(item, side_item) for item in (sections.get("skills") or [])],
         Spacer(1, 48),
@@ -1276,7 +1284,12 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
     if sections.get("tools"):
         sidebar.extend([Spacer(1, 34), *section_block("Tools" if not rtl else "الأدوات", sections.get("tools") or [])])
 
-    main_intro = [paragraph("Work Experience" if not rtl else "الخبرات العملية", section_style)]
+    main_intro = [
+        paragraph("Professional Summary" if not rtl else "الملخص المهني", section_style),
+        paragraph(sections.get("summary") or "", bullet_style),
+        Spacer(1, 22),
+        paragraph("Work Experience" if not rtl else "الخبرات العملية", section_style),
+    ]
     table_rows = []
     for index, item in enumerate(sections.get("experiences", [])):
         company_line = " - ".join([part for part in [item.get("company"), item.get("location")] if part])
@@ -1290,16 +1303,15 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
         bullets = (item.get("bullets") or [])[:7]
         if bullets:
             rows = bullet_rows(bullets, bullet_style, rtl)
-            widths = [328]
-            bullet_table = Table(rows, colWidths=widths, hAlign="RIGHT" if rtl else "LEFT")
-            bullet_table.setStyle(TableStyle([
+            bullet_table_flow = Table(rows, colWidths=[328], hAlign="RIGHT" if rtl else "LEFT")
+            bullet_table_flow.setStyle(TableStyle([
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ("LEFTPADDING", (0, 0), (-1, -1), 0),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 0),
                 ("TOPPADDING", (0, 0), (-1, -1), 1.2),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 1.2),
             ]))
-            job_flow.append(bullet_table)
+            job_flow.append(bullet_table_flow)
         job_flow.append(Spacer(1, 20))
         if index == 0:
             table_rows.append([main_intro + job_flow, sidebar])
@@ -1317,8 +1329,7 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
         if items:
             section_flow = [paragraph(title, section_style)]
             rows = bullet_rows(items, bullet_style, rtl)
-            widths = [328]
-            item_table = Table(rows, colWidths=widths, hAlign="RIGHT" if rtl else "LEFT")
+            item_table = Table(rows, colWidths=[328], hAlign="RIGHT" if rtl else "LEFT")
             item_table.setStyle(TableStyle([
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ("LEFTPADDING", (0, 0), (-1, -1), 0),
@@ -1330,7 +1341,7 @@ def make_resume_pdf(user: dict, profile: dict, experiences: list[dict], educatio
             section_flow.append(Spacer(1, 8))
             table_rows.append([section_flow, []])
 
-    story = [header, Spacer(1, 58)]
+    story = [banner, Spacer(1, 28)]
     table = Table(table_rows, colWidths=[335, 130], hAlign="LEFT", splitByRow=1)
     table.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
