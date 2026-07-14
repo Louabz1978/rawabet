@@ -3655,6 +3655,14 @@ def list_support_threads(user: Annotated[dict, Depends(admin_user)]):
           COUNT(sm.id) FILTER (
             WHERE sm.sender_role = 'user'
               AND sm.created_at > COALESCE(last_admin.last_admin_at, 'epoch'::timestamptz)
+              AND (
+                u.role = 'agent'
+                OR sm.message ILIKE '%%live support%%'
+                OR sm.message ILIKE '%%live agent%%'
+                OR sm.message ILIKE '%%human%%'
+                OR sm.message ILIKE '%%دعم مباشر%%'
+                OR sm.message ILIKE '%%موظف%%'
+              )
           )::int AS unread_count
         FROM users u
         JOIN latest ON latest.user_id = u.id
@@ -3708,10 +3716,11 @@ def list_support_messages(user: Annotated[dict, Depends(current_user)], user_id:
 @router.post("/api/support/messages", status_code=201)
 def create_support_message(body: SupportMessageBody, user: Annotated[dict, Depends(current_user)]):
     is_support_admin = user["role"] in {"admin", "master_admin"} or is_master_admin(user)
+    is_agent_sender = user["role"] == "agent"
     target_user_id = body.userId if is_support_admin and body.userId else user["id"]
     sender_role = "admin" if is_support_admin else "user"
-    was_live = live_support_requested(target_user_id) if sender_role == "user" else False
-    requested_live = is_live_support_request(body.message) if sender_role == "user" else False
+    was_live = True if is_agent_sender else (live_support_requested(target_user_id) if sender_role == "user" else False)
+    requested_live = False if is_agent_sender else (is_live_support_request(body.message) if sender_role == "user" else False)
     message = execute(
         """
         INSERT INTO support_messages (user_id, sender_role, message)

@@ -286,6 +286,7 @@ const text = {
     stayConnected: "Sign in again",
     agentChat: "Agent chat",
     chatWithAgent: "Chat with agent",
+    adminChat: "Admin chat",
     aiAssistant: "AI Assistant",
     message: "Message",
     autoLogoutIn: "Auto logout in",
@@ -574,6 +575,7 @@ const text = {
     stayConnected: "تسجيل الدخول من جديد",
     agentChat: "محادثة الوكيل",
     chatWithAgent: "تواصل مع الوكيل",
+    adminChat: "محادثة الإدارة",
     aiAssistant: "المساعد الذكي",
     message: "رسالة",
     autoLogoutIn: "تسجيل خروج تلقائي خلال",
@@ -639,6 +641,26 @@ function isSessionError(error) {
 
 function statusLabel(value, lang) {
   return STATUS_LABELS[value]?.[lang] || value || "-";
+}
+
+function analyticsLabel(kind, value, lang, t) {
+  const raw = String(value || "").trim();
+  const normalized = normalizeStatusValue(raw);
+  if (kind === "application") {
+    if (raw.toLowerCase() === "approved") return STATUS_LABELS.accepted[lang];
+    return STATUS_LABELS[normalized]?.[lang] || raw || "-";
+  }
+  if (kind === "category") return jobCategoryLabel(raw, lang);
+  if (kind === "profile") {
+    const profileLabels = {
+      excellent: t("excellent"),
+      strong: t("strong"),
+      medium: t("medium"),
+      weak: t("weak")
+    };
+    return profileLabels[raw.toLowerCase()] || raw || "-";
+  }
+  return raw || "-";
 }
 
 function normalizeStatusValue(value) {
@@ -1112,6 +1134,7 @@ function App() {
           {isAgent && <button className="icon-button mobile-chat-button" type="button" aria-label={t("agentChat")} onClick={() => setView("agent-chat")}>💬</button>}
           {!isAgent && <button className="secondary-button compact notify-button message-button" onClick={() => isAdminRole(session.role) ? (setAdminStartTab("support"), setView("admin")) : openAgentChat()} disabled={!isAdminRole(session.role) && !userAgentThreads.length}>{isAdminRole(session.role) ? t("support") : t("message")}{(isAdminRole(session.role) ? supportUnread : userAgentUnread) > 0 && <span>{isAdminRole(session.role) ? supportUnread : userAgentUnread}</span>}</button>}
           {isAgent && <button className="secondary-button compact notify-button" onClick={() => setView("agent-chat")}>{t("agentChat")}</button>}
+          {isAgent && <button className="secondary-button compact notify-button" onClick={() => setSupportOpen(true)}>{t("adminChat")}</button>}
           <button className="secondary-button compact" onClick={logout}>{t("logout")}</button>
           <button className="icon-button" onClick={() => setLang(lang === "en" ? "ar" : "en")}>{t("language")}</button>
         </div>
@@ -1122,7 +1145,7 @@ function App() {
         {isAgent && <button type="button" onClick={() => { setView("agent-jobs"); setMobileMenuOpen(false); }}>{t("assignedJobs")}</button>}
         {isAgent && <button type="button" onClick={() => { setView("agent-users"); setMobileMenuOpen(false); }}>{t("users")}</button>}
         {isAgent && <button type="button" onClick={() => { setView("agent-chat"); setMobileMenuOpen(false); }}>{t("agentChat")}</button>}
-        {isAgent && <button type="button" onClick={() => { setSupportOpen(true); setMobileMenuOpen(false); }}>{t("aiAssistant")}</button>}
+        {isAgent && <button type="button" onClick={() => { setSupportOpen(true); setMobileMenuOpen(false); }}>{t("adminChat")}</button>}
         {!isAgent && <button type="button" onClick={openAppliedJobs}><span>{t("appliedJobs")}</span><b>{formatNumber(me.applications?.length || 0)}</b></button>}
         {!isAgent && <button type="button" onClick={openAllJobs}>{t("findJob")}</button>}
         {!isAgent && <button type="button" onClick={() => { setView("agents"); setMobileMenuOpen(false); }}>{t("findCompany")}</button>}
@@ -1132,7 +1155,7 @@ function App() {
       </nav>}
 
       <main className={view === "admin" || isAgent ? "admin-main" : ""}>
-        {isAgent ? <AgentWorkspace t={t} lang={lang} agent={me.user} profile={me.profile || {}} shares={agentShares} users={agentUsers} interviews={agentInterviews} jobs={agentJobs} view={view} setView={setView} reload={loadApp} notify={notify} openAgentChat={openAgentChat} openSupportAssistant={() => setSupportOpen(true)} /> : <>
+        {isAgent ? <AgentWorkspace t={t} lang={lang} agent={me.user} profile={me.profile || {}} shares={agentShares} users={agentUsers} interviews={agentInterviews} jobs={agentJobs} view={view} setView={setView} reload={loadApp} notify={notify} openAgentChat={openAgentChat} openAdminChat={() => setSupportOpen(true)} /> : <>
           {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} agents={agents} setSelectedAgent={setSelectedAgent} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} openSmartResume={openSmartResumeForUser} openSupportAssistant={() => setSupportOpen(true)} canUseSmartResume={canUseSmartResume} jobSearch={jobSearch} setJobSearch={setJobSearch} setJobMode={setJobMode} />}
           {view === "profile" && <Profile t={t} me={me} reload={loadApp} notify={notify} />}
           {view === "smartResume" && canUseSmartResume && <SmartResumePage t={t} me={me} reload={loadApp} notify={notify} />}
@@ -1147,7 +1170,7 @@ function App() {
       </main>
       <MobileBottomNav t={t} view={view} role={session.role} setView={setView} setAdminStartTab={setAdminStartTab} openAllJobs={openAllJobs} openComingInterviews={openComingInterviews} isAdmin={isAdminRole(session.role)} />
       {!isAgent && builderOpen && <ProfileBuilder t={t} me={me} reload={loadApp} close={() => setBuilderOpen(false)} notify={notify} />}
-      {supportOpen && !isAdminRole(session.role) && <SupportWindow t={t} me={me} users={adminUsers} initialUserId={supportTarget} onUpdate={loadSupportThreads} close={() => { setSupportOpen(false); setSupportTarget(""); }} />}
+      {supportOpen && <SupportWindow t={t} me={me} users={adminUsers} initialUserId={supportTarget} onUpdate={loadSupportThreads} close={() => { setSupportOpen(false); setSupportTarget(""); }} />}
       {agentChatOpen && !isAgent && agentChatTarget && <UserAgentChatWindow t={t} agent={agentChatTarget} threads={userAgentThreads} setAgent={setAgentChatTarget} onUpdate={async () => { const threads = await api("/user/agent-chat/threads"); userAgentUnreadRef.current = threads.reduce((sum, thread) => sum + Number(thread.unread_count || 0), 0); setUserAgentThreads(threads); }} close={() => { setAgentChatOpen(false); setAgentChatTarget(null); }} />}
       {popup && <ToastPopup t={t} popup={popup} close={() => setPopup(null)} />}
       {sessionWarningOpen && <SessionWarningModal t={t} seconds={sessionCountdown} stayConnected={stayConnected} logout={logout} />}
@@ -2788,9 +2811,9 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
               <AnalyticsBars title={t("usersGrowth")} data={admin.analytics?.usersGrowth || []} />
               <AnalyticsBars title={t("jobsPosted")} data={admin.analytics?.jobsPosted || []} />
               <AnalyticsBars title={t("monthlyApplications")} data={admin.analytics?.monthlyApplications || []} />
-              <AnalyticsList title={t("applicationOutcomes")} data={admin.analytics?.applicationOutcomes || []} />
-              <AnalyticsList title={t("jobCategories")} data={admin.analytics?.jobCategories || []} />
-              <AnalyticsList title={t("profileHealth")} data={admin.analytics?.profileHealth || []} />
+              <AnalyticsList title={t("applicationOutcomes")} data={admin.analytics?.applicationOutcomes || []} labelFormatter={(label) => analyticsLabel("application", label, lang, t)} />
+              <AnalyticsList title={t("jobCategories")} data={admin.analytics?.jobCategories || []} labelFormatter={(label) => analyticsLabel("category", label, lang, t)} />
+              <AnalyticsList title={t("profileHealth")} data={admin.analytics?.profileHealth || []} labelFormatter={(label) => analyticsLabel("profile", label, lang, t)} />
             </section>
           </>}
 
@@ -3069,7 +3092,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
   );
 }
 
-function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [], interviews = [], jobs = [], view = "agent", setView, reload, notify, openAgentChat, openSupportAssistant }) {
+function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [], interviews = [], jobs = [], view = "agent", setView, reload, notify, openAgentChat, openAdminChat }) {
   const [tab, setTab] = useState("profile");
   const [selectedShareId, setSelectedShareId] = useState("");
   const [selectedJob, setSelectedJob] = useState(null);
@@ -3103,7 +3126,6 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
     ["users", t("users"), "◎"],
     ["applications", t("applications"), "◈"],
     ["chat", t("agentChat"), "✉"],
-    ["support", t("aiAssistant"), "✦"],
     ["courses", t("courses"), "▤"],
     ["schedule", t("scheduleInterview"), "◌"],
     ["interviews", t("scheduledInterviews"), "▣"]
@@ -3337,7 +3359,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
                 <div className="agent-tool-list">
                   <button className="secondary-button" type="button" onClick={() => setTab("users")}>{t("users")}</button>
                   <button className="secondary-button" type="button" onClick={() => setTab("applications")}>{t("applications")}</button>
-                  <button className="secondary-button" type="button" onClick={openSupportAssistant}>{t("aiAssistant")}</button>
+                  <button className="secondary-button" type="button" onClick={openAdminChat}>{t("adminChat")}</button>
                   <button className="secondary-button" type="button" onClick={() => setTab("schedule")}>{t("scheduleInterview")}</button>
                 </div>
               </article>
@@ -3431,11 +3453,6 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
           </section>}
 
           {tab === "chat" && <AgentChatPanel t={t} users={uniqueCandidates} initialUserId={chatUserId} />}
-
-          {tab === "support" && <section className="panel">
-            <div className="section-head"><h2>{t("aiAssistant")}</h2><button className="primary-button compact" type="button" onClick={openSupportAssistant}>{t("openChat")}</button></div>
-            <p className="muted-text">{t("liveSupportStarted")}</p>
-          </section>}
 
           {tab === "schedule" && <form id="agent-schedule-interview-form" className="panel admin-form" onSubmit={scheduleInterview}>
             <h2>{t("scheduleInterview")}</h2>
@@ -3636,6 +3653,7 @@ function UserAgentChatWindow({ t, agent, threads = [], setAgent, onUpdate, close
 
 function SupportWindow({ t, me, users, initialUserId = "", onUpdate, close }) {
   const isSupportAdmin = ["admin", "master_admin"].includes(me.user.role);
+  const isAgentSupport = me.user.role === "agent";
   const [targetUserId, setTargetUserId] = useState(isSupportAdmin ? initialUserId || users[0]?.id || "" : me.user.id);
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState("");
@@ -3725,13 +3743,13 @@ function SupportWindow({ t, me, users, initialUserId = "", onUpdate, close }) {
   const showBotOptions = !liveMode && lastMessage?.sender_role === "bot" && /دعم مباشر|live support|end the conversation|إنهاء المحادثة|end the conversation/i.test(lastMessage.message || "");
   return (
     <div className="support-window">
-      <header><strong>{isSupportAdmin ? t("supportInbox") : t("aiAssistant")}</strong><div><button type="button" onClick={clearChat} disabled={clearing}>{clearing ? t("clearingChat") : t("clearChat")}</button><button onClick={close}>×</button></div></header>
+      <header><strong>{isSupportAdmin ? t("supportInbox") : isAgentSupport ? t("adminChat") : t("aiAssistant")}</strong><div><button type="button" onClick={clearChat} disabled={clearing}>{clearing ? t("clearingChat") : t("clearChat")}</button><button onClick={close}>×</button></div></header>
       {isSupportAdmin && <select value={targetUserId} onChange={(e) => setTargetUserId(e.target.value)}>{users.map((user) => <option key={user.id} value={user.id}>{user.full_name}</option>)}</select>}
       <div className="support-messages" ref={messagesRef}>
         {messages.map((item) => <SupportBubble item={item} t={t} key={item.id} />)}
       </div>
-      {liveMode && !isSupportAdmin && <p className="notice support-live-note">{t("liveSupportStarted")}</p>}
-      {showBotOptions && <div className="support-options">
+      {liveMode && !isSupportAdmin && !isAgentSupport && <p className="notice support-live-note">{t("liveSupportStarted")}</p>}
+      {showBotOptions && !isAgentSupport && <div className="support-options">
         <button className="secondary-button compact" type="button" onClick={requestLiveSupport} disabled={sending}>{t("speakLive")}</button>
         <button className="secondary-button compact" type="button" onClick={endConversation} disabled={clearing}>{t("endConversation")}</button>
       </div>}
@@ -3845,7 +3863,7 @@ function AnalyticsBars({ title, data = [] }) {
   );
 }
 
-function AnalyticsList({ title, data = [] }) {
+function AnalyticsList({ title, data = [], labelFormatter = (label) => label }) {
   const total = data.reduce((sum, item) => sum + Number(item.value || 0), 0);
   return (
     <article className="panel analytics-card">
@@ -3854,7 +3872,7 @@ function AnalyticsList({ title, data = [] }) {
         {data.length ? data.map((item) => {
           const value = Number(item.value || 0);
           const percent = total ? Math.round((value / total) * 100) : 0;
-          return <div className="analytics-row" key={item.label}><span>{item.label}</span><strong>{value}</strong><div><i style={{ width: `${percent}%` }} /></div></div>;
+          return <div className="analytics-row" key={item.label}><span>{labelFormatter(item.label)}</span><strong>{value}</strong><div><i style={{ width: `${percent}%` }} /></div></div>;
         }) : <p>0</p>}
       </div>
     </article>
