@@ -3754,7 +3754,7 @@ def create_support_message(body: SupportMessageBody, user: Annotated[dict, Depen
 def clear_support_thread(user: dict, user_id: UUID | None = None):
     is_support_admin = user["role"] in {"admin", "master_admin"} or is_master_admin(user)
     target_user_id = user_id if is_support_admin and user_id else user["id"]
-    result = fetch_one(
+    result = execute(
         """
         WITH deleted AS (
           DELETE FROM support_messages

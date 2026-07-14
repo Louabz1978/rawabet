@@ -3717,7 +3717,7 @@ function SupportWindow({ t, me, users, initialUserId = "", onUpdate, close }) {
         method: "POST",
         body: JSON.stringify({ userId: isSupportAdmin ? targetUserId : undefined })
       });
-      setMessages([]);
+      await loadMessages();
       await onUpdate?.();
     } catch (err) {
       setChatError(err.message || t("clearFailed"));
