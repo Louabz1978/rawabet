@@ -685,47 +685,32 @@ def resume_font_name(weight: str = "medium") -> str:
     weight = weight if weight in {"light", "medium", "bold", "black"} else "medium"
     if weight in RESUME_FONT_CACHE:
         return RESUME_FONT_CACHE[weight]
+    local_font_dir = Path(__file__).resolve().parent / "fonts"
     font_paths = {
         "light": [
-            str(Path(__file__).resolve().parent / "fonts" / "NotoKufiArabic-Regular.ttf"),
+            str(local_font_dir / "NotoKufiArabic-Regular.ttf"),
             "/usr/share/fonts/rawabet/NotoKufiArabic-Regular.ttf",
         ],
         "medium": [
-            str(Path(__file__).resolve().parent / "fonts" / "NotoKufiArabic-Medium.ttf"),
-            str(Path(__file__).resolve().parent / "fonts" / "NotoKufiArabic-Regular.ttf"),
+            str(local_font_dir / "NotoKufiArabic-Medium.ttf"),
+            str(local_font_dir / "NotoKufiArabic-Regular.ttf"),
             "/usr/share/fonts/rawabet/NotoKufiArabic-Medium.ttf",
             "/usr/share/fonts/rawabet/NotoKufiArabic-Regular.ttf",
         ],
         "bold": [
-            str(Path(__file__).resolve().parent / "fonts" / "NotoKufiArabic-Bold.ttf"),
-            str(Path(__file__).resolve().parent / "fonts" / "NotoKufiArabic-Medium.ttf"),
+            str(local_font_dir / "NotoKufiArabic-Bold.ttf"),
+            str(local_font_dir / "NotoKufiArabic-Medium.ttf"),
             "/usr/share/fonts/rawabet/NotoKufiArabic-Bold.ttf",
             "/usr/share/fonts/rawabet/NotoKufiArabic-Medium.ttf",
         ],
         "black": [
-            str(Path(__file__).resolve().parent / "fonts" / "NotoKufiArabic-ExtraBold.ttf"),
-            str(Path(__file__).resolve().parent / "fonts" / "NotoKufiArabic-Bold.ttf"),
+            str(local_font_dir / "NotoKufiArabic-ExtraBold.ttf"),
+            str(local_font_dir / "NotoKufiArabic-Bold.ttf"),
             "/usr/share/fonts/rawabet/NotoKufiArabic-ExtraBold.ttf",
             "/usr/share/fonts/rawabet/NotoKufiArabic-Bold.ttf",
         ],
     }
-    fallback_candidates = [
-        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
-        "/System/Library/Fonts/Supplemental/Arial.ttf",
-        "/Library/Fonts/Arial Unicode.ttf",
-        "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
-        "/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf",
-        "/usr/share/fonts/noto/NotoSansArabic-Regular.ttf",
-        "/usr/share/fonts/google-noto/NotoNaskhArabic-Regular.ttf",
-        "/usr/share/fonts/google-noto/NotoSansArabic-Regular.ttf",
-        "/usr/share/fonts/google-noto-vf/NotoSansArabic[wght].ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-    ]
-    candidates = font_paths[weight] + font_paths["medium"] + fallback_candidates
+    candidates = font_paths[weight] + font_paths["medium"]
     for path in candidates:
         if Path(path).exists():
             try:
@@ -735,7 +720,7 @@ def resume_font_name(weight: str = "medium") -> str:
                 return font_name
             except Exception:
                 continue
-    raise RuntimeError("No Arabic-capable TrueType font was found. Install DejaVu Sans or Noto Arabic fonts on the server.")
+    raise RuntimeError("Rawabet Kufi resume font was not found. Make sure backend/app/fonts/NotoKufiArabic-*.ttf exists on the server.")
 
 
 def pdf_text(value: object) -> str:
