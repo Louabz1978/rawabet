@@ -137,6 +137,26 @@ def create_agent_chat_message(body: ChatMessageBody, user: Annotated[dict, Depen
     return {"ok": True}
 
 
+@router.delete("/agent/chat/messages")
+def clear_agent_chat_messages(user_id: UUID, user: Annotated[dict, Depends(agent_user)]):
+    ensure_agent_messages_schema()
+    target = fetch_one("SELECT id FROM users WHERE id = %s AND role IN ('member', 'user')", (user_id,))
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    deleted = execute(
+        """
+        WITH deleted AS (
+          DELETE FROM agent_messages
+          WHERE agent_id = %s AND user_id = %s
+          RETURNING 1
+        )
+        SELECT COUNT(*)::int AS deleted_count FROM deleted
+        """,
+        (user["id"], user_id),
+    )
+    return {"ok": True, "deletedCount": deleted["deleted_count"] if deleted else 0}
+
+
 @router.get("/user/agent-chat/threads")
 def list_user_agent_chat_threads(user: Annotated[dict, Depends(current_user)]):
     ensure_agent_messages_schema()
@@ -217,3 +237,23 @@ def create_user_agent_chat_message(body: ChatMessageBody, user: Annotated[dict, 
         (uuid4(), body.userId, user["id"], message),
     )
     return {"ok": True}
+
+
+@router.delete("/user/agent-chat/messages")
+def clear_user_agent_chat_messages(agent_id: UUID, user: Annotated[dict, Depends(current_user)]):
+    ensure_agent_messages_schema()
+    agent = fetch_one("SELECT id FROM users WHERE id = %s AND role = 'agent'", (agent_id,))
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    deleted = execute(
+        """
+        WITH deleted AS (
+          DELETE FROM agent_messages
+          WHERE agent_id = %s AND user_id = %s
+          RETURNING 1
+        )
+        SELECT COUNT(*)::int AS deleted_count FROM deleted
+        """,
+        (agent_id, user["id"]),
+    )
+    return {"ok": True, "deletedCount": deleted["deleted_count"] if deleted else 0}

@@ -1641,12 +1641,7 @@ def local_platform_reply(question: str) -> str | None:
     lowered = question.lower()
     normalized_question = normalize_arabic_text(question)
     wants_end = ["end conversation", "close chat", "انهاء", "إنهاء", "انهي", "إنهي", "نهاية"]
-    restricted_terms = [
-        "admin", "administrator", "agent", "dashboard", "analytics", "report", "reports", "manage users", "user management",
-        "add job", "edit job", "delete job", "manage job", "post job", "approve", "reject application", "application management",
-        "إدارة المستخدمين", "ادارة المستخدمين", "لوحة الإدارة", "لوحة الادارة", "تحليلات", "تقارير", "وكيل", "الوكيل", "مدير", "الإدارة", "الادارة"
-    ]
-    if any(term in lowered or normalize_arabic_text(term) in normalized_question for term in restricted_terms):
+    if is_restricted_platform_question(question):
         return unknown_reply_for(question)
     if is_live_support_request(question):
         return LIVE_AGENT_REPLY
@@ -1681,6 +1676,83 @@ def local_platform_reply(question: str) -> str | None:
     return best_guide["answer"] if best_guide and best_score else None
 
 
+def is_restricted_platform_question(question: str) -> bool:
+    lowered = question.lower()
+    normalized_question = normalize_arabic_text(question)
+    restricted_terms = [
+        "admin", "administrator", "dashboard", "analytics", "report", "reports", "manage users", "user management",
+        "add job", "edit job", "delete job", "manage job", "post job", "approve", "reject application", "application management",
+        "إدارة المستخدمين", "ادارة المستخدمين", "لوحة الإدارة", "لوحة الادارة", "تحليلات", "تقارير", "مدير", "الإدارة", "الادارة",
+    ]
+    return any(term in lowered or normalize_arabic_text(term) in normalized_question for term in restricted_terms)
+
+
+def rawabet_user_guides_context() -> str:
+    restricted_words = {"admin", "dashboard", "analytics", "reports", "manage users", "add job", "edit job", "delete job", "إدارة", "ادارة", "لوحة", "تحليلات", "تقارير"}
+    lines = ["Rawabet user-facing help knowledge:"]
+    for guide in RAWABET_GUIDES:
+        terms = " ".join(map(str, guide.get("terms") or []))
+        if any(word in terms for word in restricted_words):
+            continue
+        answer = re.sub(r"\s+", " ", guide.get("answer") or "").strip()
+        if answer:
+            lines.append(f"- {answer}")
+    return "\n".join(lines)
+
+
+def openai_platform_reply(question: str, fallback: str) -> str | None:
+    if not OPENAI_API_KEY:
+        return None
+    context = "\n\n".join([
+        RAWABET_CONTEXT,
+        rawabet_user_guides_context(),
+        active_jobs_context(),
+        active_agents_context(),
+    ])
+    unknown = unknown_reply_for(question)
+    no_match = no_job_match_reply_for(question)
+    payload = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are Rawabet's AI assistant for normal platform users only. "
+                    "Your goal is to answer clearly enough that most users do not need a live employee. "
+                    "Sound natural, warm, and practical, not like a script. Vary your phrasing. "
+                    "Answer only from the Rawabet context below and do not invent features. "
+                    "Never explain admin tools, agent tools, internal dashboards, analytics, or management workflows. "
+                    "Use Arabic by default unless the user writes English. "
+                    "When giving steps, write each step or bullet on its own line. "
+                    "For job questions, match semantically against active jobs by job number, title, company, category, location, and description. "
+                    "If the user asks for available jobs, return only relevant job numbers plus a short sentence. "
+                    f"If no job matches, say naturally: {no_match} "
+                    "Do not send a user to live support just because there is no matching job. "
+                    "If the user asks how to use the platform, mention exact user-facing pages/buttons such as Profile, Jobs, Details, Apply, Applied jobs, AI Assistant, and Clear chat. "
+                    f"If the question is truly outside Rawabet, reply exactly with: {unknown}\n\n"
+                    f"{context}"
+                ),
+            },
+            {"role": "user", "content": question},
+        ],
+        "temperature": 0.45,
+        "max_tokens": 620,
+    }
+    request = urllib.request.Request(
+        "https://api.openai.com/v1/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=14) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            answer = data["choices"][0]["message"]["content"].strip()
+            return answer or None
+    except (urllib.error.URLError, KeyError, IndexError, json.JSONDecodeError):
+        return None
+
+
 def platform_bot_reply(question: str) -> str:
     lowered = question.lower()
     normalized_question = normalize_arabic_text(question)
@@ -1700,35 +1772,20 @@ def platform_bot_reply(question: str) -> str:
     job_match_reply = matching_jobs_reply(question)
     if job_match_reply:
         return job_match_reply
+    fallback = unknown_reply_for(question)
+    if is_restricted_platform_question(question):
+        return fallback
+    if is_live_support_request(question):
+        return LIVE_AGENT_REPLY
+    if any(term in lowered or normalize_arabic_text(term) in normalized_question for term in ["end conversation", "close chat", "انهاء", "إنهاء", "انهي", "إنهي", "نهاية"]):
+        return END_CHAT_REPLY
+    ai_reply = openai_platform_reply(question, fallback)
+    if ai_reply:
+        return ai_reply
     local_reply = local_platform_reply(question)
     if local_reply:
         return local_reply
-    fallback = unknown_reply_for(question)
-    if not OPENAI_API_KEY:
-        return fallback
-    context = f"{RAWABET_CONTEXT}\n\n{active_jobs_context()}\n\n{active_agents_context()}"
-    unknown = unknown_reply_for(question)
-    payload = {
-        "model": "gpt-4o-mini",
-        "messages": [
-            {"role": "system", "content": f"You are Rawabet's AI assistant for normal platform users only. Act like a helpful human support assistant and try to resolve common user questions before offering live support. Answer only from the context below. Do not answer admin, agent, internal dashboard, analytics, or management questions. Use Arabic by default unless the user writes English. If you use bullets or numbered steps, every bullet or step must be on its own separate line. If the user asks about jobs, search the active jobs context semantically by title, company, category, location, and description; include matching job numbers only when available. If no active jobs match, say there are no matching jobs at this moment and suggest trying another keyword or checking Jobs later; do not offer live support for a normal no-match job search. If the user asks about companies/agencies, use the public companies/agencies context. If the user asks how to use the platform, guide them step by step using user-facing page and button names. If the user asks something truly outside Rawabet, reply exactly with: {unknown}\n\n{context}"},
-            {"role": "user", "content": question},
-        ],
-        "temperature": 0.2,
-        "max_tokens": 520,
-    }
-    request = urllib.request.Request(
-        "https://api.openai.com/v1/chat/completions",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=12) as response:
-            data = json.loads(response.read().decode("utf-8"))
-            return data["choices"][0]["message"]["content"].strip()
-    except (urllib.error.URLError, KeyError, IndexError, json.JSONDecodeError):
-        return fallback
+    return fallback
 
 
 def jobs_have_job_number_column() -> bool:

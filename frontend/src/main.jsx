@@ -3502,6 +3502,8 @@ function AgentChatPanel({ t, users = [], initialUserId = "" }) {
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [chatError, setChatError] = useState("");
   const messagesRef = useRef(null);
   const latestMessageIdRef = useRef("");
   async function loadThreads() {
@@ -3544,6 +3546,20 @@ function AgentChatPanel({ t, users = [], initialUserId = "" }) {
       setSending(false);
     }
   }
+  async function clearChat() {
+    if (!targetUserId) return;
+    setClearing(true);
+    setChatError("");
+    try {
+      await api(`/agent/chat/messages?user_id=${encodeURIComponent(targetUserId)}`, { method: "DELETE" });
+      setMessages([]);
+      await loadThreads();
+    } catch (err) {
+      setChatError(err.message || t("clearFailed"));
+    } finally {
+      setClearing(false);
+    }
+  }
   const visibleThreads = threads.length ? threads : users.map((user) => ({
     user_id: user.user_id,
     full_name: user.full_name,
@@ -3554,7 +3570,7 @@ function AgentChatPanel({ t, users = [], initialUserId = "" }) {
   }));
   return (
     <section className="panel agent-chat-panel">
-      <div className="section-head"><h2>{t("agentChat")}</h2><span className="status">{visibleThreads.length}</span></div>
+      <div className="section-head"><h2>{t("agentChat")}</h2><div className="inline-actions"><span className="status">{visibleThreads.length}</span><button className="secondary-button compact" type="button" onClick={clearChat} disabled={clearing || !targetUserId}>{clearing ? t("clearingChat") : t("clearChat")}</button></div></div>
       <div className="agent-chat-layout">
         <aside className="agent-chat-threads">
           {visibleThreads.map((thread) => (
@@ -3570,6 +3586,7 @@ function AgentChatPanel({ t, users = [], initialUserId = "" }) {
             {messages.map((item) => <SupportBubble item={item} t={t} key={item.id} />)}
             {!messages.length && <p className="muted-text">{t("agentChat")}</p>}
           </div>
+          {chatError && <p className="error support-error">{chatError}</p>}
           <form onSubmit={sendMessage}>
             <input placeholder={t("supportMessage")} value={message} onChange={(e) => setMessage(e.target.value)} />
             <button className="primary-button" disabled={sending || !targetUserId}>{t("send")}</button>
@@ -3584,6 +3601,8 @@ function UserAgentChatWindow({ t, agent, threads = [], setAgent, onUpdate, close
   const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [chatError, setChatError] = useState("");
   const messagesRef = useRef(null);
   const initializedMessagesRef = useRef(false);
   const latestMessageIdRef = useRef("");
@@ -3624,11 +3643,26 @@ function UserAgentChatWindow({ t, agent, threads = [], setAgent, onUpdate, close
       setSending(false);
     }
   }
+  async function clearChat() {
+    if (!agent?.id) return;
+    setClearing(true);
+    setChatError("");
+    try {
+      await api(`/user/agent-chat/messages?agent_id=${encodeURIComponent(agent.id)}`, { method: "DELETE" });
+      setMessages([]);
+      const update = onUpdate?.();
+      update?.catch?.(() => {});
+    } catch (err) {
+      setChatError(err.message || t("clearFailed"));
+    } finally {
+      setClearing(false);
+    }
+  }
   return (
     <div className="support-window agent-user-chat-window">
       <header>
         <strong>{agent.agency_name || agent.full_name || t("agentChat")}</strong>
-        <div><button type="button" onClick={close}>×</button></div>
+        <div><button type="button" onClick={clearChat} disabled={clearing}>{clearing ? t("clearingChat") : t("clearChat")}</button><button type="button" onClick={close}>×</button></div>
       </header>
       {threads.length > 1 && <div className="user-agent-thread-row">
         {threads.map((thread) => (
@@ -3643,6 +3677,7 @@ function UserAgentChatWindow({ t, agent, threads = [], setAgent, onUpdate, close
         {messages.map((item) => <SupportBubble item={item} t={t} key={item.id} />)}
         {!messages.length && <p className="muted-text">{t("chatWithAgent")}</p>}
       </div>
+      {chatError && <p className="error support-error">{chatError}</p>}
       <form onSubmit={sendMessage}>
         <input placeholder={t("supportMessage")} value={message} onChange={(e) => setMessage(e.target.value)} />
         <button className="primary-button" disabled={sending}>{t("send")}</button>
