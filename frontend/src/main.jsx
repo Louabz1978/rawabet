@@ -230,6 +230,7 @@ const text = {
     role: "Role",
     plan: "Plan",
     subscriptionPlans: "Subscriptions",
+    subscriptionExpires: "Expires",
     premiumPlan: "Premium user",
     agentPlan: "Agent plan",
     premiumPrice: "$7.99 / month",
@@ -537,6 +538,7 @@ const text = {
     role: "الدور",
     plan: "الخطة",
     subscriptionPlans: "الاشتراك",
+    subscriptionExpires: "ينتهي في",
     premiumPlan: "مستخدم مميز",
     agentPlan: "خطة الوكيل",
     premiumPrice: "7.99$ / شهريا",
@@ -1213,7 +1215,7 @@ function App() {
         {canUseSmartResume && <button type="button" onClick={openSmartResumeForUser}>{t("smartResume")}</button>}
         {!isAgent && <button type="button" onClick={openComingInterviews}>{t("upcomingInterviews")}</button>}
         {!isAdminRole(session.role) && <button type="button" onClick={() => setSubscriptionMenuOpen((current) => !current)}><span>{t("subscriptionPlans")}</span><b>{subscriptionMenuOpen ? "−" : "+"}</b></button>}
-        {subscriptionMenuOpen && !isAdminRole(session.role) && <PlanCards t={t} currentRole={session.role} currentPlan={me.user.plan} notify={notify} menuMode />}
+        {subscriptionMenuOpen && !isAdminRole(session.role) && <PlanCards t={t} currentRole={session.role} currentPlan={me.user.plan} subscriptionExpiresAt={me.user.subscriptionExpiresAt} notify={notify} menuMode />}
         <button type="button" onClick={logout}>{t("logout")}</button>
       </nav>}
 
@@ -1604,6 +1606,12 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
           <p>{me.user.headline}</p>
           <button className="secondary-button" onClick={() => setView("profile")}>{t("editProfileAction")}</button>
         </section>
+        <section className="panel side-panel applied-summary-panel desktop-applied-summary-panel">
+          <h2>{t("profileViews")}</h2>
+          <strong className="side-stat">{formatNumber(applications.length)}</strong>
+          <div className="job-strip side-job-strip">{priorityApplications.length ? priorityApplications.map((item) => <span className="application-chip" key={item.id}>{item.title}<b className={`status ${normalizeStatusValue(item.status)}`}>{statusLabel(normalizeStatusValue(item.status), lang)}</b></span>) : <span>{t("noAppliedJobs")}</span>}</div>
+          {!!applications.length && <button className="panel-link more-link" type="button" onClick={openAppliedJobs}><span>↗</span>{t("more")}</button>}
+        </section>
         {!!interviews.length && <section className="panel side-panel interview-panel">
           <h2>{t("upcomingInterviews")}</h2>
           {interviews.slice(0, 3).map((interview) => <button className="panel-link interview-link" type="button" onClick={() => setView("interviews")} key={interview.id}><span>◌</span><div><strong>{interview.job_title || t("job")}</strong><small>{new Date(interview.scheduled_at).toLocaleString()}</small></div></button>)}
@@ -1644,42 +1652,35 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
           <div className="meter"><span style={{ width: `${strength}%` }} /></div>
           <p>{strengthState.body}</p>
         </section>
-        <section className="panel side-panel applied-summary-panel">
-          <h2>{t("profileViews")}</h2>
-          <strong className="side-stat">{formatNumber(applications.length)}</strong>
-          <div className="job-strip side-job-strip">{priorityApplications.length ? priorityApplications.map((item) => <span className="application-chip" key={item.id}>{item.title}<b className={`status ${normalizeStatusValue(item.status)}`}>{statusLabel(normalizeStatusValue(item.status), lang)}</b></span>) : <span>{t("noAppliedJobs")}</span>}</div>
-          {!!applications.length && <button className="panel-link more-link" type="button" onClick={openAppliedJobs}><span>↗</span>{t("more")}</button>}
-        </section>
         <section className="panel side-panel profile-snapshot-panel">
           <h2>{t("skills")}</h2>
           <div className="profile-summary-list skill-summary">
             {skills.length ? skills.map((skill) => <span key={skill}>{skill}</span>) : <button className="panel-link" type="button" onClick={openBuilder}>{t("completeProfile")}</button>}
           </div>
-          {!!agents.length && <>
-            <div className="summary-divider" />
-            <h2>{t("agentDirectory")}</h2>
-            <div className="agency-list compact-agency-list">
-              {previewAgents.map((agent) => (
-                <button className="agency-row" type="button" key={agent.id} onClick={() => { setSelectedAgent(agent); setView("agents"); }}>
-                  <Avatar user={{ full_name: agent.full_name, avatar_url: agent.avatar_url, plan: agent.plan, last_active_at: agent.last_active_at }} size="small" />
-                  <span><strong>{agent.agency_name || agent.full_name}</strong><small>{agent.open_jobs || 0} {t("activeJobs")}</small></span>
-                </button>
-              ))}
-            </div>
-            {agents.length > 7 && <button className="panel-link more-link" type="button" onClick={() => setView("agents")}><span>↗</span>{t("more")}</button>}
-          </>}
           <div className="summary-divider" />
           <h2>{t("workTimeline")}</h2>
           <div className="profile-summary-list experience-summary">
             {experiences.length ? experiences.map((item) => <article key={item.id}><strong>{item.title}</strong><span>{item.company}</span></article>) : <button className="panel-link" type="button" onClick={openBuilder}>{t("addExperience")}</button>}
           </div>
         </section>
+        {!!agents.length && <section className="panel side-panel companies-panel">
+          <h2>{t("agentDirectory")}</h2>
+          <div className="agency-list compact-agency-list">
+            {previewAgents.map((agent) => (
+              <button className="agency-row" type="button" key={agent.id} onClick={() => { setSelectedAgent(agent); setView("agents"); }}>
+                <Avatar user={{ full_name: agent.full_name, avatar_url: agent.avatar_url, plan: agent.plan, last_active_at: agent.last_active_at }} size="small" />
+                <span><strong>{agent.agency_name || agent.full_name}</strong><small>{agent.open_jobs || 0} {t("activeJobs")}</small></span>
+              </button>
+            ))}
+          </div>
+          {agents.length > 7 && <button className="panel-link more-link" type="button" onClick={() => setView("agents")}><span>↗</span>{t("more")}</button>}
+        </section>}
       </aside>
     </div>
   );
 }
 
-function PlanCards({ t, currentRole = "member", currentPlan = "free", notify, menuMode = false }) {
+function PlanCards({ t, currentRole = "member", currentPlan = "free", subscriptionExpiresAt = "", notify, menuMode = false, profileMode = false }) {
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [submittingPlan, setSubmittingPlan] = useState("");
   const plans = [
@@ -1713,8 +1714,9 @@ function PlanCards({ t, currentRole = "member", currentPlan = "free", notify, me
     }
   }
   return (
-    <section className={menuMode ? "plan-panel menu-plan-panel" : "panel side-panel plan-panel"}>
+    <section className={menuMode ? "plan-panel menu-plan-panel" : profileMode ? "panel plan-panel profile-plan-panel" : "panel side-panel plan-panel"}>
       <h2>{t("subscriptionPlans")}</h2>
+      {subscriptionExpiresAt && <p className="subscription-expiry">{t("subscriptionExpires")}: {new Date(subscriptionExpiresAt).toLocaleDateString()}</p>}
       <div className="payment-methods" role="group" aria-label={t("paymentMethod")}>
         <button className={paymentMethod === "cash" ? "active" : ""} type="button" onClick={() => setPaymentMethod("cash")}>{t("cashPayment")}</button>
         <button className={paymentMethod === "shamcash" ? "active shamcash-choice" : "shamcash-choice"} type="button" onClick={() => setPaymentMethod("shamcash")}><img src="/brand/shamcash.png" alt="" />{t("shamCashPayment")}</button>
@@ -2327,6 +2329,7 @@ function Profile({ t, me, reload, notify }) {
         <Avatar user={me.user} size="large" />
         <div><h1>{me.user.fullName}</h1><p>{me.user.headline}</p><span>{me.user.location}</span><span>{t("dob")}: {me.user.dob || "-"}</span></div>
       </section>
+      <PlanCards t={t} currentRole={me.user.role} currentPlan={me.user.plan} subscriptionExpiresAt={me.user.subscriptionExpiresAt} notify={notify} profileMode />
       <form className="panel form-grid" onSubmit={saveProfile}>
         {["fullName", "phone", "headline", "location"].map((key) => <label key={key}>{t(key)}<input value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} /></label>)}
         <label>{t("dob")}<input type="date" value={form.dob} onChange={(e) => setForm({ ...form, dob: e.target.value })} /></label>
@@ -3536,6 +3539,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
               <Avatar user={agent} size="large" />
               <div><h1>{profile?.agency_name || agent?.full_name || t("agent")}</h1><p>{agent?.headline || t("agentWorkspace")}</p><span>{agent?.email}</span></div>
             </section>
+            <PlanCards t={t} currentRole={agent?.role} currentPlan={agent?.plan} subscriptionExpiresAt={agent?.subscriptionExpiresAt} notify={notify} profileMode />
             <section className="panel admin-form">
               <h2>{t("profilePicture")}</h2>
               <label>{t("profilePicture")}<input type="file" accept="image/*" onChange={(e) => uploadAgentAvatar(e.target.files[0])} /></label>

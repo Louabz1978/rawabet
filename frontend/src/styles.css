@@ -464,6 +464,17 @@ html[dir="rtl"] .avatar-status-wrap.large .online-dot { right: auto; left: 12px;
   background: #f0fbf8;
 }
 
+.profile-plan-panel .plan-card-list {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.subscription-expiry {
+  margin: -4px 0 12px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .plan-card div {
   display: flex;
   align-items: baseline;
@@ -3592,6 +3603,8 @@ td span {
   }
   .workspace-panel,
   .profile-snapshot-panel,
+  .desktop-applied-summary-panel,
+  .companies-panel,
   .insight-rail > .strength-panel,
   .insight-rail > .applied-summary-panel {
     display: none;
