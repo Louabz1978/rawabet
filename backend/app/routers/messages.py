@@ -31,7 +31,12 @@ def ensure_agent_messages_schema():
         "CREATE INDEX IF NOT EXISTS idx_agent_messages_agent_user ON agent_messages(agent_id, user_id)",
         "CREATE INDEX IF NOT EXISTS idx_agent_messages_created ON agent_messages(created_at)",
     ):
-        execute(sql)
+        try:
+            execute(sql)
+        except Exception:
+            # RDS production may create this table/indexes from PGAdmin with a
+            # different owner. Chat should keep working once the table exists.
+            pass
 
 
 def clean_message(value: str | None) -> str:
