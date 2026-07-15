@@ -2304,7 +2304,7 @@ def update_presence(user: Annotated[dict, Depends(current_user)]):
         UPDATE users
         SET last_active_at = NOW()
         WHERE id = %s
-        RETURNING id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url, last_active_at
+        RETURNING id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url, last_active_at, subscription_expires_at, subscription_renewal_reminded_at
         """,
         (user["id"],),
     )
@@ -2709,7 +2709,7 @@ async def upload_avatar(user: Annotated[dict, Depends(current_user)], file: Uplo
         UPDATE users
         SET avatar_url = %s
         WHERE id = %s
-        RETURNING id, full_name, email, role, plan, status, headline, location, avatar_url
+        RETURNING id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url, last_active_at, subscription_expires_at, subscription_renewal_reminded_at
         """,
         (avatar_url, user["id"]),
     )
