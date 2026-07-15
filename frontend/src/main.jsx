@@ -247,6 +247,7 @@ const text = {
     cashPayment: "Cash",
     shamCashPayment: "ShamCash",
     requestPlan: "Request plan",
+    renewSubscription: "Renew subscription",
     planRequests: "Plan requests",
     requestedPlan: "Requested plan",
     approve: "Approve",
@@ -561,6 +562,7 @@ const text = {
     cashPayment: "كاش",
     shamCashPayment: "شام كاش",
     requestPlan: "طلب الخطة",
+    renewSubscription: "تجديد الاشتراك",
     planRequests: "طلبات الاشتراك",
     requestedPlan: "الخطة المطلوبة",
     approve: "قبول",
@@ -771,6 +773,13 @@ function subscriptionInfo(user = {}, t) {
 function shouldShowSubscriptionStatus(user = {}) {
   const plan = String(user.plan || "").toLowerCase();
   return plan === "premium" || Boolean(user.subscriptionExpiresAt || user.subscription_expires_at);
+}
+
+function subscriptionDaysLeft(subscriptionExpiresAt = "") {
+  if (!subscriptionExpiresAt) return null;
+  const expiresAt = new Date(subscriptionExpiresAt);
+  if (Number.isNaN(expiresAt.getTime())) return null;
+  return Math.ceil((expiresAt.getTime() - Date.now()) / 86400000);
 }
 
 function roleLabel(value, lang) {
@@ -1737,20 +1746,25 @@ function PlanCards({ t, currentRole = "member", currentPlan = "free", subscripti
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [submittingPlan, setSubmittingPlan] = useState("");
   const subInfo = subscriptionInfo({ plan: currentPlan, subscriptionExpiresAt }, t);
+  const daysLeft = subscriptionDaysLeft(subscriptionExpiresAt);
+  const hasActiveSubscription = currentPlan === "premium" || currentRole === "agent";
+  const canRenew = hasActiveSubscription && daysLeft !== null && daysLeft <= 5;
   const plans = [
     {
       id: "premium",
       title: t("premiumPlan"),
       price: t("premiumPrice"),
       body: t("premiumPlanBody"),
-      active: currentPlan === "premium"
+      active: currentPlan === "premium",
+      canRenew
     },
     {
       id: "agent",
       title: t("agentPlan"),
       price: t("agentPrice"),
       body: t("agentPlanBody"),
-      active: currentRole === "agent"
+      active: currentRole === "agent",
+      canRenew
     }
   ].filter((plan) => currentRole === "agent" ? plan.id === "agent" : plan.id === "premium");
   const primaryPlan = plans[0];
@@ -1782,9 +1796,9 @@ function PlanCards({ t, currentRole = "member", currentPlan = "free", subscripti
         <button className={paymentMethod === "cash" ? "active" : ""} type="button" onClick={() => setPaymentMethod("cash")}>{t("cashPayment")}</button>
         <button className={paymentMethod === "shamcash" ? "active shamcash-choice" : "shamcash-choice"} type="button" onClick={() => setPaymentMethod("shamcash")}><img src="/brand/shamcash.png" alt="" />{t("shamCashPayment")}</button>
       </div>
-      {profileMode && primaryPlan ? (
-        <button className="secondary-button compact subscription-request-button" type="button" disabled={primaryPlan.active || submittingPlan === primaryPlan.id} onClick={() => requestPlan(primaryPlan.id)}>
-          {submittingPlan === primaryPlan.id ? t("saving") : primaryPlan.active ? t("active") : t("requestPlan")}
+      {profileMode && primaryPlan && (!primaryPlan.active || primaryPlan.canRenew) ? (
+        <button className="secondary-button compact subscription-request-button" type="button" disabled={submittingPlan === primaryPlan.id} onClick={() => requestPlan(primaryPlan.id)}>
+          {submittingPlan === primaryPlan.id ? t("saving") : primaryPlan.active ? t("renewSubscription") : t("requestPlan")}
         </button>
       ) : null}
       {!profileMode && (
@@ -1793,9 +1807,9 @@ function PlanCards({ t, currentRole = "member", currentPlan = "free", subscripti
           <article className={plan.active ? "plan-card active" : "plan-card"} key={plan.id}>
             <div><strong>{plan.title}</strong><b>{plan.price}</b></div>
             <p>{plan.body}</p>
-            <button className="secondary-button compact" type="button" disabled={plan.active || submittingPlan === plan.id} onClick={() => requestPlan(plan.id)}>
-              {submittingPlan === plan.id ? t("saving") : plan.active ? t("active") : t("requestPlan")}
-            </button>
+            {(!plan.active || plan.canRenew) && <button className="secondary-button compact" type="button" disabled={submittingPlan === plan.id} onClick={() => requestPlan(plan.id)}>
+              {submittingPlan === plan.id ? t("saving") : plan.active ? t("renewSubscription") : t("requestPlan")}
+            </button>}
           </article>
         ))}
       </div>
