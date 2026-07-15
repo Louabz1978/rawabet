@@ -768,6 +768,11 @@ function subscriptionInfo(user = {}, t) {
   return { state: "active", label: t("active"), detail: `${t("activeUntil")}: ${expiresAt.toLocaleDateString()}` };
 }
 
+function shouldShowSubscriptionStatus(user = {}) {
+  const plan = String(user.plan || "").toLowerCase();
+  return plan === "premium" || Boolean(user.subscriptionExpiresAt || user.subscription_expires_at);
+}
+
 function roleLabel(value, lang) {
   const labels = {
     member: { en: "User", ar: "مستخدم" },
@@ -1634,6 +1639,7 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
           <div className="avatar-wrap"><Avatar user={me.user} /></div>
           <h2>{me.user.fullName}</h2>
           <p>{me.user.headline}</p>
+          {shouldShowSubscriptionStatus(me.user) && <SubscriptionStatus user={me.user} t={t} />}
           <button className="secondary-button" onClick={() => setView("profile")}>{t("editProfileAction")}</button>
         </section>
         <section className="panel side-panel applied-summary-panel desktop-applied-summary-panel">
@@ -2389,7 +2395,7 @@ function Profile({ t, me, reload, notify }) {
     <div className="profile-page">
       <section className="profile-hero panel">
         <Avatar user={me.user} size="large" />
-        <div><h1>{me.user.fullName}</h1><p>{me.user.headline}</p><span>{me.user.location}</span><span>{t("dob")}: {me.user.dob || "-"}</span>{me.user.plan === "premium" && <SubscriptionStatus user={me.user} t={t} />}</div>
+        <div><h1>{me.user.fullName}</h1><p>{me.user.headline}</p><span>{me.user.location}</span><span>{t("dob")}: {me.user.dob || "-"}</span>{shouldShowSubscriptionStatus(me.user) && <SubscriptionStatus user={me.user} t={t} />}</div>
       </section>
       <PlanCards t={t} currentRole={me.user.role} currentPlan={me.user.plan} subscriptionExpiresAt={me.user.subscriptionExpiresAt} notify={notify} profileMode />
       <form className="panel form-grid" onSubmit={saveProfile}>
@@ -3565,7 +3571,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
               <h2>{selectedShare.full_name}</h2>
               <p>{selectedShare.headline || "-"}</p>
               <span>{selectedShare.user_location || "-"}</span>
-              {selectedShare.plan === "premium" && <SubscriptionStatus user={selectedShare} t={t} />}
+              {shouldShowSubscriptionStatus(selectedShare) && <SubscriptionStatus user={selectedShare} t={t} />}
             </div>
             <div className="agent-job-summary">
               {isApplicationShare ? <>
@@ -3623,7 +3629,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
           {tab === "profile" && <section className="admin-profile-view">
             <section className="profile-hero panel">
               <Avatar user={agent} size="large" />
-              <div><h1>{profile?.agency_name || agent?.full_name || t("agent")}</h1><p>{agent?.headline || t("agentWorkspace")}</p><span>{agent?.email}</span>{agent?.plan === "premium" && <SubscriptionStatus user={agent} t={t} />}</div>
+              <div><h1>{profile?.agency_name || agent?.full_name || t("agent")}</h1><p>{agent?.headline || t("agentWorkspace")}</p><span>{agent?.email}</span>{shouldShowSubscriptionStatus(agent) && <SubscriptionStatus user={agent} t={t} />}</div>
             </section>
             <PlanCards t={t} currentRole={agent?.role} currentPlan={agent?.plan} subscriptionExpiresAt={agent?.subscriptionExpiresAt} notify={notify} profileMode />
             <section className="panel admin-form">
