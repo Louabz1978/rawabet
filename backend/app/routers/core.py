@@ -2277,7 +2277,13 @@ def update_presence(user: Annotated[dict, Depends(current_user)]):
 
 @router.post("/api/account/refresh-session")
 def refresh_session(user: Annotated[dict, Depends(current_user)]):
-    raise HTTPException(status_code=403, detail="Sessions expire after 60 minutes. Please sign in again.")
+    refreshed_user = fetch_one(
+        "SELECT id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url, last_active_at, active_session_id, subscription_expires_at, subscription_renewal_reminded_at FROM users WHERE id = %s",
+        (user["id"],),
+    )
+    if not refreshed_user:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    return {"user": public_user(refreshed_user), "token": create_token(refreshed_user, session_id=user.get("_session_id"))}
 
 
 @router.post("/api/account/subscription-requests", status_code=201)

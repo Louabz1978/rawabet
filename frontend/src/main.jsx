@@ -307,8 +307,8 @@ const text = {
     strong: "Strong",
     excellent: "Excellent",
     sessionExpiringTitle: "Session expiring",
-    sessionExpiringBody: "For security, your session expires after 60 minutes. You will be signed out automatically.",
-    stayConnected: "Sign in again",
+    sessionExpiringBody: "For security, your session expires after 60 minutes. Choose stay online to extend it for another hour.",
+    stayConnected: "Stay online",
     agentChat: "Agent chat",
     chatWithAgent: "Chat with agent",
     adminChat: "Admin chat",
@@ -621,8 +621,8 @@ const text = {
     strong: "قوي",
     excellent: "ممتاز",
     sessionExpiringTitle: "ستنتهي الجلسة",
-    sessionExpiringBody: "لأمان الحساب، تنتهي الجلسة بعد 60 دقيقة وسيتم تسجيل خروجك تلقائيا.",
-    stayConnected: "تسجيل الدخول من جديد",
+    sessionExpiringBody: "لأمان الحساب، تنتهي الجلسة بعد 60 دقيقة. اختر البقاء متصلا لتمديدها ساعة أخرى.",
+    stayConnected: "البقاء متصلا",
     agentChat: "محادثة الوكيل",
     chatWithAgent: "تواصل مع الوكيل",
     adminChat: "محادثة الإدارة",
@@ -1030,7 +1030,24 @@ function App() {
   }
 
   async function stayConnected() {
-    logout();
+    try {
+      const data = await api("/account/refresh-session", { method: "POST" });
+      setToken(data.token);
+      if (data.user) {
+        setMe((current) => current ? { ...current, user: { ...current.user, ...data.user } } : current);
+        setSession((current) => current ? { ...current, ...data.user } : data.user);
+      }
+      setSessionWarningOpen(false);
+      setSessionCountdown(SESSION_GRACE_MS / 1000);
+      sessionEndedRef.current = false;
+      notify(t("stayConnected"), "success");
+    } catch (err) {
+      if (isSessionEndedError(err)) {
+        handleSessionEnded(err.message);
+        return;
+      }
+      notify(err.message || String(err), "error", err.stack || err.message || String(err));
+    }
   }
 
   useEffect(() => {
@@ -3398,17 +3415,26 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
   const [showAddJobModal, setShowAddJobModal] = useState(false);
   const [schedulingInterview, setSchedulingInterview] = useState(false);
   const [agentPage, setAgentPage] = useState(1);
+  const [applicationSearch, setApplicationSearch] = useState("");
+  const [applicationStatusFilter, setApplicationStatusFilter] = useState("");
   const userDirectory = Array.from(new Map([...shares, ...users].map((share) => [share.user_id, share])).values());
   const selectedShare = [...shares, ...users].find((share) => share.share_id === selectedShareId);
   const applicationShares = shares.filter((share) => share.share_type === "application");
+  const visibleApplicationShares = applicationShares.filter((share) => {
+    const query = applicationSearch.trim().toLowerCase();
+    const haystack = `${share.full_name || ""} ${share.email || ""} ${share.job_title || ""} ${share.company_name || ""} ${share.job_number || ""}`.toLowerCase();
+    const matchesSearch = !query || haystack.includes(query);
+    const matchesStatus = !applicationStatusFilter || normalizeStatusValue(share.application_status) === applicationStatusFilter;
+    return matchesSearch && matchesStatus;
+  });
   const uniqueCandidates = userDirectory;
   const pagedAgentJobs = pageItems(jobs, agentPage);
   const pagedUniqueCandidates = pageItems(uniqueCandidates, agentPage);
-  const pagedApplicationShares = pageItems(applicationShares, agentPage);
+  const pagedApplicationShares = pageItems(visibleApplicationShares, agentPage);
   const pagedAgentInterviews = pageItems(interviews, agentPage);
   const activeAgentTotal = tab === "jobs" ? jobs.length
     : tab === "users" ? uniqueCandidates.length
-    : tab === "applications" ? applicationShares.length
+    : tab === "applications" ? visibleApplicationShares.length
     : tab === "interviews" ? interviews.length
     : 0;
   const statusCounts = APPLICATION_STATUSES.map((status) => ({
@@ -3445,7 +3471,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
   }, [view]);
   useEffect(() => {
     setAgentPage(1);
-  }, [tab]);
+  }, [tab, applicationSearch, applicationStatusFilter]);
   function selectAgentTab(id) {
     setTab(id);
     const tabViewMap = {
@@ -3744,7 +3770,17 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
           </section>}
 
           {tab === "applications" && <section className="panel">
-            <div className="section-head"><h2>{t("applications")}</h2><span className="status">{applicationShares.length}</span></div>
+            <div className="section-head">
+              <h2>{t("applications")}</h2>
+              <div className="section-actions">
+                <input placeholder={t("searchApplications")} value={applicationSearch} onChange={(e) => setApplicationSearch(e.target.value)} />
+                <select value={applicationStatusFilter} onChange={(e) => setApplicationStatusFilter(e.target.value)}>
+                  <option value="">{t("allStatuses")}</option>
+                  {APPLICATION_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}
+                </select>
+                <span className="status">{visibleApplicationShares.length}</span>
+              </div>
+            </div>
             <div className="table-wrap">
               <table>
                 <thead><tr><th>{t("applicant")}</th><th>{t("job")}</th><th>{t("resume")}</th><th>{t("submittedAnswers")}</th><th>{t("applicationStatus")}</th><th>{t("actions")}</th></tr></thead>
