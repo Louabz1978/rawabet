@@ -679,6 +679,25 @@ def send_subscription_renewal_email(email: str, full_name: str, expires_at: obje
 
 
 def refresh_subscription_state(user_id: UUID | str) -> dict | None:
+    execute(
+        """
+        UPDATE users
+        SET subscription_expires_at = COALESCE(
+                (
+                    SELECT MAX(sr.updated_at) + interval '1 month'
+                    FROM subscription_requests sr
+                    WHERE sr.user_id = users.id
+                      AND sr.status = 'approved'
+                ),
+                NOW() + interval '1 month'
+            ),
+            subscription_renewal_reminded_at = NULL
+        WHERE id = %s
+          AND plan = 'premium'
+          AND subscription_expires_at IS NULL
+        """,
+        (user_id,),
+    )
     expired = fetch_one(
         """
         SELECT id, full_name, email, role, plan, subscription_expires_at, subscription_renewal_reminded_at
@@ -709,6 +728,23 @@ def refresh_subscription_state(user_id: UUID | str) -> dict | None:
 
 
 def refresh_expired_subscriptions(limit: int = 100) -> None:
+    execute(
+        """
+        UPDATE users
+        SET subscription_expires_at = COALESCE(
+                (
+                    SELECT MAX(sr.updated_at) + interval '1 month'
+                    FROM subscription_requests sr
+                    WHERE sr.user_id = users.id
+                      AND sr.status = 'approved'
+                ),
+                NOW() + interval '1 month'
+            ),
+            subscription_renewal_reminded_at = NULL
+        WHERE plan = 'premium'
+          AND subscription_expires_at IS NULL
+        """
+    )
     expired_users = fetch_all(
         """
         SELECT id, full_name, email, subscription_expires_at
@@ -3514,9 +3550,9 @@ def create_admin_user(body: AdminCreateUserBody, user: Annotated[dict, Depends(a
         raise HTTPException(status_code=409, detail="Email already registered")
     created_user = execute(
         """
-        INSERT INTO users (full_name, email, phone, dob, password_hash, role, plan, status, headline, location, email_verified)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,true)
-        RETURNING id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url, created_at, last_active_at
+        INSERT INTO users (full_name, email, phone, dob, password_hash, role, plan, status, headline, location, email_verified, subscription_expires_at)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,true, CASE WHEN %s = 'premium' THEN NOW() + interval '1 month' ELSE NULL END)
+        RETURNING id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url, created_at, last_active_at, subscription_expires_at
         """,
         (
             body.fullName,
@@ -3529,6 +3565,7 @@ def create_admin_user(body: AdminCreateUserBody, user: Annotated[dict, Depends(a
             body.status,
             body.headline,
             body.location,
+            body.plan,
         ),
     )
     execute("INSERT INTO profiles (user_id, about, skills, profile_strength) VALUES (%s, '', '{}', 0) ON CONFLICT (user_id) DO NOTHING", (created_user["id"],))
@@ -3539,6 +3576,7 @@ def create_admin_user(body: AdminCreateUserBody, user: Annotated[dict, Depends(a
 @router.get("/api/admin/users/{user_id}/profile")
 def admin_user_profile(user_id: UUID, user: Annotated[dict, Depends(admin_user)]):
     refresh_expired_subscriptions()
+    refresh_subscription_state(user_id)
     sync_profile_strength(user_id)
     target_user = fetch_one(
         "SELECT id, full_name, email, phone, dob, role, plan, status, headline, location, avatar_url, created_at, last_active_at, subscription_expires_at FROM users WHERE id = %s",
@@ -3606,11 +3644,20 @@ def update_admin_profile(user_id: UUID, body: AdminProfilePatch, user: Annotated
             location = COALESCE(%s, location),
             role = COALESCE(%s, role),
             plan = COALESCE(%s, plan),
-            status = COALESCE(%s, status)
+            status = COALESCE(%s, status),
+            subscription_expires_at = CASE
+                WHEN %s = 'premium' THEN COALESCE(subscription_expires_at, NOW() + interval '1 month')
+                WHEN %s = 'free' THEN NULL
+                ELSE subscription_expires_at
+            END,
+            subscription_renewal_reminded_at = CASE
+                WHEN %s IN ('premium', 'free') THEN NULL
+                ELSE subscription_renewal_reminded_at
+            END
         WHERE id = %s
         RETURNING id
         """,
-        (body.fullName, str(body.email).lower() if body.email else None, password_hash, body.phone, body.dob or None, body.headline, body.location, role, body.plan, body.status, user_id),
+        (body.fullName, str(body.email).lower() if body.email else None, password_hash, body.phone, body.dob or None, body.headline, body.location, role, body.plan, body.status, body.plan, body.plan, body.plan, user_id),
     )
     if not updated:
         raise HTTPException(status_code=404, detail="User not found")
@@ -3813,11 +3860,20 @@ def update_admin_user(user_id: UUID, body: AdminUserPatch, user: Annotated[dict,
             location = COALESCE(%s, location),
             role = COALESCE(%s, role),
             plan = COALESCE(%s, plan),
-            status = COALESCE(%s, status)
+            status = COALESCE(%s, status),
+            subscription_expires_at = CASE
+                WHEN %s = 'premium' THEN COALESCE(subscription_expires_at, NOW() + interval '1 month')
+                WHEN %s = 'free' THEN NULL
+                ELSE subscription_expires_at
+            END,
+            subscription_renewal_reminded_at = CASE
+                WHEN %s IN ('premium', 'free') THEN NULL
+                ELSE subscription_renewal_reminded_at
+            END
         WHERE id = %s
-        RETURNING id, full_name, email, phone, dob, role, plan, status, headline, location, created_at, last_active_at
+        RETURNING id, full_name, email, phone, dob, role, plan, status, headline, location, created_at, last_active_at, subscription_expires_at, subscription_renewal_reminded_at
         """,
-        (body.fullName, str(body.email).lower() if body.email else None, password_hash, body.phone, body.dob or None, body.headline, body.location, role, body.plan, body.status, user_id),
+        (body.fullName, str(body.email).lower() if body.email else None, password_hash, body.phone, body.dob or None, body.headline, body.location, role, body.plan, body.status, body.plan, body.plan, body.plan, user_id),
     )
     if not updated:
         raise HTTPException(status_code=404, detail="User not found")
