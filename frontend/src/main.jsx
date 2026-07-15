@@ -156,6 +156,7 @@ const text = {
     adminPosts: "Recent Added Jobs",
     noAdminPosts: "No admin posts yet",
     apply: "Apply",
+    applyForJob: "Apply for this job",
     adminDashboard: "Admin dashboard",
     totalUsers: "Total users",
     verifiedProfiles: "Verified profiles",
@@ -469,6 +470,7 @@ const text = {
     adminPosts: "أحدث الوظائف المضافة",
     noAdminPosts: "لا توجد منشورات من الإدارة بعد",
     apply: "تقديم",
+    applyForJob: "التقديم على هذه الوظيفة",
     adminDashboard: "لوحة تحكم الإدارة",
     totalUsers: "إجمالي المستخدمين",
     verifiedProfiles: "الملفات الموثقة",
@@ -1789,6 +1791,13 @@ function SubscriptionStatus({ user, t }) {
   );
 }
 
+function ApplicationResumeLink({ application, t }) {
+  const url = application?.resume_file_url || application?.resumeFileUrl;
+  const name = application?.resume_file_name || application?.resumeFileName || t("resume");
+  if (!url) return <span className="muted-inline">-</span>;
+  return <a className="attachment-link compact-link" href={assetUrl(url)} target="_blank" rel="noreferrer">{name}</a>;
+}
+
 function NavIcon({ name }) {
   const common = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.15", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" };
   const paths = {
@@ -2380,7 +2389,7 @@ function Profile({ t, me, reload, notify }) {
     <div className="profile-page">
       <section className="profile-hero panel">
         <Avatar user={me.user} size="large" />
-        <div><h1>{me.user.fullName}</h1><p>{me.user.headline}</p><span>{me.user.location}</span><span>{t("dob")}: {me.user.dob || "-"}</span></div>
+        <div><h1>{me.user.fullName}</h1><p>{me.user.headline}</p><span>{me.user.location}</span><span>{t("dob")}: {me.user.dob || "-"}</span>{me.user.plan === "premium" && <SubscriptionStatus user={me.user} t={t} />}</div>
       </section>
       <PlanCards t={t} currentRole={me.user.role} currentPlan={me.user.plan} subscriptionExpiresAt={me.user.subscriptionExpiresAt} notify={notify} profileMode />
       <form className="panel form-grid" onSubmit={saveProfile}>
@@ -2528,6 +2537,11 @@ function Jobs({ t, lang, jobs, documents = [], applications, interviews = [], se
     setApplyError("");
     await reload();
   }
+  function openJobDetails(jobId) {
+    setOpenJobId(jobId);
+    setQuestionJobId("");
+    setApplyError("");
+  }
   const detailJob = openJobId ? visibleJobs.find((job) => job.id === openJobId) : null;
   if (detailJob) {
     const application = appliedByJob.get(detailJob.id);
@@ -2537,7 +2551,7 @@ function Jobs({ t, lang, jobs, documents = [], applications, interviews = [], se
     const detailFrameClass = isScheduled || normalizedApplicationStatus === "interview" ? "interview-frame" : normalizedApplicationStatus === "accepted" ? "accepted-frame" : "";
     const questions = detailJob.screening_questions || [];
     return <section className="job-detail-page">
-      <button className="secondary-button compact" type="button" onClick={() => setOpenJobId("")}>{t("backToJobs")}</button>
+      <button className="secondary-button compact" type="button" onClick={() => { setOpenJobId(""); setQuestionJobId(""); setApplyError(""); }}>{t("backToJobs")}</button>
       <article className={["job-card panel highlighted-job", detailFrameClass].filter(Boolean).join(" ")}>
         <div>
           <h2>{detailJob.title}</h2>
@@ -2557,7 +2571,10 @@ function Jobs({ t, lang, jobs, documents = [], applications, interviews = [], se
           <h3>{t("description")}</h3>
           <p>{detailJob.description || "-"}</p>
         </section>
-        {!applicationStatus && <section className="job-apply-questions">
+        {!applicationStatus && questionJobId !== detailJob.id && <div className="job-actions job-detail-actions">
+          <button className="primary-button compact" type="button" onClick={() => { setQuestionJobId(detailJob.id); setApplyError(""); }}>{t("applyForJob")}</button>
+        </div>}
+        {!applicationStatus && questionJobId === detailJob.id && <section className="job-apply-questions">
           <h3>{t("apply")}</h3>
           <label>{t("chooseResume")}
             <select value={resumeSelections[detailJob.id] || resumes[0]?.id || ""} onChange={(event) => setResumeSelections({ ...resumeSelections, [detailJob.id]: event.target.value })}>
@@ -2611,7 +2628,20 @@ function Jobs({ t, lang, jobs, documents = [], applications, interviews = [], se
     const isScheduled = scheduledJobIds.has(job.id);
     const questions = job.screening_questions || [];
     const statusFrameClass = isScheduled || normalizedApplicationStatus === "interview" ? "interview-frame" : normalizedApplicationStatus === "accepted" ? "accepted-frame" : "";
-    return <article id={`job-${job.id}`} className={["job-card panel", isScheduled || openJobId === job.id ? "highlighted-job" : "", statusFrameClass].filter(Boolean).join(" ")} key={job.id}>
+    return <article
+      id={`job-${job.id}`}
+      className={["job-card panel clickable-job-card", isScheduled || openJobId === job.id ? "highlighted-job" : "", statusFrameClass].filter(Boolean).join(" ")}
+      key={job.id}
+      role="button"
+      tabIndex={0}
+      onClick={() => openJobDetails(job.id)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openJobDetails(job.id);
+        }
+      }}
+    >
       <div>
         <h2>{job.title}</h2>
         <small className="job-public-id">{t("jobId")}: #{job.job_number || "-"}</small>
@@ -2619,9 +2649,6 @@ function Jobs({ t, lang, jobs, documents = [], applications, interviews = [], se
         <span>{job.salary_range}</span>
         {isScheduled && <small className="application-status status interview">{t("upcomingInterviews")}</small>}
         {applicationStatus && <small className={`application-status status ${applicationStatus}`}>{t("applicationStatus")}: {statusLabel(applicationStatus, lang)}</small>}
-      </div>
-      <div className="job-actions">
-        <button className="secondary-button" onClick={() => setOpenJobId(job.id)}>{t("jobDetails")}</button>
       </div>
     </article>;
   }) : <article className="panel"><p>{t("noJobsMatching")}</p></article>}
@@ -3164,6 +3191,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
                         <strong>{application.job_title}</strong>
                         <span>#{application.job_number || "-"} · {application.company_name} · {application.location || "-"}</span>
                         <small>{application.salary_range || "-"} · {new Date(application.created_at).toLocaleDateString()}</small>
+                        <small>{t("resume")}: <ApplicationResumeLink application={application} t={t} /></small>
                       </div>
                       <b className={`status ${normalizeStatusValue(application.status)}`}>{statusLabel(normalizeStatusValue(application.status), lang)}</b>
                     </article>
@@ -3301,8 +3329,8 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
             <div className="section-head"><h2>{t("applications")}</h2><div className="section-actions"><input placeholder={t("searchApplications")} value={applicationSearch} onChange={(e) => setApplicationSearch(e.target.value)} /><span className="status">{visibleApplications.length}</span></div></div>
             <div className="table-wrap">
               <table>
-                <thead><tr><th>{t("applicant")}</th><th>{t("job")}</th><th>{t("location")}</th><th>{t("submittedAnswers")}</th><th>{t("applicationStatus")}</th><th>{t("shareWithAgent")}</th><th>{t("actions")}</th></tr></thead>
-                <tbody>{pagedVisibleApplications.map((application) => <tr key={application.id}><td><button className="table-user table-user-button" type="button" onClick={() => openUserProfile({ id: application.user_id })}><Avatar user={{ full_name: application.full_name, avatar_url: application.avatar_url, plan: application.plan, last_active_at: application.last_active_at }} size="small" /><div><strong>{application.full_name}</strong><span>{application.email}</span></div></button></td><td><strong>{application.job_title}</strong><span>#{application.job_number || "-"} · {application.company_name}</span></td><td>{application.location}</td><td><ApplicationAnswers t={t} answers={application.screening_answers} /></td><td><span className={`status ${application.status}`}>{statusLabel(application.status, lang)}</span></td><td><select className="action-select" defaultValue="" disabled={!agents.length} onChange={async (e) => { await shareApplication(application, e.target.value); e.target.value = ""; }}><option value="">{agents.length ? t("shareWithAgent") : t("agent")}</option>{agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}</select></td><td><select className="action-select" defaultValue="" onChange={(e) => { updateApplicationStatus(application, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option>{APPLICATION_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select></td></tr>)}</tbody>
+                <thead><tr><th>{t("applicant")}</th><th>{t("job")}</th><th>{t("location")}</th><th>{t("resume")}</th><th>{t("submittedAnswers")}</th><th>{t("applicationStatus")}</th><th>{t("shareWithAgent")}</th><th>{t("actions")}</th></tr></thead>
+                <tbody>{pagedVisibleApplications.map((application) => <tr key={application.id}><td><button className="table-user table-user-button" type="button" onClick={() => openUserProfile({ id: application.user_id })}><Avatar user={{ full_name: application.full_name, avatar_url: application.avatar_url, plan: application.plan, last_active_at: application.last_active_at }} size="small" /><div><strong>{application.full_name}</strong><span>{application.email}</span></div></button></td><td><strong>{application.job_title}</strong><span>#{application.job_number || "-"} · {application.company_name}</span></td><td>{application.location}</td><td><ApplicationResumeLink application={application} t={t} /></td><td><ApplicationAnswers t={t} answers={application.screening_answers} /></td><td><span className={`status ${application.status}`}>{statusLabel(application.status, lang)}</span></td><td><select className="action-select" defaultValue="" disabled={!agents.length} onChange={async (e) => { await shareApplication(application, e.target.value); e.target.value = ""; }}><option value="">{agents.length ? t("shareWithAgent") : t("agent")}</option>{agents.map((agent) => <option value={agent.id} key={agent.id}>{agent.full_name}</option>)}</select></td><td><select className="action-select" defaultValue="" onChange={(e) => { updateApplicationStatus(application, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option>{APPLICATION_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select></td></tr>)}</tbody>
               </table>
             </div>
           </section>}
@@ -3537,12 +3565,14 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
               <h2>{selectedShare.full_name}</h2>
               <p>{selectedShare.headline || "-"}</p>
               <span>{selectedShare.user_location || "-"}</span>
+              {selectedShare.plan === "premium" && <SubscriptionStatus user={selectedShare} t={t} />}
             </div>
             <div className="agent-job-summary">
               {isApplicationShare ? <>
                 <strong>{selectedShare.job_title}</strong>
                 <span>{t("jobId")}: #{selectedShare.job_number || "-"}</span>
                 <span>{selectedShare.company_name} · {selectedShare.salary_range || "-"}</span>
+                <span>{t("resume")}: <ApplicationResumeLink application={selectedShare} t={t} /></span>
                 <b className={`status ${selectedShare.application_status}`}>{statusLabel(selectedShare.application_status, lang)}</b>
               </> : <>
                 <strong>{t("profileDetails")}</strong>
@@ -3573,6 +3603,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
             </section>
             {isApplicationShare && <section>
               <h3>{t("submittedAnswers")}</h3>
+              <p className="muted-text">{t("resume")}: <ApplicationResumeLink application={selectedShare} t={t} /></p>
               <ApplicationAnswers t={t} answers={selectedShare.screening_answers} />
             </section>}
           </div>
@@ -3592,7 +3623,7 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
           {tab === "profile" && <section className="admin-profile-view">
             <section className="profile-hero panel">
               <Avatar user={agent} size="large" />
-              <div><h1>{profile?.agency_name || agent?.full_name || t("agent")}</h1><p>{agent?.headline || t("agentWorkspace")}</p><span>{agent?.email}</span></div>
+              <div><h1>{profile?.agency_name || agent?.full_name || t("agent")}</h1><p>{agent?.headline || t("agentWorkspace")}</p><span>{agent?.email}</span>{agent?.plan === "premium" && <SubscriptionStatus user={agent} t={t} />}</div>
             </section>
             <PlanCards t={t} currentRole={agent?.role} currentPlan={agent?.plan} subscriptionExpiresAt={agent?.subscriptionExpiresAt} notify={notify} profileMode />
             <section className="panel admin-form">
@@ -3710,11 +3741,12 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
             <div className="section-head"><h2>{t("applications")}</h2><span className="status">{applicationShares.length}</span></div>
             <div className="table-wrap">
               <table>
-                <thead><tr><th>{t("applicant")}</th><th>{t("job")}</th><th>{t("submittedAnswers")}</th><th>{t("applicationStatus")}</th><th>{t("actions")}</th></tr></thead>
+                <thead><tr><th>{t("applicant")}</th><th>{t("job")}</th><th>{t("resume")}</th><th>{t("submittedAnswers")}</th><th>{t("applicationStatus")}</th><th>{t("actions")}</th></tr></thead>
                 <tbody>{pagedApplicationShares.map((application) => (
                   <tr key={application.share_id}>
                     <td><div className="table-user"><Avatar user={{ full_name: application.full_name, avatar_url: application.avatar_url, plan: application.plan, last_active_at: application.last_active_at }} size="small" /><div><button className="link-button" type="button" onClick={() => setSelectedShareId(application.share_id)}>{application.full_name}</button><span>{application.email}</span></div></div></td>
                     <td><strong>{application.job_title}</strong><span>#{application.job_number || "-"} · {application.company_name}</span></td>
+                    <td><ApplicationResumeLink application={application} t={t} /></td>
                     <td><ApplicationAnswers t={t} answers={application.screening_answers} /></td>
                     <td><span className={`status ${application.application_status}`}>{statusLabel(application.application_status, lang)}</span></td>
                     <td><select className="action-select" defaultValue="" onChange={(e) => { updateApplicationStatus(application, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option>{APPLICATION_STATUSES.map((status) => <option value={status} key={status}>{statusLabel(status, lang)}</option>)}</select></td>

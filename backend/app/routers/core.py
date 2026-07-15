@@ -2903,6 +2903,7 @@ def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
           u.location AS user_location,
           u.avatar_url,
           u.plan,
+          u.subscription_expires_at,
           u.last_active_at,
           p.about,
           COALESCE(p.skills, '{{}}') AS skills,
@@ -2977,9 +2978,13 @@ def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
               u.location AS user_location,
               u.avatar_url,
               u.plan,
+              u.subscription_expires_at,
               u.last_active_at,
               p.about,
               COALESCE(p.skills, '{}') AS skills,
+              NULL::uuid AS resume_document_id,
+              NULL::text AS resume_file_name,
+              NULL::text AS resume_file_url,
               NULL::uuid AS job_id,
               NULL::integer AS job_number,
               NULL::text AS job_title,
@@ -3553,11 +3558,13 @@ def admin_user_profile(user_id: UUID, user: Annotated[dict, Depends(admin_user)]
         f"""
         SELECT
           a.id, a.status, a.created_at, COALESCE(a.screening_answers, '[]'::jsonb) AS screening_answers,
-          a.resume_document_id,
+          a.resume_document_id, rd.file_name AS resume_file_name,
+          CASE WHEN rd.file_path IS NULL THEN NULL ELSE '/uploads/' || split_part(rd.file_path, '/', array_length(string_to_array(rd.file_path, '/'), 1)) END AS resume_file_url,
           j.id AS job_id, {job_number_select}, j.title AS job_title, j.company_name, j.location,
           j.category, j.salary_range, j.status AS job_status
         FROM applications a
         JOIN jobs j ON j.id = a.job_id
+        LEFT JOIN documents rd ON rd.id = a.resume_document_id
         WHERE a.user_id = %s
         ORDER BY a.created_at DESC
         """,

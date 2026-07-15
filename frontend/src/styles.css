@@ -1535,6 +1535,19 @@ textarea { min-height: 110px; resize: vertical; }
   align-items: center;
 }
 
+.clickable-job-card {
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.clickable-job-card:hover,
+.clickable-job-card:focus-visible {
+  border-color: var(--primary);
+  box-shadow: 0 10px 24px rgba(10, 46, 87, 0.08);
+  outline: none;
+  transform: translateY(-1px);
+}
+
 .job-card h2 { margin: 0 0 4px; font-size: 1.1rem; }
 .job-card p { margin: 0; }
 .job-public-id {
@@ -1548,6 +1561,13 @@ textarea { min-height: 110px; resize: vertical; }
   display: flex;
   gap: 9px;
   align-items: center;
+}
+
+.job-detail-actions {
+  grid-column: 1 / -1;
+  justify-content: flex-start;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 .application-status {
   display: inline-flex;
