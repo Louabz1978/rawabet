@@ -333,6 +333,8 @@ def has_table(table_name: str) -> bool:
 
 
 def fetch_courses_for_user(user: dict) -> list[dict]:
+    if user.get("role") == "member" and not premium_is_active(user):
+        return []
     if not has_table_column("courses", "target_audience"):
         return fetch_all(
             "SELECT * FROM courses WHERE user_id = %s ORDER BY completion_date DESC NULLS LAST, created_at DESC",
@@ -785,6 +787,29 @@ def premium_is_active(user: dict | None) -> bool:
 
 def upload_limits_for(user: dict | None) -> tuple[int, int]:
     return (2, 5) if premium_is_active(user) else (1, 1)
+
+
+def visible_documents_for_user(user: dict | None, documents: list[dict] | None) -> list[dict]:
+    if not documents:
+        return []
+    if isinstance(documents, str):
+        try:
+            documents = json.loads(documents)
+        except json.JSONDecodeError:
+            return []
+    if premium_is_active(user):
+        return documents
+
+    visible = []
+    visible_counts = {"resume": 0, "certificate": 0}
+    for document in documents:
+        kind = document.get("kind")
+        if kind in visible_counts:
+            if visible_counts[kind] >= 1:
+                continue
+            visible_counts[kind] += 1
+        visible.append(document)
+    return visible
 
 
 def pdf_escape(value: str) -> str:
@@ -2253,6 +2278,7 @@ def me(user: Annotated[dict, Depends(current_user)]):
         """,
         (user["id"],),
     )
+    documents = visible_documents_for_user(user, documents)
     job_number_select = "j.job_number" if jobs_have_job_number_column() else "NULL::integer AS job_number"
     applications = fetch_all(
         f"""
@@ -3073,12 +3099,15 @@ def list_agent_shares(user: Annotated[dict, Depends(agent_user)]):
             """,
             (user["id"],),
         )
-    return sorted([*application_shares, *user_shares], key=lambda item: item["shared_at"], reverse=True)
+    shares = sorted([*application_shares, *user_shares], key=lambda item: item["shared_at"], reverse=True)
+    for share in shares:
+        share["documents"] = visible_documents_for_user(share, share.get("documents"))
+    return shares
 
 
 @router.get("/api/agent/users")
 def list_agent_users(user: Annotated[dict, Depends(agent_user)]):
-    return fetch_all(
+    rows = fetch_all(
         """
         SELECT
           'user' AS share_type,
@@ -3144,6 +3173,9 @@ def list_agent_users(user: Annotated[dict, Depends(agent_user)]):
         ORDER BY u.created_at DESC
         """
     )
+    for row in rows:
+        row["documents"] = visible_documents_for_user(row, row.get("documents"))
+    return rows
 
 
 @router.put("/api/agent/profile")
@@ -3506,7 +3538,7 @@ def admin_overview(user: Annotated[dict, Depends(admin_user)]):
 def admin_users(user: Annotated[dict, Depends(admin_user)], search: str = ""):
     refresh_expired_subscriptions()
     query = f"%{search}%"
-    return fetch_all(
+    rows = fetch_all(
         """
         SELECT
           u.id, u.full_name, u.email, u.phone, u.dob, u.role, u.plan, u.status, u.headline, u.location, u.avatar_url, u.created_at, u.last_active_at,
@@ -3534,6 +3566,9 @@ def admin_users(user: Annotated[dict, Depends(admin_user)], search: str = ""):
         """,
         (query, query, query, query, query),
     )
+    for row in rows:
+        row["documents"] = visible_documents_for_user(row, row.get("documents"))
+    return rows
 
 
 @router.post("/api/admin/users", status_code=201)
@@ -3597,6 +3632,7 @@ def admin_user_profile(user_id: UUID, user: Annotated[dict, Depends(admin_user)]
         """,
         (user_id,),
     )
+    documents = visible_documents_for_user(target_user, documents)
     job_number_select = "j.job_number" if jobs_have_job_number_column() else "NULL::integer AS job_number"
     applications = fetch_all(
         f"""

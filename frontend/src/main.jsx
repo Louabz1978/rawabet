@@ -1218,6 +1218,7 @@ function App() {
   const isAgent = session.role === "agent";
   const subscriptionActive = !me.user.subscriptionExpiresAt || new Date(me.user.subscriptionExpiresAt) > new Date();
   const canUseSmartResume = !isAgent && !isAdminRole(session.role) && me.user.plan === "premium" && subscriptionActive;
+  const canUseCourses = isAgent || isAdminRole(session.role) || (me.user.plan === "premium" && subscriptionActive);
 
   function openSmartResumeForUser() {
     if (!canUseSmartResume) return;
@@ -1264,10 +1265,21 @@ function App() {
         </div>
       </header>
       {mobileMenuOpen && <nav className="mobile-drawer-menu" aria-label={t("menu")}>
-        {isAdminRole(session.role) && <button type="button" onClick={() => { setView("admin"); setMobileMenuOpen(false); }}>{t("adminDashboard")}</button>}
+        {isAdminRole(session.role) && <button type="button" onClick={() => { setAdminStartTab("overview"); setView("admin"); setMobileMenuOpen(false); }}>{t("adminDashboard")}</button>}
+        {isAdminRole(session.role) && <button type="button" onClick={() => { setAdminStartTab("subscriptions"); setView("admin"); setMobileMenuOpen(false); }}><span>{t("planRequests")}</span><b>{formatNumber(adminSubscriptionRequests.length || 0)}</b></button>}
+        {isAdminRole(session.role) && <button type="button" onClick={() => { setAdminStartTab("users"); setView("admin"); setMobileMenuOpen(false); }}>{t("userManagement")}</button>}
+        {isAdminRole(session.role) && <button type="button" onClick={() => { setAdminStartTab("jobs"); setView("admin"); setMobileMenuOpen(false); }}>{t("jobManagement")}</button>}
+        {isAdminRole(session.role) && <button type="button" onClick={() => { setAdminStartTab("courses"); setView("admin"); setMobileMenuOpen(false); }}>{t("courses")}</button>}
+        {isAdminRole(session.role) && <button type="button" onClick={() => { setAdminStartTab("applications"); setView("admin"); setMobileMenuOpen(false); }}>{t("applications")}</button>}
+        {isAdminRole(session.role) && <button type="button" onClick={() => { setAdminStartTab("interviews"); setView("admin"); setMobileMenuOpen(false); }}>{t("interviews")}</button>}
+        {isAdminRole(session.role) && <button type="button" onClick={() => { setAdminStartTab("support"); setView("admin"); setMobileMenuOpen(false); }}>{t("supportInbox")}</button>}
         {isAgent && <button type="button" onClick={() => { setView("agent"); setMobileMenuOpen(false); }}>{t("agentWorkspace")}</button>}
         {isAgent && <button type="button" onClick={() => { setView("agent-jobs"); setMobileMenuOpen(false); }}>{t("assignedJobs")}</button>}
         {isAgent && <button type="button" onClick={() => { setView("agent-users"); setMobileMenuOpen(false); }}>{t("users")}</button>}
+        {isAgent && <button type="button" onClick={() => { setView("agent-applications"); setMobileMenuOpen(false); }}>{t("applications")}</button>}
+        {isAgent && <button type="button" onClick={() => { setView("agent-courses"); setMobileMenuOpen(false); }}>{t("courses")}</button>}
+        {isAgent && <button type="button" onClick={() => { setView("agent-schedule"); setMobileMenuOpen(false); }}>{t("scheduleInterview")}</button>}
+        {isAgent && <button type="button" onClick={() => { setView("agent-interviews"); setMobileMenuOpen(false); }}>{t("scheduledInterviews")}</button>}
         {isAgent && <button type="button" onClick={() => { setView("agent-chat"); setMobileMenuOpen(false); }}>{t("agentChat")}</button>}
         {isAgent && <button type="button" onClick={() => { setSupportOpen(true); setMobileMenuOpen(false); }}>{t("adminChat")}</button>}
         {!isAgent && <button type="button" onClick={openAppliedJobs}><span>{t("appliedJobs")}</span><b>{formatNumber(me.applications?.length || 0)}</b></button>}
@@ -1282,10 +1294,10 @@ function App() {
 
       <main className={view === "admin" || isAgent ? "admin-main" : ""}>
         {isAgent ? <AgentWorkspace t={t} lang={lang} agent={me.user} profile={me.profile || {}} shares={agentShares} users={agentUsers} interviews={agentInterviews} jobs={agentJobs} view={view} setView={setView} reload={loadApp} notify={notify} openAgentChat={openAgentChat} openAdminChat={() => setSupportOpen(true)} /> : <>
-          {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} agents={agents} setSelectedAgent={setSelectedAgent} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} openSmartResume={openSmartResumeForUser} openSupportAssistant={() => setSupportOpen(true)} canUseSmartResume={canUseSmartResume} jobSearch={jobSearch} setJobSearch={setJobSearch} setJobMode={setJobMode} notify={notify} />}
+          {view === "home" && <Home t={t} lang={lang} me={me} jobs={jobs} agents={agents} setSelectedAgent={setSelectedAgent} setView={setView} openJob={openJob} openAppliedJobs={openAppliedJobs} openBuilder={() => setBuilderOpen(true)} openSmartResume={openSmartResumeForUser} openSupportAssistant={() => setSupportOpen(true)} canUseSmartResume={canUseSmartResume} canUseCourses={canUseCourses} jobSearch={jobSearch} setJobSearch={setJobSearch} setJobMode={setJobMode} notify={notify} />}
           {view === "profile" && <Profile t={t} me={me} reload={loadApp} notify={notify} />}
           {view === "smartResume" && canUseSmartResume && <SmartResumePage t={t} me={me} reload={loadApp} notify={notify} />}
-          {view === "courses" && <CoursesPage t={t} courses={me.courses || []} />}
+          {view === "courses" && canUseCourses && <CoursesPage t={t} courses={me.courses || []} />}
           {view === "agents" && <AgentsPage t={t} agents={agents} selectedAgent={selectedAgent} setSelectedAgent={setSelectedAgent} openJob={openJob} openAgentChat={openAgentChat} />}
           {view === "jobs" && <Jobs t={t} lang={lang} jobs={jobs} documents={me.documents || []} applications={me.applications || []} interviews={me.interviews || []} search={jobSearch} mode={jobMode} setMode={setJobMode} selectedJobId={selectedJobId} clearSelectedJob={() => setSelectedJobId("")} reload={loadApp} />}
           {view === "allJobs" && <Jobs t={t} lang={lang} jobs={jobs} documents={me.documents || []} applications={me.applications || []} interviews={me.interviews || []} search={jobSearch} mode="all" setMode={(mode) => mode === "applied" ? openAppliedJobs() : openAllJobs()} selectedJobId={selectedJobId} clearSelectedJob={() => setSelectedJobId("")} reload={loadApp} />}
@@ -1294,7 +1306,7 @@ function App() {
           {view === "admin" && isAdminRole(session.role) && <Admin t={t} lang={lang} session={session} admin={admin} users={adminUsers} setUsers={setAdminUsers} jobs={jobs} courses={adminCourses} applications={adminApplications} setApplications={setAdminApplications} interviews={adminInterviews} subscriptionRequests={adminSubscriptionRequests} supportThreads={supportThreads} initialTab={adminStartTab} clearInitialTab={() => setAdminStartTab("")} reload={loadApp} openSupport={(userId) => { setSupportTarget(userId || ""); setSupportOpen(true); }} notify={notify} withNotify={withNotify} />}
         </>}
       </main>
-      <MobileBottomNav t={t} view={view} role={session.role} setView={setView} setAdminStartTab={setAdminStartTab} openAllJobs={openAllJobs} openComingInterviews={openComingInterviews} isAdmin={isAdminRole(session.role)} />
+      <MobileBottomNav t={t} view={view} role={session.role} setView={setView} setAdminStartTab={setAdminStartTab} openAllJobs={openAllJobs} openComingInterviews={openComingInterviews} openSmartResume={openSmartResumeForUser} canUseSmartResume={canUseSmartResume} canUseCourses={canUseCourses} isAdmin={isAdminRole(session.role)} />
       {!isAgent && builderOpen && <ProfileBuilder t={t} me={me} reload={loadApp} close={() => setBuilderOpen(false)} notify={notify} />}
       {supportOpen && <SupportWindow t={t} me={me} users={adminUsers} initialUserId={supportTarget} onUpdate={loadSupportThreads} close={() => { setSupportOpen(false); setSupportTarget(""); }} />}
       {agentChatOpen && !isAgent && agentChatTarget && <UserAgentChatWindow t={t} agent={agentChatTarget} threads={userAgentThreads} setAgent={setAgentChatTarget} onUpdate={async () => { const threads = await api("/user/agent-chat/threads"); userAgentUnreadRef.current = threads.reduce((sum, thread) => sum + Number(thread.unread_count || 0), 0); setUserAgentThreads(threads); }} close={() => { setAgentChatOpen(false); setAgentChatTarget(null); }} />}
@@ -1621,7 +1633,7 @@ function AppFooter() {
   );
 }
 
-function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJob, openAppliedJobs, openBuilder, openSmartResume, openSupportAssistant, canUseSmartResume = true, jobSearch, setJobSearch, setJobMode, notify }) {
+function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJob, openAppliedJobs, openBuilder, openSmartResume, openSupportAssistant, canUseSmartResume = true, canUseCourses = false, jobSearch, setJobSearch, setJobMode, notify }) {
   const strength = Number(me.profile?.profile_strength ?? 0);
   const strengthState = profileStrengthStatus(strength, t);
   const applications = me.applications || [];
@@ -1683,7 +1695,7 @@ function Home({ t, lang, me, jobs, agents = [], setSelectedAgent, setView, openJ
           <button className="panel-link" onClick={() => setView("profile")}><span>↗</span>{t("publicProfile")}</button>
           <button className="panel-link" onClick={openSupportAssistant}><span>✦</span>{t("aiAssistant")}</button>
           {canUseSmartResume && <button className="panel-link" onClick={openSmartResume}><span>◈</span>{t("smartResume")}</button>}
-          <button className="panel-link desktop-only-workspace-link" onClick={() => setView("courses")}><span>▤</span>{t("courses")}</button>
+          {canUseCourses && <button className="panel-link desktop-only-workspace-link" onClick={() => setView("courses")}><span>▤</span>{t("courses")}</button>}
           <button className="panel-link" onClick={() => setView("allJobs")}><span>▦</span>{t("savedJobs")}</button>
           {["admin", "master_admin"].includes(me.user.role) && <button className="panel-link" onClick={() => setView("admin")}><span>▥</span>{t("adminDashboard")}</button>}
         </section>
@@ -1850,13 +1862,14 @@ function NavIcon({ name }) {
   return <svg {...common}>{paths[name]}</svg>;
 }
 
-function MobileBottomNav({ t, view, role, setView, setAdminStartTab, openAllJobs, openComingInterviews, isAdmin = false }) {
+function MobileBottomNav({ t, view, role, setView, setAdminStartTab, openAllJobs, openComingInterviews, openSmartResume, canUseSmartResume = false, canUseCourses = false, isAdmin = false }) {
   function openAdminTab(tab) {
     setAdminStartTab?.(tab);
     setView("admin");
   }
   const adminItems = [
     { id: "admin-overview", icon: "home", label: t("overview"), action: () => openAdminTab("overview") },
+    { id: "admin-subscriptions", icon: "courses", label: t("planRequests"), action: () => openAdminTab("subscriptions") },
     { id: "admin-users", icon: "profile", label: t("userManagement"), action: () => openAdminTab("users") },
     { id: "admin-jobs", icon: "jobs", label: t("jobManagement"), action: () => openAdminTab("jobs") },
     { id: "admin-applications", icon: "admin", label: t("applications"), action: () => openAdminTab("applications") },
@@ -1868,6 +1881,7 @@ function MobileBottomNav({ t, view, role, setView, setAdminStartTab, openAllJobs
     { id: "agent-jobs", icon: "jobs", label: t("assignedJobs"), action: () => setView("agent-jobs") },
     { id: "agent-users", icon: "profile", label: t("users"), action: () => setView("agent-users") },
     { id: "agent-applications", icon: "admin", label: t("applications"), action: () => setView("agent-applications") },
+    { id: "agent-courses", icon: "courses", label: t("courses"), action: () => setView("agent-courses") },
     { id: "agent-chat", icon: "support", label: t("agentChat"), action: () => setView("agent-chat") },
     { id: "agent-interviews", icon: "interviews", label: t("scheduledInterviews"), action: () => setView("agent-interviews") }
   ];
@@ -1875,9 +1889,10 @@ function MobileBottomNav({ t, view, role, setView, setAdminStartTab, openAllJobs
     ...(isAdmin ? [{ id: "admin", icon: "admin", label: t("admin"), action: () => setView("admin") }] : []),
     { id: "home", icon: "home", label: t("home"), action: () => setView("home") },
     { id: "profile", icon: "profile", label: t("profile"), action: () => setView("profile") },
+    ...(canUseSmartResume ? [{ id: "smartResume", icon: "courses", label: t("smartResume"), action: openSmartResume }] : []),
     { id: "allJobs", icon: "jobs", label: t("jobs"), action: openAllJobs },
     { id: "interviews", icon: "interviews", label: t("upcomingInterviews"), action: openComingInterviews },
-    { id: "courses", icon: "courses", label: t("courses"), action: () => setView("courses") },
+    ...(canUseCourses ? [{ id: "courses", icon: "courses", label: t("courses"), action: () => setView("courses") }] : []),
     { id: "agents", icon: "agents", label: t("companies"), action: () => setView("agents") }
   ];
   const items = role === "agent" ? agentItems : isAdmin ? adminItems : userItems;
@@ -2722,6 +2737,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
   const unreadTotal = supportThreads.filter((thread) => Number(thread.unread_count || 0) > 0).length;
   const adminTabs = [
     ["overview", t("overview"), "▦"],
+    ["subscriptions", t("planRequests"), "▤"],
     ["users", t("userManagement"), "◎"],
     ["jobs", t("jobManagement"), "▣"],
     ["courses", t("courses"), "▤"],
@@ -2746,7 +2762,7 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
   const pagedVisibleApplications = pageItems(visibleApplications, adminPage);
   const pagedInterviews = pageItems(interviews, adminPage);
   const pagedSupportThreads = pageItems(supportThreads, adminPage);
-  const activeAdminTotal = tab === "overview" ? subscriptionRequests.length
+  const activeAdminTotal = tab === "overview" || tab === "subscriptions" ? subscriptionRequests.length
     : tab === "users" ? users.length
     : tab === "courses" ? courses.length
     : tab === "jobs" ? adminVisibleJobs.length
@@ -3137,6 +3153,27 @@ function Admin({ t, lang, session, admin, users, setUsers, jobs, courses = [], a
             </section>
           </>}
 
+          {tab === "subscriptions" && <section className="panel">
+            <div className="section-head"><h2>{t("planRequests")}</h2><span className="status">{subscriptionRequests.length}</span></div>
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>{t("users")}</th><th>{t("requestedPlan")}</th><th>{t("paymentMethod")}</th><th>{t("subscriptionStatus")}</th><th>{t("status")}</th><th>{t("actions")}</th></tr></thead>
+                <tbody>
+                  {subscriptionRequests.length ? pagedSubscriptionRequests.map((request) => (
+                    <tr key={request.id}>
+                      <td><div className="table-user"><Avatar user={{ full_name: request.full_name }} size="small" /><div><strong>{request.full_name}</strong><span>{request.email}</span></div></div></td>
+                      <td><strong>{request.requested_plan === "agent" ? t("agentPlan") : t("premiumPlan")}</strong><span className="muted-inline">{Number(request.amount).toFixed(2)} {request.currency}</span></td>
+                      <td>{request.payment_method === "shamcash" ? t("shamCashPayment") : t("cashPayment")}</td>
+                      <td><SubscriptionStatus user={{ plan: request.plan, subscription_expires_at: request.subscription_expires_at }} t={t} /></td>
+                      <td><span className={`status ${request.status}`}>{statusLabel(request.status, lang)}</span></td>
+                      <td><select className="action-select" defaultValue="" onChange={(e) => { updateSubscriptionRequest(request, e.target.value); e.target.value = ""; }}><option value="">{t("chooseAction")}</option><option value="approved">{t("approve")}</option><option value="rejected">{t("reject")}</option><option value="cancelled">{statusLabel("cancelled", lang)}</option></select></td>
+                    </tr>
+                  )) : <tr><td colSpan="6">{t("noAppliedJobs")}</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </section>}
+
           {tab === "users" && <>
             <section className="panel">
               <div className="section-head"><h2>{t("users")}</h2><div className="section-actions"><input placeholder={t("searchUsers")} value={search} onChange={(e) => searchUsers(e.target.value)} /><button className="primary-button compact" type="button" onClick={() => setShowAddUserModal(true)}>{t("addUser")}</button></div></div>
@@ -3479,6 +3516,8 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
       "agent-users": "users",
       "agent-applications": "applications",
       "agent-chat": "chat",
+      "agent-courses": "courses",
+      "agent-schedule": "schedule",
       "agent-interviews": "interviews"
     };
     if (viewTabMap[view] && viewTabMap[view] !== tab) setTab(viewTabMap[view]);
@@ -3493,6 +3532,8 @@ function AgentWorkspace({ t, lang, agent, profile = {}, shares = [], users = [],
       jobs: "agent-jobs",
       users: "agent-users",
       applications: "agent-applications",
+      courses: "agent-courses",
+      schedule: "agent-schedule",
       chat: "agent-chat",
       interviews: "agent-interviews"
     };
